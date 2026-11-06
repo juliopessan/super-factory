@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent'
 import { Memory } from '@mastra/memory'
 
+import { conhecimento } from '../conhecimento.ts'
 import { habilidades } from '../habilidades.ts'
 import { modeloConfigurado } from '../model.ts'
 import { RedigirDadosPessoais } from '../processors/redigir-dados.ts'
@@ -25,6 +26,7 @@ const BASE = [
   'Não peça e não execute comando de shell. Não faça force-push nem commit direto em main ou master.',
   'Quando uma ferramenta devolver resumo, mostre esse texto. Não invente issue, work item ou aprovação.',
   'As skills do workspace são leitura. A skill super-factory manda: não execute script, shell, merge, force-push nem deploy.',
+  'A base do projeto é por repositório. Se lerBaseProjeto disser que está vazia, não invente regra do cliente.',
 ].join('\n')
 
 export const memoria = new Memory({ options: { lastMessages: 12, generateTitle: false } })
@@ -38,6 +40,7 @@ function criar(id: string, name: string, description: string, papel: string, ext
     model: () => modeloConfigurado(),
     tools,
     memory: memoria,
+    knowledge: conhecimento,
     workspace: habilidades,
     defaultOptions: { maxSteps: 4 },
     inputProcessors: [new RedigirDadosPessoais()],
@@ -52,7 +55,7 @@ export const chiefOfStaff = criar(
   'Chief of Staff',
   'Único papel que abre card e encaminha o ciclo. Não aprova portão.',
   'chief-of-staff',
-  'Você é o único que delega. Abra card quando o pedido já tiver critérios e repositório. Para os três portões, peça o workflow sdlc.',
+  'Você é o único que delega. Abra card quando o pedido já tiver critérios e repositório. Para os três portões, peça o workflow sdlc. Só grave regra de cliente quando a pessoa ditar o texto e o nome dela.',
   {
     ...quadroEManifesto,
     abrirCard,

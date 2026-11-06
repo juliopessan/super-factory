@@ -6,10 +6,7 @@
     "node": ">=22.18.0"
   },
   "scripts": {
-  "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev --dir src/super-factory",
-    "dev:cofre": "pwsh -NoProfile -File src/scripts/cofre.ps1 iniciar",
-    "cofre": "pwsh -NoProfile -File src/scripts/cofre.ps1",
-    "check:cofre": "pwsh -NoProfile -File src/scripts/check-cofre.ps1",
+    "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev --dir src/super-factory",
     "build": "mastra build --dir src/super-factory",
     "start": "MASTRA_AUTO_DETECT_URL=true mastra start",
     "typecheck": "tsc --noEmit",
@@ -21,6 +18,7 @@
     "@mastra/mcp": "^2.8.0",
     "@mastra/memory": "^1.41.0",
     "@mastra/observability": "^1.23.1",
+    "@mastra/server": "^1.82.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

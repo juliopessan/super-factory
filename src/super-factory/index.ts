@@ -3,10 +3,12 @@ import { fileURLToPath } from 'node:url'
 
 import { Mastra } from '@mastra/core/mastra'
 import { LibSQLStore } from '@mastra/libsql'
+import { KNOWLEDGE_ROUTES } from '@mastra/server/server-adapter'
 import { Observability, MastraStorageExporter, SensitiveDataFilter } from '@mastra/observability'
 
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
 import { marcaSuperFactory } from './marca.ts'
+import { conhecimento } from './conhecimento.ts'
 import { habilidades } from './habilidades.ts'
 import { criarMesa } from './mesa.ts'
 import { servidorMcp } from './mcp.ts'
@@ -65,6 +67,7 @@ export const mastra = new Mastra({
   storage,
   memory: { mesa: memoria },
   workspace: habilidades,
+  knowledge: { projeto: conhecimento },
   mcpServers: { 'super-factory': servidorMcp },
   agentControllers: { mesa: criarMesa(storage) },
   observability: new Observability({
@@ -83,6 +86,7 @@ export const mastra = new Mastra({
     // então o navegador fala com a mesma origem.
     host: '0.0.0.0',
     cors: false,
+    apiRoutes: [...KNOWLEDGE_ROUTES],
     middleware: marcaSuperFactory,
   },
 })
