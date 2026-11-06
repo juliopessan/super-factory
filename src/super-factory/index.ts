@@ -7,6 +7,7 @@ import { Observability, MastraStorageExporter, SensitiveDataFilter } from '@mast
 
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
 import { marcaSuperFactory } from './marca.ts'
+import { habilidades } from './habilidades.ts'
 import { criarMesa } from './mesa.ts'
 import { servidorMcp } from './mcp.ts'
 import { evidenciaScorer, portoesScorer, relatorioScorer } from './scorers/factory.ts'
@@ -63,6 +64,7 @@ export const mastra = new Mastra({
   },
   storage,
   memory: { mesa: memoria },
+  workspace: habilidades,
   mcpServers: { 'super-factory': servidorMcp },
   agentControllers: { mesa: criarMesa(storage) },
   observability: new Observability({

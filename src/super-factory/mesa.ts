@@ -2,6 +2,7 @@ import { AgentController } from '@mastra/core/agent-controller'
 import type { LibSQLStore } from '@mastra/libsql'
 
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
+import { habilidades } from './habilidades.ts'
 
 const LEITURA = ['statusQuadro', 'lerLedger', 'lintarCriterios']
 const QUADRO = [...LEITURA, 'validarManifesto']
@@ -13,6 +14,7 @@ export function criarMesa(storage: LibSQLStore) {
     storage,
     agent: chiefOfStaff,
     memory: memoria,
+    workspace: habilidades,
     defaultModeId: 'chief-of-staff',
     disableBuiltinTools: ['submit_plan', 'subagent'],
     instructions: [
