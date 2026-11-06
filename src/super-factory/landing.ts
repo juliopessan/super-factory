@@ -179,6 +179,45 @@ export function paginaInicial(): string {
       display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
     }
     footer a { color: var(--ink); }
+    .guia-alvo {
+      position: relative;
+      z-index: 40;
+      border-radius: 16px;
+      transform: scale(1.035);
+      transform-origin: center top;
+      box-shadow: 0 0 0 3px var(--orange), 0 24px 70px rgba(0, 0, 0, 0.55);
+      transition: transform 0.35s ease;
+    }
+    .guia-velo {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: rgba(0, 0, 0, 0.72);
+    }
+    .guia-painel {
+      position: fixed;
+      z-index: 50;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      width: min(560px, calc(100% - 24px));
+      background: #121212;
+      color: var(--ink);
+      border: 1px solid var(--line-2);
+      border-radius: 16px;
+      padding: 18px 18px 16px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    }
+    .guia-painel[hidden], #guia[hidden] { display: none; }
+    .guia-kicker { margin: 0 0 6px; color: var(--orange); font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .guia-painel h2 { margin: 0 0 8px; font-size: 22px; letter-spacing: -0.03em; font-weight: 500; }
+    .guia-painel p { margin: 0; color: var(--muted); }
+    .guia-acoes { display: flex; gap: 8px; margin-top: 14px; }
+    .guia-acoes button {
+      min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-2);
+      background: transparent; color: var(--ink); cursor: pointer; font: inherit;
+    }
+    .guia-acoes .solid { background: var(--orange); color: var(--orange-ink); border-color: transparent; font-weight: 600; }
     @media (max-width: 980px) {
       nav { display: none; }
       .wrap { width: min(1160px, calc(100% - 28px)); }
@@ -187,6 +226,8 @@ export function paginaInicial(): string {
       .tree, .evals { border: 0; border-top: 1px solid var(--line); }
       .role.wide { grid-column: auto; }
       section { padding: 48px 0; }
+      .guia-alvo { transform: none; }
+      .guia-painel { bottom: 12px; }
     }
   </style>
 </head>
@@ -208,7 +249,8 @@ export function paginaInicial(): string {
       </nav>
       <div class="nav-cta">
         <a class="btn ghost" href="#ciclo">Ciclo</a>
-        <a class="btn solid" href="/studio">Abrir a mesa</a>
+        <button class="btn ghost" type="button" id="guia-abrir">Guia-me</button>
+        <a class="btn solid" href="/studio" id="mesa-cta">Abrir a mesa</a>
       </div>
     </div>
   </header>
@@ -224,7 +266,7 @@ export function paginaInicial(): string {
           <a class="btn ghost" href="#ciclo">Ver o ciclo</a>
         </div>
       </div>
-      <section class="frame" aria-label="Execução do ciclo parada no portão humano">
+      <section class="frame" id="portao" aria-label="Execução do ciclo parada no portão humano">
         <div class="frame-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> super-factory / sdlc · R-3</div>
         <div class="frame-grid">
           <aside class="tree">
@@ -327,14 +369,14 @@ export function paginaInicial(): string {
         <h3>Um passo. Depois o próximo.</h3>
         <p class="intro">Se uma linha vermelha aparecer, copie essa mensagem e cole no chat da mesa. A conversa fica nesse passo, explica o conserto e só então segue. Não cole chave, token ou senha.</p>
         <div class="grid">
-          <article class="card"><em>01</em><h4>Node</h4><p>Baixe a versão 22 em nodejs.org. No Terminal, node -v precisa mostrar v22.18 ou mais.</p></article>
-          <article class="card"><em>02</em><h4>Terminal</h4><p>No Mac, Command + espaço e escreva Terminal. No Windows, escreva PowerShell no Iniciar.</p></article>
-          <article class="card"><em>03</em><h4>Projeto</h4><p>Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize a branch main.</p></article>
-          <article class="card"><em>04</em><h4>Peças</h4><p>Dentro da pasta, npm install. Espere a linha added packages. Não use sudo.</p></article>
-          <article class="card"><em>05</em><h4>Ligar</h4><p>npm run dev e deixe a janela aberta. A linha saudável mostra 4721.</p></article>
-          <article class="card"><em>06</em><h4>Mesa</h4><p>No navegador, localhost:4721 é a página. localhost:4721/studio é a mesa.</p></article>
+          <article class="card" id="passo-1"><em>01</em><h4>Node</h4><p>Baixe a versão 22 em nodejs.org. No Terminal, node -v precisa mostrar v22.18 ou mais.</p></article>
+          <article class="card" id="passo-2"><em>02</em><h4>Terminal</h4><p>No Mac, Command + espaço e escreva Terminal. No Windows, escreva PowerShell no Iniciar.</p></article>
+          <article class="card" id="passo-3"><em>03</em><h4>Projeto</h4><p>Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize a branch main.</p></article>
+          <article class="card" id="passo-4"><em>04</em><h4>Peças</h4><p>Dentro da pasta, npm install. Espere a linha added packages. Não use sudo.</p></article>
+          <article class="card" id="passo-5"><em>05</em><h4>Ligar</h4><p>npm run dev e deixe a janela aberta. A linha saudável mostra 4721.</p></article>
+          <article class="card" id="passo-6"><em>06</em><h4>Mesa</h4><p>No navegador, localhost:4721 é a página. localhost:4721/studio é a mesa.</p></article>
         </div>
-        <p class="intro">O sétimo passo é a chave, e ele é opcional. Sem chave, a mesa funciona e avisa quando a resposta é uma amostra.</p>
+        <p class="intro" id="passo-7">O sétimo passo é a chave, e ele é opcional. Sem chave, a mesa funciona e avisa quando a resposta é uma amostra.</p>
       </div>
     </section>
     <section id="limites">
@@ -362,6 +404,85 @@ export function paginaInicial(): string {
       <span><a href="/studio">Mesa</a> · <a href="https://github.com/juliopessan/super-factory">GitHub</a></span>
     </footer>
   </div>
+  <div id="guia" hidden>
+    <div class="guia-velo"></div>
+    <div class="guia-painel" role="dialog" aria-modal="true" aria-labelledby="guia-titulo">
+      <p class="guia-kicker" id="guia-indice"></p>
+      <h2 id="guia-titulo"></h2>
+      <p id="guia-texto"></p>
+      <div class="guia-acoes">
+        <button type="button" id="guia-voltar">Voltar</button>
+        <button type="button" class="solid" id="guia-seguir">Seguir</button>
+        <button type="button" id="guia-fechar">Fechar</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var passos = [
+        { alvo: 'passo-1', titulo: 'Instale o Node', texto: 'Baixe a versão 22 em nodejs.org. No Terminal, node -v precisa mostrar v22.18 ou mais. Se a versão for antiga, fique neste passo.' },
+        { alvo: 'passo-2', titulo: 'Abra o Terminal', texto: 'No Mac, Command e espaço, e escreva Terminal. No Windows, escreva PowerShell no Iniciar.' },
+        { alvo: 'passo-3', titulo: 'Traga o projeto', texto: 'Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize a branch main.' },
+        { alvo: 'passo-4', titulo: 'Instale as peças', texto: 'Dentro da pasta, npm install. Espere a linha added packages. Não use sudo. Se der erro, cole a mensagem no chat e continue daqui.' },
+        { alvo: 'passo-5', titulo: 'Ligue a mesa', texto: 'npm run dev e deixe a janela aberta. A linha saudável mostra 4721.' },
+        { alvo: 'passo-6', titulo: 'Abra no navegador', texto: 'localhost:4721 é esta página. localhost:4721/studio é a mesa, onde o chat continua a instalação.' },
+        { alvo: 'passo-7', titulo: 'A chave é opcional', texto: 'Sem chave, a mesa funciona e avisa quando a resposta é uma amostra. Não cole chave, token ou senha no chat.' },
+        { alvo: 'portao', titulo: 'O ciclo para no portão', texto: 'Um pedido passa por triagem e especificação e espera uma pessoa em implementação, merge e release. O agente não aprova.' },
+        { alvo: 'ciclo', titulo: 'Seis estágios', texto: 'Triagem, especificação, implementação, verificação, revisão humana e entrega. Cada passo deixa registro.' },
+        { alvo: 'quadro', titulo: 'O quadro', texto: 'Pedido claro entra em ready. Pedido vago, segredo ou force-push fica blocked. A onda leva no máximo cinco cards.' },
+        { alvo: 'papeis', titulo: 'Oito papéis', texto: 'Só o Chief of Staff abre card. Security é somente leitura. Nenhum papel aprova portão.' },
+        { alvo: 'limites', titulo: 'O que fica de fora', texto: 'Sem merge, sem deploy, sem force-push e sem comando. Teste de produto continua NOT_RUN até uma pessoa rodar fora daqui.' },
+        { alvo: 'mesa-cta', titulo: 'Agora a mesa', texto: 'Abra a mesa e escreva o passo em que você está, ou cole o erro. A conversa não volta ao começo.' }
+      ]
+      var i = 0
+      var caixa = document.getElementById('guia')
+      var aberto = false
+      function limpar() {
+        document.querySelectorAll('.guia-alvo').forEach(function (el) { el.classList.remove('guia-alvo') })
+      }
+      function mostrar(n) {
+        i = Math.max(0, Math.min(passos.length - 1, n))
+        limpar()
+        var passo = passos[i]
+        var alvo = document.getElementById(passo.alvo)
+        if (alvo) {
+          alvo.classList.add('guia-alvo')
+          alvo.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+        document.getElementById('guia-indice').textContent = (i + 1) + ' de ' + passos.length
+        document.getElementById('guia-titulo').textContent = passo.titulo
+        document.getElementById('guia-texto').textContent = passo.texto
+        document.getElementById('guia-seguir').textContent = i === passos.length - 1 ? 'Concluir' : 'Seguir'
+        document.getElementById('guia-voltar').hidden = i === 0
+        caixa.hidden = false
+        aberto = true
+      }
+      function fechar() {
+        limpar()
+        caixa.hidden = true
+        aberto = false
+        try { localStorage.setItem('sf-guia', 'visto') } catch (e) {}
+      }
+      document.getElementById('guia-abrir').addEventListener('click', function () { mostrar(0) })
+      document.getElementById('guia-seguir').addEventListener('click', function () {
+        if (i >= passos.length - 1) fechar()
+        else mostrar(i + 1)
+      })
+      document.getElementById('guia-voltar').addEventListener('click', function () { mostrar(i - 1) })
+      document.getElementById('guia-fechar').addEventListener('click', fechar)
+      document.querySelector('.guia-velo').addEventListener('click', fechar)
+      document.addEventListener('keydown', function (evento) {
+        if (!aberto) return
+        if (evento.key === 'Escape') fechar()
+        if (evento.key === 'ArrowRight') document.getElementById('guia-seguir').click()
+        if (evento.key === 'ArrowLeft' && i > 0) mostrar(i - 1)
+      })
+      var forcar = /(?:\\?|&)guia=1(?:&|$)/.test(location.search)
+      var visto = false
+      try { visto = localStorage.getItem('sf-guia') === 'visto' } catch (e) {}
+      if (forcar || !visto) setTimeout(function () { mostrar(0) }, 500)
+    })()
+  </script>
 </body>
 </html>`
 }
