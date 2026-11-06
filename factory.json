@@ -1,0 +1,47 @@
+{
+  "apiVersion": "super-factory/v1",
+  "stages": [
+    "triage",
+    "specification",
+    "implementation",
+    "verification",
+    "human-review",
+    "delivery"
+  ],
+  "gates": {
+    "beforeImplementation": {
+      "human": true,
+      "agentMayApprove": false
+    },
+    "beforeMerge": {
+      "human": true,
+      "requiresEvidence": true,
+      "agentMayApprove": false
+    },
+    "beforeRelease": {
+      "human": true,
+      "deploys": false,
+      "agentMayApprove": false
+    }
+  },
+  "agents": [
+    "chief-of-staff",
+    "architect",
+    "frontend",
+    "backend",
+    "integrations",
+    "qa",
+    "security",
+    "docs"
+  ],
+  "invariants": {
+    "chiefIsOnlyDelegator": true,
+    "securityIsReadOnly": true,
+    "agentsCannotApproveGates": true,
+    "noFalsePass": true,
+    "disjointWriteSets": true,
+    "noDirectPushToProtectedBranches": true,
+    "noAutoDeploy": true,
+    "productTestsAreNotExecutedHere": true
+  }
+}

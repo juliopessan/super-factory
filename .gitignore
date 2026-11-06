@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.mastra/
+.env
+.env.local
+*.db
+*.db-*
+*.db-journal
+agent-tools/
+data/
+.DS_Store
