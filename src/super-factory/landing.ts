@@ -9,133 +9,193 @@ export function paginaInicial(): string {
   <link rel="icon" href="/sf.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,640&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Geist:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #10140f;
-      --bg-2: #171d15;
-      --ink: #f4f0e6;
-      --muted: #b3ad9f;
-      --line: rgba(244, 240, 230, 0.14);
-      --signal: #e4ff57;
-      --signal-ink: #1b2408;
-      --copper: #e0a15a;
-      --shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
-      --serif: "Fraunces", "Iowan Old Style", Palatino, serif;
-      --sans: "Outfit", "Avenir Next", "Segoe UI", sans-serif;
-      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --bg: #080808;
+      --panel: #0f0f0f;
+      --panel-2: #121212;
+      --ink: #f0f0f0;
+      --muted: #939393;
+      --line: #1c1c1c;
+      --line-2: #242424;
+      --orange: #fdac53;
+      --orange-2: #e0993f;
+      --orange-ink: #1a1208;
+      --green: #7aff78;
+      --red: #ff4931;
+      --sans: "Geist", "Avenir Next", "Segoe UI", sans-serif;
+      --mono: "Geist Mono", ui-monospace, monospace;
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      background:
-        radial-gradient(900px 480px at 85% -10%, rgba(228, 255, 87, 0.12), transparent 60%),
-        radial-gradient(700px 420px at -10% 20%, rgba(224, 161, 90, 0.12), transparent 55%),
-        var(--bg);
+      background: var(--bg);
       color: var(--ink);
       font-family: var(--sans);
-      font-size: 17px;
+      font-size: 16px;
       line-height: 1.5;
     }
-    a { color: inherit; }
-    .wrap { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+    a { color: inherit; text-decoration: none; }
+    button, .btn { font-family: inherit; }
+    .banner {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      align-items: center;
+      min-height: 36px;
+      padding: 8px 16px;
+      background: #101010;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+    .banner b { color: var(--ink); font-weight: 500; }
+    .banner a { color: var(--orange); }
     .top {
       position: sticky;
       top: 0;
-      z-index: 4;
+      z-index: 5;
+      background: rgba(8, 8, 8, 0.86);
       backdrop-filter: blur(16px);
-      background: rgba(16, 20, 15, 0.78);
       border-bottom: 1px solid var(--line);
     }
-    .top-inner { display: flex; align-items: center; gap: 18px; min-height: 72px; }
-    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 600; letter-spacing: -0.02em; }
+    .wrap { width: min(1160px, calc(100% - 40px)); margin: 0 auto; }
+    .top-inner { display: flex; align-items: center; gap: 22px; min-height: 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.03em; }
     .mark {
-      width: 36px; height: 36px; border-radius: 10px;
+      width: 28px; height: 28px; border-radius: 7px;
       display: grid; place-items: center;
-      background: var(--signal); color: var(--signal-ink);
-      font-family: var(--sans); font-weight: 600; font-size: 14px;
+      background: var(--orange); color: var(--orange-ink);
+      font-size: 12px; font-weight: 600;
     }
-    nav { display: flex; gap: 18px; margin-left: auto; }
-    nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+    nav { display: flex; gap: 18px; }
+    nav a { color: var(--muted); font-size: 14px; }
     nav a:hover { color: var(--ink); }
-    .go {
-      text-decoration: none; background: var(--signal); color: var(--signal-ink);
-      border-radius: 999px; padding: 10px 16px; font-weight: 600; font-size: 14px;
+    .nav-cta { margin-left: auto; display: flex; gap: 8px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 36px; padding: 0 14px; border-radius: 8px;
+      border: 1px solid transparent; font-size: 14px; font-weight: 500;
     }
-    .go.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
-    .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 48px; align-items: end; padding: 72px 0 36px; }
-    .kicker { font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--copper); margin: 0 0 16px; }
-    h1 { font-family: var(--serif); font-weight: 560; font-size: clamp(44px, 6vw, 76px); line-height: 0.96; letter-spacing: -0.035em; margin: 0; }
-    .lead { color: var(--muted); font-size: 18px; max-width: 46ch; margin: 22px 0 0; }
-    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
-    .ticket {
-      background: var(--bg-2);
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      box-shadow: var(--shadow);
-      padding: 22px;
-      position: relative;
+    .btn.solid { background: var(--orange); color: var(--orange-ink); }
+    .btn.solid:hover { background: var(--orange-2); }
+    .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
+    .btn.ghost:hover { border-color: #3a3a3a; }
+    .hero { padding: 72px 0 28px; max-width: 820px; }
+    .kicker {
+      margin: 0 0 18px;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--orange);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(46px, 6.2vw, 76px);
+      font-weight: 500;
+      letter-spacing: -0.048em;
+      line-height: 0.96;
+    }
+    h1 em { font-style: normal; color: var(--orange); }
+    .lead { margin: 22px 0 0; max-width: 58ch; color: var(--muted); font-size: 18px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .frame {
+      margin: 28px 0 8px;
+      border: 1px solid var(--line-2);
+      border-radius: 16px;
+      background: #0c0c0c;
       overflow: hidden;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
     }
-    .ticket:before {
-      content: "";
-      position: absolute; inset: 0 auto 0 0; width: 6px;
-      background: repeating-linear-gradient(var(--signal) 0 8px, transparent 8px 14px);
+    .frame-bar {
+      display: flex; align-items: center; gap: 10px;
+      min-height: 44px; padding: 0 14px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
     }
-    .ticket-head, .step, .role-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-    .ticket-head { font-family: var(--mono); font-size: 12px; color: var(--muted); padding-left: 10px; }
-    .pill { color: var(--signal-ink); background: var(--signal); border-radius: 999px; padding: 2px 8px; font-weight: 500; }
-    .ticket h2 { font-family: var(--serif); font-size: 32px; line-height: 1.05; margin: 14px 0 18px; padding-left: 10px; font-weight: 560; }
-    .step { padding: 9px 10px; border-top: 1px solid var(--line); font-size: 14px; }
-    .step strong { font-weight: 500; }
-    .step span { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-    .step.wait { background: rgba(228, 255, 87, 0.08); }
-    .step.wait span { color: var(--signal); }
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-    .stat { padding: 22px 8px; }
-    .stat b { display: block; font-family: var(--serif); font-size: 34px; font-weight: 560; letter-spacing: -0.03em; }
-    .stat span { color: var(--muted); font-size: 14px; }
+    .dots { display: flex; gap: 6px; }
+    .dots i { width: 8px; height: 8px; border-radius: 99px; background: #2b2b2b; display: block; }
+    .dots i:first-child { background: var(--orange); }
+    .frame-grid { display: grid; grid-template-columns: 210px 1fr 280px; min-height: 360px; }
+    .tree, .evals { background: var(--panel); }
+    .tree { border-right: 1px solid var(--line); padding: 14px 8px; }
+    .evals { border-left: 1px solid var(--line); padding: 14px; }
+    .file, .trace-row, .score {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+    }
+    .file { padding: 7px 10px; border-radius: 8px; color: var(--muted); font-size: 13px; }
+    .file.on { background: #171717; color: var(--ink); }
+    .file span { font-family: var(--mono); font-size: 11px; color: var(--orange); }
+    .trace { padding: 8px 0; }
+    .trace-row { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .trace-row small, .score small, .file small { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+    .wait { background: rgba(253, 172, 83, 0.08); }
+    .wait strong { color: var(--orange); font-weight: 500; }
+    .evals h2, .tree p { margin: 4px 10px 12px; font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+    .score { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .ok { color: var(--green); font-family: var(--mono); font-size: 12px; }
+    .hold { color: var(--orange); font-family: var(--mono); font-size: 12px; }
     section { padding: 72px 0; }
-    h3 { font-family: var(--serif); font-size: clamp(32px, 4vw, 48px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 560; margin: 0 0 12px; }
-    .intro { color: var(--muted); max-width: 62ch; margin: 0 0 28px; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .section-kicker { margin: 0 0 10px; color: var(--muted); font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+    h3 { margin: 0 0 12px; font-size: clamp(32px, 4vw, 48px); font-weight: 500; letter-spacing: -0.04em; line-height: 1.05; }
+    .intro { margin: 0 0 28px; max-width: 64ch; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
     .card, .role, .limit {
-      background: rgba(23, 29, 21, 0.8);
+      background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 14px;
       padding: 20px;
     }
-    .card em, .role small { font-family: var(--mono); font-style: normal; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--copper); }
-    .card h4, .role h4, .limit h4 { margin: 10px 0 8px; font-size: 20px; letter-spacing: -0.02em; }
+    .card em, .role small { font-family: var(--mono); font-style: normal; font-size: 12px; color: var(--orange); }
+    .card h4, .role h4, .limit h4 { margin: 10px 0 8px; font-size: 18px; font-weight: 500; letter-spacing: -0.02em; }
     .card p, .role p, .limit p { margin: 0; color: var(--muted); }
-    .rail { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
-    .stage { min-height: 140px; border-radius: 16px; border: 1px solid var(--line); padding: 14px; background: var(--bg-2); }
-    .stage b { display: block; font-family: var(--mono); font-size: 12px; color: var(--signal); margin-bottom: 18px; }
+    .rail { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .stage { min-height: 120px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); padding: 14px; }
+    .stage b { display: block; margin-bottom: 28px; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--orange); }
     .cols { display: flex; flex-wrap: wrap; gap: 8px; }
-    .cols span { border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-family: var(--mono); font-size: 13px; }
-    .cols .hot { background: var(--signal); color: var(--signal-ink); border-color: transparent; }
-    .cols .stop { border-color: var(--copper); color: var(--copper); }
-    .roles { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr); gap: 12px; }
-    .role.wide { grid-column: span 2; background: linear-gradient(180deg, rgba(228, 255, 87, 0.12), rgba(23, 29, 21, 0.9)); }
-    .limits { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 28px; align-items: start; }
+    .cols span { border: 1px solid var(--line-2); border-radius: 999px; padding: 7px 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    .cols .hot { background: var(--orange); color: var(--orange-ink); border-color: transparent; }
+    .cols .stop { color: var(--red); border-color: rgba(255, 73, 49, 0.45); }
+    .roles { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 12px; }
+    .role.wide { grid-column: span 2; background: linear-gradient(180deg, rgba(253, 172, 83, 0.1), var(--panel) 42%); }
+    .limits { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 28px; align-items: start; }
     .limit-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     pre {
-      margin: 0; padding: 18px; border-radius: 16px; background: #0b0e0a; border: 1px solid var(--line);
-      overflow: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: #efe8d4;
+      margin: 12px 0 0; padding: 16px; border-radius: 12px;
+      background: #0c0c0c; border: 1px solid var(--line);
+      overflow: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: #f0f0f0;
     }
-    footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .key { color: var(--orange); }
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 28px 0 40px;
+      color: var(--muted);
+      display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
     footer a { color: var(--ink); }
-    @media (max-width: 860px) {
+    @media (max-width: 980px) {
       nav { display: none; }
-      .hero, .grid, .rail, .roles, .limits, .limit-list, .stats { grid-template-columns: 1fr; }
-      .hero { padding-top: 36px; }
-      section { padding: 48px 0; }
+      .wrap { width: min(1160px, calc(100% - 28px)); }
+      .hero { padding-top: 40px; }
+      .frame-grid, .grid, .rail, .roles, .limits, .limit-list { grid-template-columns: 1fr; }
+      .tree, .evals { border: 0; border-top: 1px solid var(--line); }
       .role.wide { grid-column: auto; }
+      section { padding: 48px 0; }
     }
   </style>
 </head>
 <body>
+  <div class="banner">
+    <b>Três portões humanos.</b>
+    <span>Nenhum merge e nenhum deploy saem da fábrica.</span>
+    <a href="#limites">Ver os limites</a>
+  </div>
   <header class="top">
     <div class="wrap top-inner">
       <a class="brand" href="/"><span class="mark" aria-hidden="true">SF</span> Super Factory</a>
@@ -145,40 +205,57 @@ export function paginaInicial(): string {
         <a href="#papeis">Papéis</a>
         <a href="#limites">Limites</a>
       </nav>
-      <a class="go" href="/studio">Abrir o Studio</a>
+      <div class="nav-cta">
+        <a class="btn ghost" href="#ciclo">Ciclo</a>
+        <a class="btn solid" href="/studio">Abrir o Studio</a>
+      </div>
     </div>
   </header>
   <main>
-    <div class="wrap hero">
-      <div>
+    <div class="wrap">
+      <div class="hero">
         <p class="kicker">SDLC agentic · evidência antes de confiança</p>
-        <h1>O pedido só atravessa a fábrica quando uma pessoa libera.</h1>
+        <h1>Conduza o pedido. <em>Pare</em> no portão.</h1>
         <p class="lead">Super Factory é a mesa. Um pedido vira card, passa por triagem, especificação, plano, verificação e revisão, e para três vezes: implementação, merge e release. Agente não aprova, não faz merge e não publica.</p>
         <div class="actions">
-          <a class="go" href="/studio">Entrar na mesa</a>
-          <a class="go ghost" href="#ciclo">Ver o ciclo</a>
+          <a class="btn solid" href="/studio">Abrir o Studio</a>
+          <a class="btn ghost" href="#ciclo">Ver o ciclo</a>
         </div>
       </div>
-      <aside class="ticket" aria-label="Exemplo de card parado no portão de implementação">
-        <div class="ticket-head"><span>C-18 · github · acme/widgets</span><span class="pill">ready</span></div>
-        <h2>Filtro de datas com hora</h2>
-        <div class="step"><strong>Triagem</strong><span>observado</span></div>
-        <div class="step"><strong>Especificação</strong><span>registrada</span></div>
-        <div class="step wait"><strong>Implementação</strong><span>portão humano</span></div>
-        <div class="step"><strong>Verificação</strong><span>ainda não</span></div>
-        <div class="step"><strong>Revisão</strong><span>ainda não</span></div>
-        <div class="step"><strong>Entrega</strong><span>sem merge</span></div>
-      </aside>
-    </div>
-    <div class="wrap stats">
-      <div class="stat"><b>3</b><span>portões que só uma pessoa abre</span></div>
-      <div class="stat"><b>8</b><span>papéis, um único delegador</span></div>
-      <div class="stat"><b>0</b><span>deploys feitos pela fábrica</span></div>
+      <section class="frame" aria-label="Execução do ciclo parada no portão humano">
+        <div class="frame-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> super-factory / sdlc · R-3</div>
+        <div class="frame-grid">
+          <aside class="tree">
+            <p>projeto</p>
+            <div class="file">factory.json <span>ok</span></div>
+            <div class="file">agents/</div>
+            <div class="file on">workflows/sdlc.ts <span>ativo</span></div>
+            <div class="file">quadro</div>
+            <div class="file">trilha</div>
+          </aside>
+          <div class="trace">
+            <div class="trace-row"><span>triagem</span><small>0.012s</small></div>
+            <div class="trace-row"><span>especificação</span><small>0.041s</small></div>
+            <div class="trace-row wait"><strong>portão humano</strong><small>beforeImplementation</small></div>
+            <div class="trace-row"><span>verificação</span><small>ainda não</small></div>
+            <div class="trace-row"><span>revisão</span><small>ainda não</small></div>
+            <div class="trace-row"><span>entrega</span><small>sem merge</small></div>
+          </div>
+          <aside class="evals">
+            <h2>avaliações</h2>
+            <div class="score"><span>Evidência honesta</span><b class="ok">100%</b></div>
+            <div class="score"><span>Portões humanos</span><b class="ok">100%</b></div>
+            <div class="score"><span>Testes do produto</span><b class="hold">NOT_RUN</b></div>
+            <div class="score"><span>Merge automático</span><b class="hold">bloqueado</b></div>
+          </aside>
+        </div>
+      </section>
     </div>
     <section id="proposta">
       <div class="wrap">
-        <h3>Uma mesa de operação, não um piloto automático.</h3>
-        <p class="intro">O Studio continua sendo o lugar de trabalhar. Esta página explica o contrato: o que a fábrica conduz, o que ela observa e o que ela se recusa a fazer sozinha.</p>
+        <p class="section-kicker">proposta</p>
+        <h3>Uma mesa de operação, com o julgamento fora do agente.</h3>
+        <p class="intro">O Studio continua sendo o lugar de trabalhar. A página explica o contrato: o que a fábrica conduz, o que ela observa e o que ela se recusa a fazer sozinha.</p>
         <div class="grid">
           <article class="card">
             <em>01 · Evidência</em>
@@ -200,6 +277,7 @@ export function paginaInicial(): string {
     </section>
     <section id="ciclo">
       <div class="wrap">
+        <p class="section-kicker">ciclo</p>
         <h3>Seis estágios, uma trilha.</h3>
         <p class="intro">Cada passo deixa registro. O relatório fecha com contexto, critérios, donos, evidência, portões e o próximo passo.</p>
         <div class="rail">
@@ -214,6 +292,7 @@ export function paginaInicial(): string {
     </section>
     <section id="quadro">
       <div class="wrap">
+        <p class="section-kicker">quadro</p>
         <h3>O quadro decide para onde o card vai.</h3>
         <p class="intro">Pedido claro ou bug com critério observável entra em ready. Pedido vago, segredo ou force-push fica blocked. A onda pega no máximo cinco cards prontos, com escritas disjuntas.</p>
         <div class="cols" aria-label="Colunas do quadro">
@@ -223,10 +302,11 @@ export function paginaInicial(): string {
     </section>
     <section id="papeis">
       <div class="wrap">
+        <p class="section-kicker">papéis</p>
         <h3>Oito papéis. Um só abre o card.</h3>
         <div class="roles">
           <article class="role wide">
-            <div class="role-top"><h4>Chief of Staff</h4><small>delega</small></div>
+            <div class="file"><h4>Chief of Staff</h4><small>delega</small></div>
             <p>Único papel que abre card e encaminha o ciclo. Não aprova portão. Para os três portões, o caminho é o workflow sdlc.</p>
           </article>
           <article class="role"><h4>Architect</h4><p>Separa donos e caminhos. Se duas fatias cobrem o mesmo lugar, o card para.</p></article>
@@ -242,6 +322,7 @@ export function paginaInicial(): string {
     <section id="limites">
       <div class="wrap limits">
         <div>
+          <p class="section-kicker">limites</p>
           <h3>O que a fábrica deixa do lado de fora.</h3>
           <p class="intro">O desfecho aceito-com-ressalvas significa que a pessoa aceitou o release e os testes do produto continuam fora deste ciclo.</p>
         </div>
@@ -252,7 +333,7 @@ export function paginaInicial(): string {
             <article class="limit"><h4>Sem force-push</h4><p>Pedido de push forçado ou commit direto em main para na triagem.</p></article>
             <article class="limit"><h4>Sem comando</h4><p>Nada de shell. Quem roda a suíte é uma pessoa, e o resultado fica anexado depois.</p></article>
           </div>
-          <pre>{ "aprovado": true, "aprovador": "Joana", "nota": "Pode seguir, sem merge." }</pre>
+          <pre>{ <span class="key">"aprovado"</span>: true, <span class="key">"aprovador"</span>: "Joana", <span class="key">"nota"</span>: "Pode seguir, sem merge." }</pre>
         </div>
       </div>
     </section>
