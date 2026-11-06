@@ -28,10 +28,17 @@ const { criarIssueGithub, criarRascunhoGithub, listarIssuesGithub } = await impo
 const { criarWorkItemAzure, listarWorkItemsAzure } = await import('../factory/azure.ts')
 const { MANIFEST, validarManifesto } = await import('../factory/manifest.ts')
 const { aprovar, avaliarMerge, iniciar, observado } = await import('../factory/pipeline.ts')
-const { chiefOfStaff, security } = await import('../mastra/agents/factory.ts')
-const { planejarMesa } = await import('../mastra/factory-model.ts')
-const { evidenciaScorer, portoesScorer, relatorioScorer } = await import('../mastra/scorers/factory.ts')
-const { sdlcWorkflow } = await import('../mastra/workflows/sdlc.ts')
+const { chiefOfStaff, security } = await import('../super-factory/agents/factory.ts')
+const { planejarMesa } = await import('../super-factory/factory-model.ts')
+const { evidenciaScorer, portoesScorer, relatorioScorer } = await import('../super-factory/scorers/factory.ts')
+const { sdlcWorkflow } = await import('../super-factory/workflows/sdlc.ts')
+const { paginaInicial } = await import('../super-factory/landing.ts')
+const pagina = paginaInicial()
+assert.match(pagina, /Super Factory/)
+assert.match(pagina, /beforeMerge|portão humano/)
+assert.match(pagina, /href="\/studio"/)
+assert.equal(pagina.toLowerCase().includes('lorem'), false)
+assert.match(fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), 'src/super-factory/index.ts'), 'utf8'), /studioBase:\s*'\/studio'/)
 
 import type { Estado, PedidoBruto } from '../factory/schemas.ts'
 
@@ -346,7 +353,7 @@ function listarFontes(dir: string): string[] {
     return cheio.endsWith('.ts') ? [cheio] : []
   })
 }
-for (const arquivo of [...listarFontes(path.join(raiz, 'src/factory')), ...listarFontes(path.join(raiz, 'src/mastra'))]) {
+for (const arquivo of [...listarFontes(path.join(raiz, 'src/factory')), ...listarFontes(path.join(raiz, 'src/super-factory'))]) {
   const texto = fs.readFileSync(arquivo, 'utf8')
   assert.equal(texto.includes('child_process'), false, arquivo)
   assert.equal(texto.includes('execSync'), false, arquivo)
