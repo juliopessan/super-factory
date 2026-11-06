@@ -4,7 +4,7 @@ import type { LibSQLStore } from '@mastra/libsql'
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
 import { habilidades } from './habilidades.ts'
 
-const LEITURA = ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto']
+const LEITURA = ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao']
 const QUADRO = [...LEITURA, 'validarManifesto']
 const TAREFAS = ['ask_user', 'task_write', 'task_update', 'task_complete', 'task_check']
 

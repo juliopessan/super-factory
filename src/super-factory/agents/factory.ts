@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent'
 import { Memory } from '@mastra/memory'
 
 import { conhecimento, definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, relatarMerge } from '../conhecimento.ts'
+import { conduzirInstalacaoFerramenta } from '../instalacao.ts'
 import { habilidades } from '../habilidades.ts'
 import { modeloConfigurado } from '../model.ts'
 import { RedigirDadosPessoais } from '../processors/redigir-dados.ts'
@@ -28,6 +29,7 @@ const BASE = [
   'As skills do workspace são leitura. A skill super-factory manda: não execute script, shell, merge, force-push nem deploy.',
   'A base do projeto é por repositório. Se lerBaseProjeto disser que está vazia, não invente regra do cliente.',
   'A política é entrega humana. Um relato de merge, mesmo confiante, não aprova o portão beforeMerge.',
+  'Na instalação, use conduzirInstalacao. Um erro fica no mesmo passo. Não peça chave, token ou senha.',
 ].join('\n')
 
 export const memoria = new Memory({ options: { lastMessages: 12, generateTitle: false } })
@@ -48,7 +50,7 @@ function criar(id: string, name: string, description: string, papel: string, ext
   })
 }
 
-const leitura = { statusQuadro, lerLedger, lintarCriterios, lerBaseProjeto, lerPoliticaProjeto }
+const leitura = { statusQuadro, lerLedger, lintarCriterios, lerBaseProjeto, lerPoliticaProjeto, conduzirInstalacao: conduzirInstalacaoFerramenta }
 const quadroEManifesto = { ...leitura, validarManifesto }
 
 export const chiefOfStaff = criar(

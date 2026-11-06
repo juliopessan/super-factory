@@ -2,6 +2,7 @@ import { MCPServer } from '@mastra/mcp'
 
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, qa, security } from './agents/factory.ts'
 import { definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, registrarRegraProjeto, relatarMerge } from './conhecimento.ts'
+import { conduzirInstalacaoFerramenta } from './instalacao.ts'
 import {
   abrirCard,
   avaliarPortaoMerge,
@@ -64,6 +65,7 @@ export const servidorMcp = new MCPServer({
     lerPoliticaProjeto,
     definirPoliticaProjeto,
     relatarMerge,
+    conduzirInstalacao: conduzirInstalacaoFerramenta,
   },
   workflows: { sdlc: sdlcWorkflow },
 })

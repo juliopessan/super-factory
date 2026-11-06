@@ -10,6 +10,7 @@ import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria
 import { marcaSuperFactory } from './marca.ts'
 import { conhecimento, definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, registrarRegraProjeto, relatarMerge } from './conhecimento.ts'
 import { habilidades } from './habilidades.ts'
+import { conduzirInstalacaoFerramenta } from './instalacao.ts'
 import { criarMesa } from './mesa.ts'
 import { servidorMcp } from './mcp.ts'
 import { evidenciaScorer, portoesScorer, relatorioScorer } from './scorers/factory.ts'
@@ -63,6 +64,7 @@ export const mastra = new Mastra({
     lerPoliticaProjeto,
     definirPoliticaProjeto,
     relatarMerge,
+    conduzirInstalacao: conduzirInstalacaoFerramenta,
   },
   scorers: {
     evidencia: evidenciaScorer,
