@@ -2,9 +2,9 @@
 
 https://github.com/juliopessan/super-factory
 
-O Studio é a mesa. Um pedido vira card, passa por triagem, especificação, plano, verificação e revisão, e só segue quando uma pessoa libera os três portões: implementação, merge e release. O ciclo não faz merge, não faz push em `main` ou `master` e não coloca nada em produção.
+A raiz é a apresentação. O Studio, em `/studio`, é a mesa. Um pedido vira card, passa por triagem, especificação, plano, verificação e revisão, e só segue quando uma pessoa libera os três portões: implementação, merge e release. O ciclo não faz merge, não faz push em `main` ou `master` e não coloca nada em produção.
 
-## Clonar
+## Rodar
 
 É preciso Node `22.18` ou mais recente.
 
@@ -15,9 +15,32 @@ npm install
 npm run dev
 ```
 
-O servidor sobe na porta `4721`. A raiz é a landing da Super Factory. O Studio, a mesa de operação, fica em `/studio`. `npm run check` confere tipos e a checagem da fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão.
+Se a pasta `super-factory` já existe, não clone de novo. Atualize a branch e instale:
 
-O quadro usa as colunas `backlog`, `ready`, `build`, `qa`, `review`, `blocked` e `done`. Pedido claro ou bug com critério observável entra em `ready`. Pedido vago, segredo ou force-push para em `blocked`.
+```bash
+cd super-factory
+git fetch origin
+git checkout -B main origin/main
+npm install
+npm run dev
+```
+
+O servidor sobe na porta `4721`. Abra a landing em `/` e a mesa em `/studio`. `npm run check` confere tipos e a checagem da fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão. `npm install` gera o `package-lock.json` quando ele ainda não está no clone.
+
+## Onde está o código
+
+| Caminho | O que guarda |
+| --- | --- |
+| `src/super-factory/` | Landing, marca SF, agentes, ferramentas e o workflow `sdlc` |
+| `src/factory/` | Quadro, portões, trilha, GitHub e Azure DevOps |
+| `src/scripts/check.ts` | Checagem do ciclo, sem shell e sem suíte de produto |
+| `factory.json` | Manifesto: estágios, três portões, oito papéis, evidência |
+
+O comando de desenvolvimento aponta para `src/super-factory`. A pasta antiga `src/mastra` não faz parte deste repositório.
+
+## Quadro
+
+As colunas são `backlog`, `ready`, `build`, `qa`, `review`, `blocked` e `done`. Pedido claro ou bug com critério observável entra em `ready`. Pedido vago, segredo ou force-push para em `blocked`.
 
 Os oito papéis são Chief of Staff, Architect, Frontend, Backend, Integrations, QA, Security e Docs. Só o Chief of Staff abre card. Security é somente leitura. Nenhum agente registra aprovação.
 
@@ -47,11 +70,13 @@ O workflow suspende três vezes. Em cada uma, retome com:
 
 O desfecho `aceito-com-ressalvas` significa que a pessoa aceitou o release e os testes do produto continuam `NOT_RUN`. A fábrica não executa comando de teste, de build nem de shell. Quem roda a suíte é uma pessoa, no repositório, e o resultado fica fora deste ciclo.
 
-## O que cada modo faz
+## Credenciais
+
+Copie `.env.example` para `.env` só na sua máquina. O arquivo `.env` não entra no repositório.
 
 Sem `GITHUB_TOKEN`, listar ou abrir issue no GitHub devolve a amostra e a nota `Simulado`. Com o token, a chamada vai para `https://api.github.com`. O pull request, quando a branch de origem existe e não é a base, sai como rascunho. Não há endpoint de merge nem de push.
 
-Sem `AZURE_DEVOPS_ORG` e `AZURE_DEVOPS_PAT` juntos, o Azure DevOps fica simulado. Com os dois, work items usam a API em `https://dev.azure.com`. Pull request rascunho só quando o campo vem como `projeto/repositorio`.
+Sem `AZURE_DEVOPS_ORG` e `AZURE_DEVOPS_PAT` juntos, o Azure DevOps fica simulado. Com os dois, work items usam a API em `https://dev.azure.com`. O projeto vem do campo do ciclo. Pull request rascunho só quando esse campo vem como `projeto/repositorio`.
 
 Os identificadores passam por uma lista fechada de caracteres. O token não entra na URL e não é copiado para o relatório.
 
@@ -61,7 +86,7 @@ Fale com o Chief of Staff para ver o quadro, abrir um card ou ler a trilha. Um c
 
 Security responde em leitura. Se o pedido for escrever, ele recusa.
 
-Sem chave de modelo, a mesa local encaminha a frase para a ferramenta certa. Com `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` ou `GOOGLE_API_KEY`, os agentes usam o provedor correspondente. `FACTORY_MODEL` troca o modelo, no formato `provedor/modelo`.
+Sem chave de modelo, a mesa local encaminha a frase para a ferramenta certa. Com `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` ou `GOOGLE_GENERATIVE_AI_API_KEY`, os agentes usam o provedor correspondente. `SUPER_FACTORY_MODEL` troca o modelo, no formato `provedor/modelo`. `FACTORY_MODEL` continua valendo quando o primeiro está vazio.
 
 ## O que fica de fora de propósito
 
