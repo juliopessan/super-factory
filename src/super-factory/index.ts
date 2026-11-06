@@ -5,8 +5,10 @@ import { Mastra } from '@mastra/core/mastra'
 import { LibSQLStore } from '@mastra/libsql'
 import { Observability, MastraStorageExporter, SensitiveDataFilter } from '@mastra/observability'
 
-import { architect, backend, chiefOfStaff, docs, frontend, integrations, qa, security } from './agents/factory.ts'
+import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
 import { marcaSuperFactory } from './marca.ts'
+import { criarMesa } from './mesa.ts'
+import { servidorMcp } from './mcp.ts'
 import { evidenciaScorer, portoesScorer, relatorioScorer } from './scorers/factory.ts'
 import {
   abrirCard,
@@ -24,6 +26,10 @@ import {
 import { sdlcWorkflow } from './workflows/sdlc.ts'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const storage = new LibSQLStore({
+  id: 'super-factory-storage',
+  url: `file:${path.join(root, 'factory.db')}`,
+})
 
 export const mastra = new Mastra({
   agents: {
@@ -55,10 +61,10 @@ export const mastra = new Mastra({
     portoes: portoesScorer,
     relatorio: relatorioScorer,
   },
-  storage: new LibSQLStore({
-    id: 'super-factory-storage',
-    url: `file:${path.join(root, 'factory.db')}`,
-  }),
+  storage,
+  memory: { mesa: memoria },
+  mcpServers: { 'super-factory': servidorMcp },
+  agentControllers: { mesa: criarMesa(storage) },
   observability: new Observability({
     configs: {
       default: {
