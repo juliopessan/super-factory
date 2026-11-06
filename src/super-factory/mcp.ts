@@ -1,7 +1,7 @@
 import { MCPServer } from '@mastra/mcp'
 
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, qa, security } from './agents/factory.ts'
-import { lerBaseProjeto, registrarRegraProjeto } from './conhecimento.ts'
+import { definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, registrarRegraProjeto, relatarMerge } from './conhecimento.ts'
 import {
   abrirCard,
   avaliarPortaoMerge,
@@ -61,6 +61,9 @@ export const servidorMcp = new MCPServer({
     criarWorkItemAzure,
     lerBaseProjeto,
     registrarRegraProjeto,
+    lerPoliticaProjeto,
+    definirPoliticaProjeto,
+    relatarMerge,
   },
   workflows: { sdlc: sdlcWorkflow },
 })

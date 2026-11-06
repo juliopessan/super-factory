@@ -8,7 +8,7 @@ import { Observability, MastraStorageExporter, SensitiveDataFilter } from '@mast
 
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
 import { marcaSuperFactory } from './marca.ts'
-import { conhecimento } from './conhecimento.ts'
+import { conhecimento, definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, registrarRegraProjeto, relatarMerge } from './conhecimento.ts'
 import { habilidades } from './habilidades.ts'
 import { criarMesa } from './mesa.ts'
 import { servidorMcp } from './mcp.ts'
@@ -58,6 +58,11 @@ export const mastra = new Mastra({
     criarIssueGithub,
     listarAzure,
     criarWorkItemAzure,
+    lerBaseProjeto,
+    registrarRegraProjeto,
+    lerPoliticaProjeto,
+    definirPoliticaProjeto,
+    relatarMerge,
   },
   scorers: {
     evidencia: evidenciaScorer,

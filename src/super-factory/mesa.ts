@@ -4,7 +4,7 @@ import type { LibSQLStore } from '@mastra/libsql'
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
 import { habilidades } from './habilidades.ts'
 
-const LEITURA = ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto']
+const LEITURA = ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto']
 const QUADRO = [...LEITURA, 'validarManifesto']
 const TAREFAS = ['ask_user', 'task_write', 'task_update', 'task_complete', 'task_check']
 
@@ -29,7 +29,7 @@ export function criarMesa(storage: LibSQLStore) {
         description: 'Abre card e encaminha. Não aprova portão.',
         agent: chiefOfStaff,
         metadata: { default: true },
-        availableTools: [...TAREFAS, ...QUADRO, 'abrirCard', 'planejarOnda', 'avaliarPortaoMerge', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure', 'registrarRegraProjeto'],
+        availableTools: [...TAREFAS, ...QUADRO, 'abrirCard', 'planejarOnda', 'avaliarPortaoMerge', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure', 'registrarRegraProjeto', 'definirPoliticaProjeto', 'relatarMerge'],
       },
       {
         id: 'architect',
@@ -57,14 +57,14 @@ export function criarMesa(storage: LibSQLStore) {
         name: 'Integrations',
         description: 'Lista e abre issue ou work item. Não faz merge.',
         agent: integrations,
-        availableTools: ['statusQuadro', 'lerLedger', 'lerBaseProjeto', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure'],
+        availableTools: ['statusQuadro', 'lerLedger', 'lerBaseProjeto', 'lerPoliticaProjeto', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure'],
       },
       {
         id: 'qa',
         name: 'QA',
         description: 'Lê evidência. Não transforma NOT_RUN em PASS.',
         agent: qa,
-        availableTools: [...LEITURA, 'avaliarPortaoMerge'],
+        availableTools: [...LEITURA, 'avaliarPortaoMerge', 'relatarMerge'],
       },
       {
         id: 'security',

@@ -1,7 +1,7 @@
 import { Agent } from '@mastra/core/agent'
 import { Memory } from '@mastra/memory'
 
-import { conhecimento } from '../conhecimento.ts'
+import { conhecimento, definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, relatarMerge } from '../conhecimento.ts'
 import { habilidades } from '../habilidades.ts'
 import { modeloConfigurado } from '../model.ts'
 import { RedigirDadosPessoais } from '../processors/redigir-dados.ts'
@@ -27,6 +27,7 @@ const BASE = [
   'Quando uma ferramenta devolver resumo, mostre esse texto. Não invente issue, work item ou aprovação.',
   'As skills do workspace são leitura. A skill super-factory manda: não execute script, shell, merge, force-push nem deploy.',
   'A base do projeto é por repositório. Se lerBaseProjeto disser que está vazia, não invente regra do cliente.',
+  'A política é entrega humana. Um relato de merge, mesmo confiante, não aprova o portão beforeMerge.',
 ].join('\n')
 
 export const memoria = new Memory({ options: { lastMessages: 12, generateTitle: false } })
@@ -47,7 +48,7 @@ function criar(id: string, name: string, description: string, papel: string, ext
   })
 }
 
-const leitura = { statusQuadro, lerLedger, lintarCriterios }
+const leitura = { statusQuadro, lerLedger, lintarCriterios, lerBaseProjeto, lerPoliticaProjeto }
 const quadroEManifesto = { ...leitura, validarManifesto }
 
 export const chiefOfStaff = criar(
@@ -65,6 +66,8 @@ export const chiefOfStaff = criar(
     listarAzure,
     criarIssueGithub,
     criarWorkItemAzure,
+    definirPoliticaProjeto,
+    relatarMerge,
   },
 )
 
@@ -116,8 +119,8 @@ export const qa = criar(
   'QA',
   'Lê evidência. Não transforma NOT_RUN em PASS.',
   'qa',
-  'Testes do produto ficam NOT_RUN até alguém rodá-los fora da fábrica. Você não executa comando.',
-  { ...leitura, avaliarPortaoMerge },
+  'Testes do produto ficam NOT_RUN até alguém rodá-los fora da fábrica. Você não executa comando. O relato de merge não aprova o portão.',
+  { ...leitura, avaliarPortaoMerge, relatarMerge },
 )
 
 export const security = criar(
