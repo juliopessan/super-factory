@@ -30,8 +30,8 @@ export function rotear(descricao: string, lintOk: boolean): Rota {
 const REGRAS: { dono: Dono; test: RegExp; caminho: string }[] = [
   { dono: 'frontend', test: /\b(ui|tela|p[aá]gina|frontend|componente)\b/i, caminho: 'src/ui/' },
   { dono: 'backend', test: /\b(api|servi[cç]o|backend|banco|endpoint|filtro)\b/i, caminho: 'src/api/' },
-  { dono: 'integrations', test: /\b(github|azure|integra[cç][ãa]o|webhook)\b/i, caminho: 'src/integrations/' },
-  { dono: 'docs', test: /\b(readme|documenta[cç][ãa]o)\b/i, caminho: 'docs/' },
+  { dono: 'integrations', test: /\b(github|azure|integra[cç][aã]o|webhook)\b/i, caminho: 'src/integrations/' },
+  { dono: 'docs', test: /\b(readme|documenta[cç][aã]o)\b/i, caminho: 'docs/' },
 ]
 
 export function fatiasDe(texto: string): Fatia[] {
