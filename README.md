@@ -4,28 +4,19 @@ https://github.com/juliopessan/super-factory
 
 A raiz é a apresentação. O Studio, em `/studio`, é a mesa. Um pedido vira card, passa por triagem, especificação, plano, verificação e revisão, e só segue quando uma pessoa libera os três portões: implementação, merge e release. O ciclo não faz merge, não faz push em `main` ou `master` e não coloca nada em produção.
 
-## Rodar
+## Instalar
 
-É preciso Node `22.18` ou mais recente.
+São sete passos, um de cada vez. A página inicial, na parte Instalar, diz a mesma coisa. Quando a mesa já estiver aberta, o chat continua do passo em que a pessoa parou: cole o que o Terminal mostrou. Um erro não volta ao começo. Não cole chave, token ou senha.
 
-```bash
-git clone https://github.com/juliopessan/super-factory.git
-cd super-factory
-npm install
-npm run dev
-```
+1. Instale o Node 22.18 ou mais novo, pelo site nodejs.org. No Terminal, `node -v` precisa começar com `v22` nessa faixa, ou com um número maior.
+2. Abra o Terminal.
+3. Primeira vez: `git clone https://github.com/juliopessan/super-factory.git` e entre na pasta. Se a pasta `super-factory` já existe, não clone de novo. Use `cd ~/super-factory`, `git fetch origin` e `git checkout -B main origin/main`.
+4. `npm install`
+5. `npm run dev` e deixe essa janela aberta. A linha saudável mostra `4721`.
+6. No navegador, abra `http://localhost:4721` e a mesa em `http://localhost:4721/studio`.
+7. Chave é opcional. Sem ela, a mesa responde em amostra. O arquivo `.env` fica só na máquina.
 
-Se a pasta `super-factory` já existe, não clone de novo. Atualize a branch e instale:
-
-```bash
-cd super-factory
-git fetch origin
-git checkout -B main origin/main
-npm install
-npm run dev
-```
-
-O servidor sobe na porta `4721`. Abra a landing em `/` e a mesa em `/studio`. `npm run check` confere tipos e a checagem da fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão. `npm install` gera o `package-lock.json` quando ele ainda não está no clone.
+`npm run check` confere a fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão.
 
 ## Onde está o código
 
@@ -36,7 +27,7 @@ O servidor sobe na porta `4721`. Abra a landing em `/` e a mesa em `/studio`. `n
 | `src/scripts/check.ts` | Checagem do ciclo, sem shell e sem suíte de produto |
 | `factory.json` | Manifesto: estágios, três portões, oito papéis, evidência |
 
-O comando de desenvolvimento aponta para `src/super-factory`. A pasta antiga `src/mastra` não faz parte deste repositório.
+O comando de desenvolvimento aponta para `src/super-factory`.
 
 ## Quadro
 
