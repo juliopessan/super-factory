@@ -82,7 +82,9 @@ Os identificadores passam por uma lista fechada de caracteres. O token não entr
 
 ## Base do projeto
 
-Cada repositório tem a própria base. Ela guarda a regra que uma pessoa daquele cliente ditou: escrita, pastas, branch, evidência, glossário. `lerBaseProjeto` lê. `registrarRegraProjeto` grava, e o autor é o nome dessa pessoa. Um papel da mesa não entra como autor. Base vazia continua vazia: o ciclo segue e ninguém inventa regra de cliente. A base não aprova portão.
+Cada repositório tem a própria base. Ela guarda a regra que uma pessoa daquele cliente ditou: escrita, pastas, branch, evidência, glossário. `lerBaseProjeto` lê. `registrarRegraProjeto` grava, e o autor é o nome dessa pessoa. Um papel da mesa não entra como autor. Base vazia continua vazia: o ciclo segue e ninguém inventa regra de cliente.
+
+`lerPoliticaProjeto` lê a política. Sem página gravada, a autonomia já é entrega humana. `definirPoliticaProjeto` registra a branch protegida e os checks que o cliente nomeou. A fábrica não executa esses checks e não aceita merge automático. `relatarMerge` guarda interpretação, premissas e confiança (`confiante` ou `entrega`). Confiança não aprova o portão `beforeMerge`.
 
 ## Skills
 
@@ -105,5 +107,5 @@ Sem chave de modelo, a mesa local encaminha a frase para a ferramenta certa. Com
 ## O que fica de fora de propósito
 
 - Copiar os textos da Agent Factory. O manifesto em `factory.json` reescreve o núcleo: estágios, três portões humanos, oito papéis, evidência e escritas disjuntas.
-- O quadro e a triagem (claro, nebuloso, bug) seguem o modelo operacional do super-board, sob a licença MIT, Copyright 2026 Julio Pessan.
+- O quadro e a triagem (claro, nebuloso, bug) seguem o modelo operacional do super-board, sob a licença MIT, Copyright 2026 Eric Tech.
 - Gerar código no repositório, executar a suíte, fazer merge, force-push ou deploy. O plano aponta donos e caminhos (`src/ui/`, `src/api/`, `src/integrations/`, `docs/`). Se dois donos cobrem o mesmo caminho, o card para.
