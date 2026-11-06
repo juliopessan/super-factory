@@ -28,4 +28,4 @@ The checker gives every problem one `type`. The workflow attaches this table's d
 3. One round is one coherent batch. If two commands pull against each other (`bolder` and `quieter` on the same element), keep the higher-severity one and skip the other with a reason.
 4. `bolder`, `colorize`, `animate` and `delight` add things. Run them only when the brief or the taste file's direction asks for more. Otherwise skip with the reason "direction says calmer" or similar.
 
-Without Impeccable (rubric method), the same commands apply, using the notes in [`rubric.md`](rubric.md) § 4 instead of the playbooks.
+Without Impeccable (rubric method), the same commands apply, using the notes in [`rubric.md`](rubric.md) §4 instead of the playbooks.
