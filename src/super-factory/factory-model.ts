@@ -141,7 +141,7 @@ function escolher(papel: Papel, texto: string): PlanoMesa {
     if (!runId) return { kind: 'text', text: `Diga o ciclo, por exemplo R-3, que eu leio o portão. Eu não aprovo.\n\n${RODAPE}` }
     ferramenta = 'avaliarPortaoMerge'
     input = { runId }
-  } else if (/\b(crit[ée]rios|aceite)\b/i.test(texto)) {
+  } else if (/\b(crit[eé]rios|aceite)\b/i.test(texto)) {
     ferramenta = 'lintarCriterios'
     input = { criterios: texto }
   } else if (/\b(azure|devops|work item)\b/i.test(texto) && /\b(cria|abre|abrir|criar)\b/i.test(texto)) {
