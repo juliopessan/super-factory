@@ -155,11 +155,11 @@ goes in Before | After.
 
 ```
 ## Acceptance criteria
-- [x] 12 MB file shows the size message in 1 s\\
+- [x] 12 MB file shows the size message in 1 s\
   ↳ `e2e/upload-size.spec.ts:14` · failed on `5a2363b`, passes on `3f9c2a1`
-- [x] No request over 10 MB\\
+- [x] No request over 10 MB\
   ↳ spec asserts 0 calls · HAR in `runs/issue-790-qa-v2/`
-- [ ] No new Sentry events after deploy\\
+- [ ] No new Sentry events after deploy\
   ↳ not verified: needs prod deploy · Eric
 ```
 
