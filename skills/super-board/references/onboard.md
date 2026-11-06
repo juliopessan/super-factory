@@ -93,7 +93,7 @@ the question:
 
 ```
 ⏺ Bash(cat .claude/super-board/onboard-answers.json)
-  ◿  saved 2 Oct, 18:40 · stopped at Policies & permissions
+  ⎿  saved 2 Oct, 18:40 · stopped at Policies & permissions
 ⏺ 💾 Found your answers from last time:
   ✓ GitHub: erictech        ✓ board: Ledgerly Roadmap
   ✓ base: staging           ✓ AGENTS.md: merged
@@ -276,7 +276,7 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
    ├─ Yes → draft the merge into onboard-staged/ by the rules below. Each conflict = its own
    │    AskUserQuestion, header "Conflict k of n", question "<Subject>: which rule wins?",
    │    options quoting BOTH lines verbatim with file:line, the more specific one Recommended.
-   │    Then one tool line: Bash(super-board-agents-md.py coverage && check) ◿ 31/31 rules kept ·
+   │    Then one tool line: Bash(super-board-agents-md.py coverage && check) ⎿ 31/31 rules kept ·
    │    118 lines. Written at step 8.
    ├─ Only the section → stage `block --create`; a CLAUDE.md alone gets `@AGENTS.md` prepended.
    └─ Writing standard, always, no question: stage docs/agents/issue-tracker.md with a
@@ -385,7 +385,7 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
 DONE — run `python3 $SB/super-board-verification-ready.py --config <saved config>`;
       exit 9 reports setup incomplete (repair checks before run; do not reinstall/rebase).
       Then self-check, then the ONE place that names the next command:
-      ⏺ Bash(self-check)  ◿  all good
+      ⏺ Bash(self-check)  ⎿  all good
       ⏺ 🎉 Onboard complete.
         📋 Board: github.com/users/<owner>/projects/<n> (<title>)
         🧹 Next: /super-board lint — checks every ticket has clear success criteria.
