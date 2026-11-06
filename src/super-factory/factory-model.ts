@@ -19,17 +19,17 @@ type Mensagem = {
 const PAPEIS = ['chief-of-staff', 'architect', 'frontend', 'backend', 'integrations', 'qa', 'security', 'docs'] as const
 type Papel = (typeof PAPEIS)[number]
 
-const LEITURA = ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'avaliarPortaoMerge', 'listarGithub', 'listarAzure', 'lerBaseProjeto', 'lerPoliticaProjeto']
+const LEITURA = ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'avaliarPortaoMerge', 'listarGithub', 'listarAzure', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao']
 
 const PERMITIDO: Record<Papel, string[]> = {
   'chief-of-staff': [...LEITURA, 'abrirCard', 'criarIssueGithub', 'criarWorkItemAzure'],
-  architect: ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'lerBaseProjeto', 'lerPoliticaProjeto'],
-  frontend: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto'],
-  backend: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto'],
-  integrations: ['statusQuadro', 'lerLedger', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure', 'lerBaseProjeto', 'lerPoliticaProjeto'],
-  qa: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'avaliarPortaoMerge', 'lerBaseProjeto', 'lerPoliticaProjeto'],
-  security: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'validarManifesto', 'avaliarPortaoMerge', 'lerBaseProjeto', 'lerPoliticaProjeto'],
-  docs: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto'],
+  architect: ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
+  frontend: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
+  backend: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
+  integrations: ['statusQuadro', 'lerLedger', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
+  qa: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'avaliarPortaoMerge', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
+  security: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'validarManifesto', 'avaliarPortaoMerge', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
+  docs: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
 }
 
 export function textoDoUsuario(prompt: Mensagem[]): string {
@@ -119,7 +119,11 @@ function escolher(papel: Papel, texto: string): PlanoMesa {
   let ferramenta = ''
   let input: Record<string, unknown> = {}
 
-  if (/\b(pol[ií]tica|autonomia)\b/i.test(texto)) {
+  if (/\b(instal|npm err|eaddrinuse|command not found|enoent)\b/i.test(texto) || /passo\s*[1-7]/i.test(texto)) {
+    const numero = texto.match(/passo\s*([1-7])/i)
+    ferramenta = 'conduzirInstalacao'
+    input = { relato: texto, ...(numero ? { passo: Number(numero[1]) } : {}) }
+  } else if (/\b(pol[ií]tica|autonomia)\b/i.test(texto)) {
     if (!repo) return { kind: 'text', text: `Diga o repositório, por exemplo repo: acme/widgets. A autonomia é entrega humana.\n\n${RODAPE}` }
     ferramenta = 'lerPoliticaProjeto'
     input = { repositorio: repo }
