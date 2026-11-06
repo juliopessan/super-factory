@@ -41,11 +41,11 @@ When the user asks for diagnostics or a fix, prefer dispatching a focused `claud
 
 ```
 🤖 super-board run
-───────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────
 Purpose: the autonomous loop. Drains your GitHub Project board.
 
 Progress: ✅ onboard  →  ✅ lint  →  🤖 run (you are here)
-───────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────
 ```
 
 ## Optional post-run learning
