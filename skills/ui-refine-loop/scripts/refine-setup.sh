@@ -196,7 +196,7 @@ case "$cmd" in
     NM=$(node_modules "$WT" "$PM" "$LOCK")
     while IFS= read -r f || [ -n "$f" ]; do [ -n "$f" ] && [ -f "$f" ] && [ ! -e "$WT/$f" ] && cp "$f" "$WT/$f" || true; done < <(field envFiles <<<"$S")
     PORT=$(free_port)
-    # Every fd redirected, or the server holds the caller's $(\u2026) pipe open forever.
+    # Every fd redirected, or the server holds the caller's $(…) pipe open forever.
     ( cd "$WT" && PORT="$PORT" exec nohup sh -c "$DEV" ) > "$RUN/dev.log" 2>&1 < /dev/null &
     echo $! > "$RUN/dev.pid"
     BASE="http://localhost:$PORT"
