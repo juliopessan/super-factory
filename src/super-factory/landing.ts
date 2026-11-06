@@ -203,11 +203,12 @@ export function paginaInicial(): string {
         <a href="#proposta">Proposta</a>
         <a href="#ciclo">Ciclo</a>
         <a href="#papeis">Papéis</a>
+        <a href="#instalar">Instalar</a>
         <a href="#limites">Limites</a>
       </nav>
       <div class="nav-cta">
         <a class="btn ghost" href="#ciclo">Ciclo</a>
-        <a class="btn solid" href="/studio">Abrir o Studio</a>
+        <a class="btn solid" href="/studio">Abrir a mesa</a>
       </div>
     </div>
   </header>
@@ -218,7 +219,8 @@ export function paginaInicial(): string {
         <h1>Conduza o pedido. <em>Pare</em> no portão.</h1>
         <p class="lead">Super Factory é a mesa. Um pedido vira card, passa por triagem, especificação, plano, verificação e revisão, e para três vezes: implementação, merge e release. Agente não aprova, não faz merge e não publica.</p>
         <div class="actions">
-          <a class="btn solid" href="/studio">Abrir o Studio</a>
+          <a class="btn solid" href="/studio">Abrir a mesa</a>
+          <a class="btn ghost" href="#instalar">Instalar</a>
           <a class="btn ghost" href="#ciclo">Ver o ciclo</a>
         </div>
       </div>
@@ -255,7 +257,7 @@ export function paginaInicial(): string {
       <div class="wrap">
         <p class="section-kicker">proposta</p>
         <h3>Uma mesa de operação, com o julgamento fora do agente.</h3>
-        <p class="intro">O Studio continua sendo o lugar de trabalhar. A página explica o contrato: o que a fábrica conduz, o que ela observa e o que ela se recusa a fazer sozinha.</p>
+        <p class="intro">A mesa continua sendo o lugar de trabalhar. A página explica o contrato: o que a fábrica conduz, o que ela observa e o que ela se recusa a fazer sozinha.</p>
         <div class="grid">
           <article class="card">
             <em>01 · Evidência</em>
@@ -319,6 +321,22 @@ export function paginaInicial(): string {
         </div>
       </div>
     </section>
+    <section id="instalar">
+      <div class="wrap">
+        <p class="section-kicker">instalar</p>
+        <h3>Um passo. Depois o próximo.</h3>
+        <p class="intro">Se uma linha vermelha aparecer, copie essa mensagem e cole no chat da mesa. A conversa fica nesse passo, explica o conserto e só então segue. Não cole chave, token ou senha.</p>
+        <div class="grid">
+          <article class="card"><em>01</em><h4>Node</h4><p>Baixe a versão 22 em nodejs.org. No Terminal, node -v precisa mostrar v22.18 ou mais.</p></article>
+          <article class="card"><em>02</em><h4>Terminal</h4><p>No Mac, Command + espaço e escreva Terminal. No Windows, escreva PowerShell no Iniciar.</p></article>
+          <article class="card"><em>03</em><h4>Projeto</h4><p>Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize a branch main.</p></article>
+          <article class="card"><em>04</em><h4>Peças</h4><p>Dentro da pasta, npm install. Espere a linha added packages. Não use sudo.</p></article>
+          <article class="card"><em>05</em><h4>Ligar</h4><p>npm run dev e deixe a janela aberta. A linha saudável mostra 4721.</p></article>
+          <article class="card"><em>06</em><h4>Mesa</h4><p>No navegador, localhost:4721 é a página. localhost:4721/studio é a mesa.</p></article>
+        </div>
+        <p class="intro">O sétimo passo é a chave, e ele é opcional. Sem chave, a mesa funciona e avisa quando a resposta é uma amostra.</p>
+      </div>
+    </section>
     <section id="limites">
       <div class="wrap limits">
         <div>
@@ -341,7 +359,7 @@ export function paginaInicial(): string {
   <div class="wrap">
     <footer>
       <span>SF · Super Factory</span>
-      <span><a href="/studio">Studio</a> · <a href="https://github.com/juliopessan/super-factory">GitHub</a></span>
+      <span><a href="/studio">Mesa</a> · <a href="https://github.com/juliopessan/super-factory">GitHub</a></span>
     </footer>
   </div>
 </body>
