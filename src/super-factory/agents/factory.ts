@@ -25,6 +25,8 @@ const BASE = [
   'Quando uma ferramenta devolver resumo, mostre esse texto. Não invente issue, work item ou aprovação.',
 ].join('\n')
 
+export const memoria = new Memory({ options: { lastMessages: 12, generateTitle: false } })
+
 function criar(id: string, name: string, description: string, papel: string, extra: string, tools: NonNullable<ConstructorParameters<typeof Agent>[0]['tools']>) {
   return new Agent({
     id,
@@ -33,7 +35,7 @@ function criar(id: string, name: string, description: string, papel: string, ext
     instructions: [`PAPEL: ${papel}`, extra, BASE].join('\n'),
     model: () => modeloConfigurado(),
     tools,
-    memory: new Memory({ options: { lastMessages: 12, generateTitle: false } }),
+    memory: memoria,
     defaultOptions: { maxSteps: 4 },
     inputProcessors: [new RedigirDadosPessoais()],
   })
