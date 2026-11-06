@@ -6,8 +6,8 @@
     "node": ">=22.18.0"
   },
   "scripts": {
-    "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev",
-    "build": "mastra build",
+    "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev --dir src/super-factory",
+    "build": "mastra build --dir src/super-factory",
     "start": "MASTRA_AUTO_DETECT_URL=true mastra start",
     "typecheck": "tsc --noEmit",
     "check": "tsc --noEmit && node --experimental-strip-types src/scripts/check.ts"
