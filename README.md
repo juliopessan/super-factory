@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-O Studio sobe na porta `4721`. `npm run check` confere tipos e a checagem da fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão.
+O servidor sobe na porta `4721`. A raiz é a landing da Super Factory. O Studio, a mesa de operação, fica em `/studio`. `npm run check` confere tipos e a checagem da fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão.
 
 O quadro usa as colunas `backlog`, `ready`, `build`, `qa`, `review`, `blocked` e `done`. Pedido claro ou bug com critério observável entra em `ready`. Pedido vago, segredo ou force-push para em `blocked`.
 
