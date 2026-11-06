@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent'
 import { Memory } from '@mastra/memory'
 
+import { habilidades } from '../habilidades.ts'
 import { modeloConfigurado } from '../model.ts'
 import { RedigirDadosPessoais } from '../processors/redigir-dados.ts'
 import {
@@ -23,6 +24,7 @@ const BASE = [
   'PASS só existe com evidência observada. NOT_RUN e BLOCKED são resultados válidos.',
   'Não peça e não execute comando de shell. Não faça force-push nem commit direto em main ou master.',
   'Quando uma ferramenta devolver resumo, mostre esse texto. Não invente issue, work item ou aprovação.',
+  'As skills do workspace são leitura. A skill super-factory manda: não execute script, shell, merge, force-push nem deploy.',
 ].join('\n')
 
 export const memoria = new Memory({ options: { lastMessages: 12, generateTitle: false } })
@@ -36,6 +38,7 @@ function criar(id: string, name: string, description: string, papel: string, ext
     model: () => modeloConfigurado(),
     tools,
     memory: memoria,
+    workspace: habilidades,
     defaultOptions: { maxSteps: 4 },
     inputProcessors: [new RedigirDadosPessoais()],
   })
