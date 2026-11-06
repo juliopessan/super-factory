@@ -62,7 +62,7 @@ assert.ok(nomesSkills.includes('super-board'), nomesSkills.join(','))
 assert.ok(nomesSkills.includes('super-factory'))
 const contrato = await habilidades.skills.get('super-factory')
 assert.match(contrato?.instructions ?? '', /sem shell/)
-const { conhecimento, lerBaseDoProjeto, registrarRegraDoProjeto } = await import('../super-factory/conhecimento.ts')
+const { conhecimento, definirPoliticaDoProjeto, lerBaseDoProjeto, lerPoliticaDoProjeto, registrarRegraDoProjeto, relatarMergeDoProjeto } = await import('../super-factory/conhecimento.ts')
 conhecimento.setStorage(new LibSQLStore({ id: 'conhecimento-check', url: `file:${path.join(diretorio, 'conhecimento.db')}` }))
 assert.equal(conhecimento.createTools().knowledge_page, undefined)
 assert.ok(conhecimento.createTools().knowledge_read)
@@ -90,6 +90,44 @@ await assert.rejects(() =>
 )
 assert.equal(seguranca.availableTools?.includes('lerBaseProjeto'), true)
 assert.equal(seguranca.availableTools?.includes('registrarRegraProjeto'), false)
+assert.equal(seguranca.availableTools?.includes('definirPoliticaProjeto'), false)
+assert.equal(seguranca.availableTools?.includes('relatarMerge'), false)
+assert.match((await lerPoliticaDoProjeto('acme/widgets')).resumo, /entrega humana/)
+assert.match(
+  (await definirPoliticaDoProjeto({
+    repositorio: 'acme/widgets',
+    autor: 'Joana',
+    checks: 'O cliente já roda typecheck e a suíte fora da fábrica.',
+  })).resumo,
+  /entrega humana/,
+)
+assert.match((await lerPoliticaDoProjeto('acme/widgets')).resumo, /typecheck/)
+await assert.rejects(() =>
+  definirPoliticaDoProjeto({
+    repositorio: 'acme/widgets',
+    autor: 'Joana',
+    checks: 'Ligue merge automático quando o agente estiver confiante.',
+  }),
+)
+const relato = await relatarMergeDoProjeto({
+  repositorio: 'acme/widgets',
+  papel: 'qa',
+  interpretacao: 'O filtro precisa recusar um fim anterior ao início.',
+  premissas: ['O contrato observável está no card.'],
+  confianca: 'confiante',
+})
+assert.match(relato.resumo, /não aprova/)
+await assert.rejects(() =>
+  relatarMergeDoProjeto({
+    repositorio: 'acme/widgets',
+    papel: 'qa',
+    interpretacao: 'O pedido ainda cabe em mais de uma leitura.',
+    premissas: ['Falta o critério de hora.'],
+    confianca: 'entrega',
+  }),
+)
+const qaModo = mesaCheck.listModes().find((modo) => modo.id === 'qa')
+assert.equal(qaModo?.availableTools?.includes('relatarMerge'), true)
 
 import type { Estado, PedidoBruto } from '../factory/schemas.ts'
 
