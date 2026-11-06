@@ -80,6 +80,12 @@ Sem `AZURE_DEVOPS_ORG` e `AZURE_DEVOPS_PAT` juntos, o Azure DevOps fica simulado
 
 Os identificadores passam por uma lista fechada de caracteres. O token não entra na URL e não é copiado para o relatório.
 
+## MCP e mesa
+
+O Studio mostra o servidor MCP `super-factory` e a mesa `mesa`, com um modo para cada papel. O servidor fica em `/api/mcp/super-factory/mcp` e expõe as ferramentas, os oito agentes e o workflow `sdlc`. A mesa não tem `submit_plan` nem subagente: uma tarefa concluída nela não é um portão. O modo Security continua só com leitura.
+
+Clientes de fora podem falar com esse endereço. A fábrica não sobe comando local para conectar em outro servidor. Um servidor HTTP adicional entra pelo Studio, na área de MCP, quando alguém cola a URL.
+
 ## Agentes
 
 Fale com o Chief of Staff para ver o quadro, abrir um card ou ler a trilha. Um card aberto pelo agente não atravessa os portões: isso só acontece no workflow `sdlc`.
