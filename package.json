@@ -7,6 +7,9 @@
   },
   "scripts": {
     "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev",
+    "dev:cofre": "pwsh -NoProfile -File src/scripts/cofre.ps1 iniciar",
+    "cofre": "pwsh -NoProfile -File src/scripts/cofre.ps1",
+    "check:cofre": "pwsh -NoProfile -File src/scripts/check-cofre.ps1",
     "build": "mastra build",
     "start": "MASTRA_AUTO_DETECT_URL=true mastra start",
     "typecheck": "tsc --noEmit",

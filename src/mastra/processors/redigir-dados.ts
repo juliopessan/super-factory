@@ -30,13 +30,13 @@ export class RedigirDadosPessoais implements Processor {
   readonly description = 'Tira e-mail, telefone, CPF e token do texto antes de ele chegar ao modelo.'
 
   async processInput({ messages, abort }: ProcessInputArgs): Promise<MastraDBMessage[]> {
-    const original = messages
-      .filter((message) => message.role === 'user')
+    const mensagensDoUsuario = messages.filter((message) => message.role === 'user')
+    const original = mensagensDoUsuario
       .map((message) => textoDaMensagem(message))
       .join('\n')
       .trim()
 
-    if (!original) {
+    if (mensagensDoUsuario.length > 0 && !original) {
       abort('Manda o pedido, mesmo que ainda esteja cru.')
     }
 

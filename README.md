@@ -17,6 +17,22 @@ npm run dev
 
 O Studio sobe na porta `4721`. `npm run check` confere tipos e a checagem da fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão.
 
+## Cofre local no Windows
+
+O cofre requer PowerShell 7 (`pwsh`) e protege credenciais com o DPAPI do Windows, vinculadas ao usuário e ao computador atuais. Os arquivos criptografados ficam em `%LOCALAPPDATA%\SuperFactory\cofre`, fora do repositório. Ele é para uso local; não compartilha segredos entre usuários, máquinas ou implantações.
+
+No PowerShell, cadastre uma credencial sem exibi-la na tela ou passá-la como argumento:
+
+```powershell
+npm run cofre -- definir GITHUB_TOKEN
+```
+
+O comando solicita o valor de forma oculta. Os nomes aceitos são `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GITHUB_TOKEN` e `AZURE_DEVOPS_PAT`. Use `npm run cofre -- listar` para verificar quais estão salvos e `npm run cofre -- remover GITHUB_TOKEN` para excluir um deles.
+
+Para carregar o cofre, inicie o Studio com `npm run dev:cofre`. Reinicie o Studio depois de cadastrar, alterar ou remover credenciais. O `GITHUB_TOKEN` salvo no cofre tem precedência sobre a variável herdada; para as outras credenciais, variáveis de ambiente já definidas têm precedência. `AZURE_DEVOPS_ORG` continua sendo configurada como variável de ambiente. Os segredos carregados ficam disponíveis ao processo do Studio e aos processos que ele iniciar. O Studio não oferece autenticação e escuta em todas as interfaces, portanto use-o somente em uma rede confiável.
+
+`npm run check:cofre` verifica o cofre com uma credencial fictícia, sem modificar as credenciais salvas.
+
 O quadro usa as colunas `backlog`, `ready`, `build`, `qa`, `review`, `blocked` e `done`. Pedido claro ou bug com critério observável entra em `ready`. Pedido vago, segredo ou force-push para em `blocked`.
 
 Os oito papéis são Chief of Staff, Architect, Frontend, Backend, Integrations, QA, Security e Docs. Só o Chief of Staff abre card. Security é somente leitura. Nenhum agente registra aprovação.

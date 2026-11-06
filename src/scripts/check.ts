@@ -30,6 +30,7 @@ const { MANIFEST, validarManifesto } = await import('../factory/manifest.ts')
 const { aprovar, avaliarMerge, iniciar, observado } = await import('../factory/pipeline.ts')
 const { chiefOfStaff, security } = await import('../mastra/agents/factory.ts')
 const { planejarMesa } = await import('../mastra/factory-model.ts')
+const { RedigirDadosPessoais } = await import('../mastra/processors/redigir-dados.ts')
 const { evidenciaScorer, portoesScorer, relatorioScorer } = await import('../mastra/scorers/factory.ts')
 const { sdlcWorkflow } = await import('../mastra/workflows/sdlc.ts')
 
@@ -339,6 +340,19 @@ const bloqueio = planejarMesa({
 assert.equal(bloqueio.kind, 'text')
 if (bloqueio.kind === 'text') assert.match(bloqueio.text, /somente leitura/)
 
+const redator = new RedigirDadosPessoais()
+const processar = (role: 'user' | 'assistant', text: string) =>
+  redator.processInput({
+    messages: [{ id: 'check-redacao', role, content: { format: 2, parts: [{ type: 'text', text }] } }],
+    abort: (motivo: string) => { throw new Error(motivo) },
+  } as unknown as Parameters<typeof redator.processInput>[0])
+const repo = 'https://github.com/ava-group-brazilimf/imfai-ava-generator-dev.git'
+const mensagemRepo = await processar('user', `Vamos analisar o repo ${repo}. Contato: pessoa@example.com`)
+assert.match(JSON.stringify(mensagemRepo), /github\.com\/ava-group-brazilimf\/imfai-ava-generator-dev\.git/)
+assert.doesNotMatch(JSON.stringify(mensagemRepo), /pessoa@example\.com/)
+assert.match(JSON.stringify(await processar('assistant', 'Continuação da execução')), /Continuação/)
+await assert.rejects(processar('user', '   '), /Manda o pedido/)
+
 function listarFontes(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entrada) => {
     const cheio = path.join(dir, entrada.name)
@@ -358,6 +372,10 @@ const resposta = await agente.generate('como está o quadro', { memory: { resour
 assert.match(resposta.text, /ready/)
 assert.match(resposta.text, /C-1/)
 assert.match(resposta.text, /Mesa local/)
+const fluxoRepo = await agente.stream(`Vamos analisar o repo ${repo}`, {
+  memory: { resource: 'check', thread: `check-repo-${Date.now()}` },
+})
+assert.ok((await fluxoRepo.text).trim())
 
 console.log(
   JSON.stringify(
