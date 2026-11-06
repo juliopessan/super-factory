@@ -105,5 +105,5 @@ Sem chave de modelo, a mesa local encaminha a frase para a ferramenta certa. Com
 ## O que fica de fora de propósito
 
 - Copiar os textos da Agent Factory. O manifesto em `factory.json` reescreve o núcleo: estágios, três portões humanos, oito papéis, evidência e escritas disjuntas.
-- O quadro e a triagem (claro, nebuloso, bug) seguem o modelo operacional do super-board, sob a licença MIT, Copyright 2026 Eric Tech.
+- O quadro e a triagem (claro, nebuloso, bug) seguem o modelo operacional do super-board, sob a licença MIT, Copyright 2026 Julio Pessan.
 - Gerar código no repositório, executar a suíte, fazer merge, force-push ou deploy. O plano aponta donos e caminhos (`src/ui/`, `src/api/`, `src/integrations/`, `docs/`). Se dois donos cobrem o mesmo caminho, o card para.
