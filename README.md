@@ -27,22 +27,6 @@ npm run dev
 
 O servidor sobe na porta `4721`. Abra a landing em `/` e a mesa em `/studio`. `npm run check` confere tipos e a checagem da fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão. `npm install` gera o `package-lock.json` quando ele ainda não está no clone.
 
-## Cofre local no Windows
-
-O cofre requer PowerShell 7 (`pwsh`) e protege credenciais com o DPAPI do Windows, vinculadas ao usuário e ao computador atuais. Os arquivos criptografados ficam em `%LOCALAPPDATA%\SuperFactory\cofre`, fora do repositório. Ele é para uso local; não compartilha segredos entre usuários, máquinas ou implantações.
-
-No PowerShell, cadastre uma credencial sem exibi-la na tela ou passá-la como argumento:
-
-```powershell
-npm run cofre -- definir GITHUB_TOKEN
-```
-
-O comando solicita o valor de forma oculta. Os nomes aceitos são `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GITHUB_TOKEN` e `AZURE_DEVOPS_PAT`. Use `npm run cofre -- listar` para verificar quais estão salvos e `npm run cofre -- remover GITHUB_TOKEN` para excluir um deles.
-
-Para carregar o cofre, inicie o Studio com `npm run dev:cofre`. Reinicie o Studio depois de cadastrar, alterar ou remover credenciais. O `GITHUB_TOKEN` salvo no cofre tem precedência sobre a variável herdada; para as outras credenciais, variáveis de ambiente já definidas têm precedência. `AZURE_DEVOPS_ORG` continua sendo configurada como variável de ambiente. Os segredos carregados ficam disponíveis ao processo do Studio e aos processos que ele iniciar. O Studio não oferece autenticação e escuta em todas as interfaces, portanto use-o somente em uma rede confiável.
-
-`npm run check:cofre` verifica o cofre com uma credencial fictícia, sem modificar as credenciais salvas.
-
 ## Onde está o código
 
 | Caminho | O que guarda |
@@ -95,6 +79,10 @@ Sem `GITHUB_TOKEN`, listar ou abrir issue no GitHub devolve a amostra e a nota `
 Sem `AZURE_DEVOPS_ORG` e `AZURE_DEVOPS_PAT` juntos, o Azure DevOps fica simulado. Com os dois, work items usam a API em `https://dev.azure.com`. O projeto vem do campo do ciclo. Pull request rascunho só quando esse campo vem como `projeto/repositorio`.
 
 Os identificadores passam por uma lista fechada de caracteres. O token não entra na URL e não é copiado para o relatório.
+
+## Base do projeto
+
+Cada repositório tem a própria base. Ela guarda a regra que uma pessoa daquele cliente ditou: escrita, pastas, branch, evidência, glossário. `lerBaseProjeto` lê. `registrarRegraProjeto` grava, e o autor é o nome dessa pessoa. Um papel da mesa não entra como autor. Base vazia continua vazia: o ciclo segue e ninguém inventa regra de cliente. A base não aprova portão.
 
 ## Skills
 
