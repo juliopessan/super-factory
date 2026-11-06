@@ -71,7 +71,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     'iniciar' {
       CarregarSegredos
       $env:MASTRA_AUTO_DETECT_URL = 'true'
-      & (Join-Path $PSScriptRoot '..\..\node_modules\.bin\mastra.cmd') dev
+      & (Join-Path $PSScriptRoot '..\..\node_modules\.bin\mastra.cmd') dev --dir src/super-factory
       exit $LASTEXITCODE
     }
   }

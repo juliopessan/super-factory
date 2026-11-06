@@ -1,3 +1,5 @@
+import { paginaInicial } from './landing.ts'
+
 const ICONE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
   <rect width="32" height="32" rx="8" fill="currentColor" opacity="0.14"/>
   <text x="16" y="21.5" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="currentColor">SF</text>
@@ -6,7 +8,7 @@ const ICONE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill=
 const SCRIPT = `(function () {
   var nome = 'Super Factory'
   function marcar() {
-    if (document.title === 'Mastra Studio') document.title = nome
+    if (document.title === 'Mastra Studio' || document.title === 'Mastra') document.title = nome
     document.querySelectorAll('svg[viewBox="0 0 34 21"]').forEach(function (svg) {
       if (svg.dataset.sf === '1') return
       svg.dataset.sf = '1'
@@ -20,8 +22,8 @@ const SCRIPT = `(function () {
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     var node
     while ((node = walker.nextNode())) {
-      if (node.nodeValue && node.nodeValue.indexOf('Mastra Studio') !== -1) {
-        node.nodeValue = node.nodeValue.replaceAll('Mastra Studio', nome)
+      if (node.nodeValue && node.nodeValue.indexOf('Mastra') !== -1) {
+        node.nodeValue = node.nodeValue.replaceAll('Mastra Studio', nome).replaceAll('Mastra', nome)
       }
     }
   }
@@ -45,8 +47,17 @@ function icone(): Response {
 
 export async function marcaSuperFactory(c: { req: { path: string }; res: Response }, next: () => Promise<void>) {
   const caminho = c.req.path
-  if (caminho === '/sf.svg' || caminho.endsWith('/mastra-dark-tile.svg') || caminho.endsWith('/mastra-light-tile.svg')) {
+  if (caminho === '/sf.svg' || caminho.endsWith('/sf.svg') || caminho.endsWith('/mastra-dark-tile.svg') || caminho.endsWith('/mastra-light-tile.svg')) {
     return icone()
+  }
+  if (caminho === '/' || caminho === '') {
+    return new Response(paginaInicial(), {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache',
+      },
+    })
   }
   await next()
   const tipo = c.res.headers.get('content-type') ?? ''
