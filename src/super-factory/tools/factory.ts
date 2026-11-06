@@ -146,7 +146,9 @@ export const avaliarPortaoMerge = createTool({
     const avaliacao = avaliarMerge(estado)
     return {
       ...avaliacao,
-      resumo: avaliacao.ok ? 'As condições do merge estão presentes. Quem decide é a pessoa, no workflow.' : avaliacao.motivos.join(' '),
+      resumo: avaliacao.ok
+        ? 'As condições do merge estão presentes. Quem decide é a pessoa, no workflow. A política é entrega humana. Este parecer não funde.'
+        : `${avaliacao.motivos.join(' ')} A política é entrega humana. Este parecer não funde.`,
     }
   },
 })

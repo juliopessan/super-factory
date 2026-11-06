@@ -19,17 +19,17 @@ type Mensagem = {
 const PAPEIS = ['chief-of-staff', 'architect', 'frontend', 'backend', 'integrations', 'qa', 'security', 'docs'] as const
 type Papel = (typeof PAPEIS)[number]
 
-const LEITURA = ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'avaliarPortaoMerge', 'listarGithub', 'listarAzure']
+const LEITURA = ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'avaliarPortaoMerge', 'listarGithub', 'listarAzure', 'lerBaseProjeto', 'lerPoliticaProjeto']
 
 const PERMITIDO: Record<Papel, string[]> = {
   'chief-of-staff': [...LEITURA, 'abrirCard', 'criarIssueGithub', 'criarWorkItemAzure'],
-  architect: ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda'],
-  frontend: ['statusQuadro', 'lerLedger', 'lintarCriterios'],
-  backend: ['statusQuadro', 'lerLedger', 'lintarCriterios'],
-  integrations: ['statusQuadro', 'lerLedger', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure'],
-  qa: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'avaliarPortaoMerge'],
-  security: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'validarManifesto', 'avaliarPortaoMerge'],
-  docs: ['statusQuadro', 'lerLedger', 'lintarCriterios'],
+  architect: ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'lerBaseProjeto', 'lerPoliticaProjeto'],
+  frontend: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto'],
+  backend: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto'],
+  integrations: ['statusQuadro', 'lerLedger', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure', 'lerBaseProjeto', 'lerPoliticaProjeto'],
+  qa: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'avaliarPortaoMerge', 'lerBaseProjeto', 'lerPoliticaProjeto'],
+  security: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'validarManifesto', 'avaliarPortaoMerge', 'lerBaseProjeto', 'lerPoliticaProjeto'],
+  docs: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto'],
 }
 
 export function textoDoUsuario(prompt: Mensagem[]): string {
@@ -119,7 +119,15 @@ function escolher(papel: Papel, texto: string): PlanoMesa {
   let ferramenta = ''
   let input: Record<string, unknown> = {}
 
-  if (/\b(quadro|status|board|colunas)\b/i.test(texto)) {
+  if (/\b(pol[ií]tica|autonomia)\b/i.test(texto)) {
+    if (!repo) return { kind: 'text', text: `Diga o repositório, por exemplo repo: acme/widgets. A autonomia é entrega humana.\n\n${RODAPE}` }
+    ferramenta = 'lerPoliticaProjeto'
+    input = { repositorio: repo }
+  } else if (/\b(base do projeto|regras do cliente)\b/i.test(texto)) {
+    if (!repo) return { kind: 'text', text: `Diga o repositório, por exemplo repo: acme/widgets.\n\n${RODAPE}` }
+    ferramenta = 'lerBaseProjeto'
+    input = { repositorio: repo }
+  } else if (/\b(quadro|status|board|colunas)\b/i.test(texto)) {
     ferramenta = 'statusQuadro'
   } else if (/\b(manifesto|invariantes|port[oõ]es)\b/i.test(texto)) {
     ferramenta = 'validarManifesto'
@@ -133,7 +141,7 @@ function escolher(papel: Papel, texto: string): PlanoMesa {
     if (!runId) return { kind: 'text', text: `Diga o ciclo, por exemplo R-3, que eu leio o portão. Eu não aprovo.\n\n${RODAPE}` }
     ferramenta = 'avaliarPortaoMerge'
     input = { runId }
-  } else if (/\b(crit[eé]rios|aceite)\b/i.test(texto)) {
+  } else if (/\b(crit[ée]rios|aceite)\b/i.test(texto)) {
     ferramenta = 'lintarCriterios'
     input = { criterios: texto }
   } else if (/\b(azure|devops|work item)\b/i.test(texto) && /\b(cria|abre|abrir|criar)\b/i.test(texto)) {
