@@ -6,7 +6,7 @@ A raiz é a apresentação. O Studio, em `/studio`, é a mesa. Um pedido vira ca
 
 ## Instalar
 
-São sete passos, um de cada vez. A página inicial, na parte Instalar, diz a mesma coisa. Quando a mesa já estiver aberta, o chat continua do passo em que a pessoa parou: cole o que o Terminal mostrou. Um erro não volta ao começo. Não cole chave, token ou senha.
+São sete passos, um de cada vez. A página inicial tem o botão Guia-me: ele aproxima cada passo da instalação e, depois, o portão, o ciclo, o quadro, os papéis e os limites. A parte Instalar diz a mesma coisa. Quando a mesa já estiver aberta, o chat continua do passo em que a pessoa parou: cole o que o Terminal mostrou. Um erro não volta ao começo. Não cole chave, token ou senha.
 
 1. Instale o Node 22.18 ou mais novo, pelo site nodejs.org. No Terminal, `node -v` precisa começar com `v22` nessa faixa, ou com um número maior.
 2. Abra o Terminal.
