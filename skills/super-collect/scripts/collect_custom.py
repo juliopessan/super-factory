@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """super-collect source `custom`: the extra sources a project added in onboard
-("🆕 Add another source") — an MCP server, an HTTP API, a CLI command, or a known app.
+("➕ Add another source") — an MCP server, an HTTP API, a CLI command, or a known app.
 
 Each lives in the config's `collect.custom[]` as {name, kind, target, auth_env?, map?}.
 This script classifies what the user typed, proves it can be read (read-only) before
