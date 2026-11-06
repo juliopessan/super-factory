@@ -8,7 +8,7 @@ const ICONE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill=
 const SCRIPT = `(function () {
   var nome = 'Super Factory'
   function marcar() {
-    if (document.title === 'Super Factory Studio' || document.title === 'Super Factory') document.title = nome
+    if (document.title === 'Mastra Studio' || document.title === 'Mastra') document.title = nome
     document.querySelectorAll('svg[viewBox="0 0 34 21"]').forEach(function (svg) {
       if (svg.dataset.sf === '1') return
       svg.dataset.sf = '1'
@@ -22,8 +22,8 @@ const SCRIPT = `(function () {
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     var node
     while ((node = walker.nextNode())) {
-      if (node.nodeValue && node.nodeValue.indexOf('Super Factory') !== -1) {
-        node.nodeValue = node.nodeValue.replaceAll('Super Factory', nome).replaceAll('Super Factory', nome)
+      if (node.nodeValue && node.nodeValue.indexOf('Mastra') !== -1) {
+        node.nodeValue = node.nodeValue.replaceAll('Mastra Studio', nome).replaceAll('Mastra', nome)
       }
     }
   }
@@ -64,8 +64,8 @@ export async function marcaSuperFactory(c: { req: { path: string }; res: Respons
   if (!tipo.includes('text/html')) return
   const html = await c.res.text()
   const marcado = html
-    .replaceAll('<title>Super Factory</title>', '<title>Super Factory</title>')
-    .replaceAll('href="./super-factory-dark-tile.svg"', 'href="./sf.svg"')
+    .replaceAll('<title>Mastra Studio</title>', '<title>Super Factory</title>')
+    .replaceAll('href="./mastra-dark-tile.svg"', 'href="./sf.svg"')
     .replace('</body>', `<script>${SCRIPT}</script></body>`)
   const headers = new Headers(c.res.headers)
   headers.delete('content-length')
