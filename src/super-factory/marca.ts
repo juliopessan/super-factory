@@ -28,6 +28,8 @@ const SCRIPT = `(function () {
     var node
     while ((node = walker.nextNode())) {
       if (node.nodeValue && ESPERAS.test(node.nodeValue.trim()) && !vivos.has(node)) girar(node)
+      // Título do primeiro grupo do menu do Studio.
+      if (node.nodeValue && node.nodeValue.trim() === 'Primitives') node.nodeValue = node.nodeValue.replace('Primitives', 'Factory')
       if (node.nodeValue && /mastra/i.test(node.nodeValue)) {
         var novo = node.nodeValue.replaceAll('@mastra/', '').replaceAll('Mastra Studio', nome).replaceAll('Mastra', nome)
         if (novo !== node.nodeValue) node.nodeValue = novo
