@@ -9,4 +9,4 @@ Chame a ferramenta `conduzirInstalacao`. Passe o número do passo quando a pesso
 
 Mostre a instrução que a ferramenta devolver. Não junte o passo seguinte. Não mande recomeçar do passo 1 quando o erro for de um passo no meio.
 
-Se a mesa ainda não está no ar, a pessoa segue a página inicial, na parte Instalar. Quando a mesa abrir, o chat continua do passo em que ela parou.
+Se a Factory ainda não está no ar, a pessoa segue a página inicial, na parte Instalar. Quando a Factory abrir, o chat continua do passo em que ela parou.

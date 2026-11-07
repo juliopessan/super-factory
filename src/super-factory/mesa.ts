@@ -10,7 +10,7 @@ const TAREFAS = ['ask_user', 'task_write', 'task_update', 'task_complete', 'task
 
 export function criarMesa(storage: LibSQLStore) {
   return new AgentController({
-    id: 'mesa',
+    id: 'factory',
     storage,
     agent: chiefOfStaff,
     memory: memoria,
@@ -18,9 +18,9 @@ export function criarMesa(storage: LibSQLStore) {
     defaultModeId: 'chief-of-staff',
     disableBuiltinTools: ['submit_plan', 'subagent'],
     instructions: [
-      'A mesa troca o papel, não o contrato.',
+      'A Factory troca o papel, não o contrato.',
       'Portão, merge e deploy continuam fora daqui. O ciclo com pausa humana é o workflow sdlc.',
-      'submit_plan não existe. Uma tarefa concluída nesta mesa não é uma aprovação.',
+      'submit_plan não existe. Uma tarefa concluída nesta Factory não é uma aprovação.',
     ].join('\n'),
     modes: [
       {

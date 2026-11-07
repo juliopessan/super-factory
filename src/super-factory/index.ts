@@ -72,11 +72,11 @@ export const mastra = new Mastra({
     relatorio: relatorioScorer,
   },
   storage,
-  memory: { mesa: memoria },
+  memory: { factory: memoria },
   workspace: habilidades,
   knowledge: { projeto: conhecimento },
   mcpServers: { 'super-factory': servidorMcp },
-  agentControllers: { mesa: criarMesa(storage) },
+  agentControllers: { factory: criarMesa(storage) },
   observability: new Observability({
     configs: {
       default: {

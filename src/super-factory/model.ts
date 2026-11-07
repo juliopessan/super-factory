@@ -25,5 +25,5 @@ export function origemDoModelo(): string {
   if (process.env.OPENAI_API_KEY) return MODELOS.openai
   if (process.env.ANTHROPIC_API_KEY) return MODELOS.anthropic
   if (process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) return MODELOS.google
-  return 'super-factory/mesa'
+  return 'super-factory/factory'
 }
