@@ -499,17 +499,9 @@ const leituraGithub = await listarIssuesGithub('acme/widgets', {
 assert.equal(leituraGithub.ok, true)
 assert.equal(chamadasGithub, 2)
 
-const { cadeiaDeModelos } = await import('../super-factory/model.ts')
-assert.equal(cadeiaDeModelos().length, 1, 'sem chave, só o modelo local')
-process.env.ANTHROPIC_API_KEY = 'teste'
-process.env.OPENAI_API_KEY = 'teste'
-process.env.SUPER_FACTORY_MODEL = 'anthropic/claude-sonnet-5-5'
-const cadeia = cadeiaDeModelos()
-assert.deepEqual(cadeia.map((item) => item.model), ['anthropic/claude-sonnet-5-5', 'openai/gpt-6.1-sol'])
-assert.deepEqual(cadeia.map((item) => item.maxRetries), [2, 1])
-delete process.env.ANTHROPIC_API_KEY
-delete process.env.OPENAI_API_KEY
-delete process.env.SUPER_FACTORY_MODEL
+const fonteAgentes = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'super-factory', 'agents', 'factory.ts'), 'utf8')
+assert.match(fonteAgentes, /model: \(\) => modeloConfigurado\(\),/, 'modelo único: o Studio mostra o seletor de provedor')
+assert.match(fonteAgentes, /maxRetries: 2,/)
 
 const { guardarTexto, guardaDeSaida, AVISO_SAIDA } = await import('../super-factory/processors/guarda-saida.ts')
 for (const afirmacao of ['Pronto, fiz o merge na main.', 'O deploy foi feito às 10h.', 'Eu aprovei o gate de release.', 'Já subi o release.', 'O gate beforeMerge foi aprovado por mim.']) {

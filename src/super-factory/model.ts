@@ -28,23 +28,3 @@ export function origemDoModelo(): string {
   return 'super-factory/factory'
 }
 
-/** Provedores com chave no ambiente, na ordem de preferência. */
-function provedoresComChave(): string[] {
-  const lista: string[] = []
-  if (process.env.OPENAI_API_KEY) lista.push(MODELOS.openai)
-  if (process.env.ANTHROPIC_API_KEY) lista.push(MODELOS.anthropic)
-  if (process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) lista.push(MODELOS.google)
-  return lista
-}
-
-/**
- * Cadeia de modelos do agente: o escolhido primeiro, com 2 novas tentativas,
- * e os outros provedores com chave como reserva, com 1. Sem chave, só o
- * modelo local da Factory, que não falha por rede.
- */
-export function cadeiaDeModelos(): Array<{ model: string | ReturnType<typeof criarFactoryModel>; maxRetries: number }> {
-  const escolhido = modeloEscolhido()
-  const nomes = [...new Set([escolhido, ...provedoresComChave()].filter(Boolean))]
-  if (nomes.length === 0) return [{ model: criarFactoryModel(), maxRetries: 0 }]
-  return nomes.map((model, i) => ({ model, maxRetries: i === 0 ? 2 : 1 }))
-}
