@@ -1,6 +1,6 @@
 const RODAPE = '_Factory local, sem provedor de modelo. Portão, merge e deploy não saem daqui._'
 
-export type PlanoMesa =
+export type PlanoFactory =
   | { kind: 'text'; text: string }
   | { kind: 'tool'; toolName: string; input: Record<string, unknown> }
 
@@ -113,7 +113,7 @@ function ajuda(papel: Papel): string {
   return [`Papel ${papel}. O ciclo governado é o workflow sdlc. Eu não aprovo portão nem faço merge.`, '', RODAPE].join('\n')
 }
 
-function escolher(papel: Papel, texto: string): PlanoMesa {
+function escolher(papel: Papel, texto: string): PlanoFactory {
   const repo = repositorioDe(texto)
   const runId = runDe(texto)
   let ferramenta = ''
@@ -186,7 +186,7 @@ function escolher(papel: Papel, texto: string): PlanoMesa {
   return { kind: 'tool', toolName: ferramenta, input }
 }
 
-export function planejarMesa(entrada: { userText: string; systemText: string; toolResult?: unknown }): PlanoMesa {
+export function planejarFactory(entrada: { userText: string; systemText: string; toolResult?: unknown }): PlanoFactory {
   if (entrada.toolResult !== undefined) return { kind: 'text', text: formatar(entrada.toolResult) }
   return escolher(papelDe(entrada.systemText), entrada.userText.trim())
 }
@@ -197,8 +197,8 @@ type Opcoes = {
   prompt: Mensagem[]
 }
 
-function planoDasOpcoes(options: Opcoes): PlanoMesa {
-  return planejarMesa({
+function planoDasOpcoes(options: Opcoes): PlanoFactory {
+  return planejarFactory({
     userText: textoDoUsuario(options.prompt),
     systemText: textoDoSistema(options.prompt),
     toolResult: ultimoResultado(options.prompt),
@@ -210,7 +210,7 @@ function uso(texto: string) {
   return { inputTokens: 32, outputTokens, totalTokens: 32 + outputTokens }
 }
 
-export function criarMesaModel() {
+export function criarFactoryModel() {
   return {
     specificationVersion: 'v2' as const,
     provider: 'super-factory',
@@ -219,7 +219,7 @@ export function criarMesaModel() {
     async doGenerate(options: Opcoes) {
       const plano = planoDasOpcoes(options)
       if (plano.kind === 'tool') {
-        const toolCallId = `mesa_${++chamada}`
+        const toolCallId = `factory_${++chamada}`
         const input = JSON.stringify(plano.input)
         return {
           content: [{ type: 'tool-call' as const, toolCallId, toolName: plano.toolName, input }],
@@ -241,7 +241,7 @@ export function criarMesaModel() {
         start(controller) {
           controller.enqueue({ type: 'stream-start', warnings: [] })
           if (plano.kind === 'tool') {
-            const id = `mesa_${++chamada}`
+            const id = `factory_${++chamada}`
             const input = JSON.stringify(plano.input)
             controller.enqueue({ type: 'tool-input-start', id, toolName: plano.toolName })
             controller.enqueue({ type: 'tool-input-delta', id, delta: input })

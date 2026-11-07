@@ -11,7 +11,7 @@ import { marcaSuperFactory } from './marca.ts'
 import { conhecimento, definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, registrarRegraProjeto, relatarMerge } from './conhecimento.ts'
 import { habilidades } from './habilidades.ts'
 import { conduzirInstalacaoFerramenta } from './instalacao.ts'
-import { criarMesa } from './mesa.ts'
+import { criarFactory } from './controle.ts'
 import { servidorMcp } from './mcp.ts'
 import { evidenciaScorer, portoesScorer, relatorioScorer } from './scorers/factory.ts'
 import {
@@ -76,7 +76,7 @@ export const mastra = new Mastra({
   workspace: habilidades,
   knowledge: { projeto: conhecimento },
   mcpServers: { 'super-factory': servidorMcp },
-  agentControllers: { factory: criarMesa(storage) },
+  agentControllers: { factory: criarFactory(storage) },
   observability: new Observability({
     configs: {
       default: {
