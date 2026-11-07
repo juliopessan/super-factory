@@ -202,7 +202,10 @@ export async function criarRascunhoAzure(
   base: string,
   head: string,
   deps?: AzureDeps,
+  opcoes: { rascunho?: boolean } = {},
 ): Promise<CriacaoAzure> {
+  const rascunho = opcoes.rascunho ?? true
+  const tipo = rascunho ? 'rascunho' : 'pronto para revisão'
   let project: string
   let repository: string | null
   try {
@@ -231,7 +234,7 @@ export async function criarRascunhoAzure(
       provedor: 'azure-devops',
       id: 'fixture-pr',
       url: null,
-      nota: `Simulado, sem AZURE_DEVOPS_PAT. Nenhum pull request rascunho foi aberto de ${head} para ${base}.`,
+      nota: `Simulado, sem AZURE_DEVOPS_PAT. Nenhum pull request ${tipo} foi aberto de ${head} para ${base}.`,
     }
   }
   try {
@@ -246,7 +249,7 @@ export async function criarRascunhoAzure(
           description: corpo,
           sourceRefName: `refs/heads/${head}`,
           targetRefName: `refs/heads/${base}`,
-          isDraft: true,
+          isDraft: rascunho,
         }),
       },
     )) as { pullRequestId?: number }
@@ -257,7 +260,7 @@ export async function criarRascunhoAzure(
       provedor: 'azure-devops',
       id,
       url: id ? `https://dev.azure.com/${remoto.org}/${project}/_git/${repository}/pullrequest/${id}` : null,
-      nota: `Pull request rascunho #${id} de ${head} para ${base}. Merge não foi feito.`,
+      nota: `Pull request ${tipo} #${id} de ${head} para ${base}. Merge não foi feito.`,
     }
   } catch (error) {
     return {

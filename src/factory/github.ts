@@ -169,7 +169,10 @@ export async function criarRascunhoGithub(
   base: string,
   head: string,
   deps?: GithubDeps,
+  opcoes: { rascunho?: boolean } = {},
 ): Promise<CriacaoRemota> {
+  const rascunho = opcoes.rascunho ?? true
+  const tipo = rascunho ? 'rascunho' : 'pronto para revisão'
   let owner: string
   let name: string
   try {
@@ -185,14 +188,14 @@ export async function criarRascunhoGithub(
       provedor: 'github',
       id: 'fixture-pr',
       url: null,
-      nota: `Simulado, sem GITHUB_TOKEN. Nenhum pull request rascunho foi aberto de ${head} para ${base}.`,
+      nota: `Simulado, sem GITHUB_TOKEN. Nenhum pull request ${tipo} foi aberto de ${head} para ${base}.`,
     }
   }
   try {
     const criado = (await pedir(`https://api.github.com/repos/${owner}/${name}/pulls`, remoto, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: titulo, body: corpo, base, head, draft: true }),
+      body: JSON.stringify({ title: titulo, body: corpo, base, head, draft: rascunho }),
     })) as { number?: number; html_url?: string }
     return {
       ok: true,
@@ -200,7 +203,7 @@ export async function criarRascunhoGithub(
       provedor: 'github',
       id: String(criado.number ?? ''),
       url: typeof criado.html_url === 'string' ? criado.html_url : null,
-      nota: `Pull request rascunho #${criado.number ?? ''} de ${head} para ${base}. Merge não foi feito.`,
+      nota: `Pull request ${tipo} #${criado.number ?? ''} de ${head} para ${base}. Merge não foi feito.`,
     }
   } catch (error) {
     return {

@@ -1,0 +1,21 @@
+[Unit]
+Description=Super Factory
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+User=factory
+Group=factory
+WorkingDirectory=/opt/super-factory
+EnvironmentFile=/opt/super-factory/.env
+Environment=NODE_ENV=production
+# Escuta só em localhost: quem fala com a internet é o Caddy, com login.
+Environment=SUPER_FACTORY_HOST=127.0.0.1
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

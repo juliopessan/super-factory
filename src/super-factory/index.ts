@@ -27,6 +27,7 @@ import {
   statusQuadro,
   validarManifesto,
 } from './tools/factory.ts'
+import { autonomoWorkflow } from './workflows/autonomo.ts'
 import { sdlcWorkflow } from './workflows/sdlc.ts'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -46,7 +47,7 @@ export const mastra = new Mastra({
     security,
     docs,
   },
-  workflows: { sdlc: sdlcWorkflow },
+  workflows: { sdlc: sdlcWorkflow, autonomo: autonomoWorkflow },
   tools: {
     statusQuadro,
     validarManifesto,
