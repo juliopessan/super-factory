@@ -1,4 +1,4 @@
-const RODAPE = '_Mesa local da Super Factory, sem provedor de modelo. Portão, merge e deploy não saem daqui._'
+const RODAPE = '_Factory local, sem provedor de modelo. Portão, merge e deploy não saem daqui._'
 
 export type PlanoMesa =
   | { kind: 'text'; text: string }
@@ -214,7 +214,7 @@ export function criarMesaModel() {
   return {
     specificationVersion: 'v2' as const,
     provider: 'super-factory',
-    modelId: 'mesa',
+    modelId: 'factory',
     supportedUrls: {},
     async doGenerate(options: Opcoes) {
       const plano = planoDasOpcoes(options)
