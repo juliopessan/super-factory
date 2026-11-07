@@ -5,7 +5,7 @@ export function paginaInicial(): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Super Factory</title>
-  <meta name="description" content="Na Factory, um pedido vira card e só atravessa implementação, merge e release quando uma pessoa libera." />
+  <meta name="description" content="A programação morreu. A engenharia não. A Super Factory lê a demanda no Azure DevOps ou no GitHub, implementa e testa num container e abre o pull request. Você decide o merge." />
   <link rel="icon" href="/sf.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -146,6 +146,7 @@ export function paginaInicial(): string {
     @keyframes corre { from { stroke-dashoffset: 418; } to { stroke-dashoffset: 0; } }
     .diagrama .miolo { fill: var(--card-2); }
     .diagrama .borda { fill: none; stroke: var(--line-2); stroke-width: 2.5; stroke-linecap: round; }
+    .diagrama .borda.humano { stroke: var(--accent); }
     .diagrama .ic { fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
     .diagrama text { font-family: var(--mono); font-size: 13px; letter-spacing: .08em; fill: var(--accent); }
     .diagrama text.apagado { fill: var(--faint); }
@@ -213,6 +214,40 @@ export function paginaInicial(): string {
     .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
     .foot a:hover { color: var(--text); }
 
+
+
+    /* manifesto */
+    .manifesto { border-top: 1px solid var(--line); }
+    .frase { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 32px; align-items: baseline; padding: 36px 0; border-bottom: 1px solid var(--line); }
+    .frase h2 { font-size: clamp(2rem, 1rem + 3vw, 3.6rem); line-height: 1.05; letter-spacing: -.035em; }
+    .frase p { margin: 0; color: var(--muted); font-size: clamp(1rem, .95rem + .3vw, 1.2rem); max-width: 46ch; }
+    .rotulo-hero .gira { margin-right: 4px; }
+    /* modo autônomo: sessão ao vivo no estilo do Claude */
+    .auto-grade { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 40px; padding: 40px; }
+    .etapas { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; align-content: start; }
+    .etapas li { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; }
+    .etapas .mono { color: var(--accent); padding-top: 3px; }
+    .etapas h3 { font-size: 16px; }
+    .etapas p { margin: 4px 0 0; color: var(--muted); }
+    .terminal { border: 1px solid var(--line); border-radius: 16px; background: var(--card-2); overflow: hidden; min-width: 0; align-self: start; }
+    .terminal-topo { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--faint); }
+    .terminal-topo .dots { display: flex; gap: 6px; }
+    .terminal-topo .dots i { width: 9px; height: 9px; border-radius: 9px; border: 1px solid var(--line-2); display: block; }
+    .sessao { font-family: var(--mono); font-size: 13px; line-height: 1.8; padding: 16px 18px 20px; min-height: 380px; }
+    .sessao .l { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
+    .sessao .pedido { color: var(--text); margin-bottom: 6px; }
+    .sessao .tool b { font-weight: 400; color: var(--signal); margin-right: 8px; }
+    .sessao .res { padding-left: 22px; color: var(--faint); }
+    .sessao .res.falha { color: var(--accent); }
+    .sessao .pr { color: var(--signal); margin-top: 6px; }
+    .sessao .humano { color: var(--accent); }
+    .sessao .spin { color: var(--accent); margin-top: 4px; }
+    .sessao .spin .vivo { background: linear-gradient(90deg, var(--accent) 0%, var(--text) 50%, var(--accent) 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: brilha 1.8s linear infinite; }
+    .sessao .spin small { color: var(--faint); font-size: 12px; margin-left: 8px; }
+    .sessao .digitando::after { content: "▍"; color: var(--faint); animation: pisca 1s steps(1) infinite; }
+    .gira.js-gira { animation: none; }
+    @keyframes brilha { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+    @keyframes pisca { 50% { opacity: 0; } }
     .mov [data-revela] { opacity: 0; }
 
     /* guia */
@@ -231,6 +266,8 @@ export function paginaInicial(): string {
       nav { display: none; }
       .grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .trilha-grade { grid-template-columns: 1fr; }
+      .auto-grade { grid-template-columns: 1fr; padding: 24px; }
+      .frase { grid-template-columns: 1fr; gap: 10px; padding: 28px 0; }
       .colunas { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .passos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -257,7 +294,7 @@ export function paginaInicial(): string {
     }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
-      .gira, .rede .fluxo, .diagrama .corre { animation: none; }
+      .gira, .rede .fluxo, .diagrama .corre, .sessao .spin .vivo, .sessao .digitando::after { animation: none; }
       .rede .fluxo, .diagrama .corre { display: none; }
       .mov [data-revela] { opacity: 1; }
     }
@@ -268,9 +305,11 @@ export function paginaInicial(): string {
     <div class="wrap top-inner">
       <a class="brand" href="/"><span class="mark" aria-hidden="true">SF</span><span class="nome">Super Factory</span></a>
       <nav aria-label="Seções">
+        <a href="#manifesto">Manifesto</a>
+        <a href="#autonomo">Autônomo</a>
+        <a href="#harness">Harness</a>
         <a href="#papeis">Papéis</a>
         <a href="#ciclo">Ciclo</a>
-        <a href="#quadro">Quadro</a>
         <a href="#limites">Limites</a>
         <a href="#instalar">Instalar</a>
       </nav>
@@ -281,7 +320,7 @@ export function paginaInicial(): string {
       </div>
     </div>
   </header>
-  <div class="wrap"><a class="aba" href="#instalar"><span class="longo">Guia de instalação</span><i class="longo" aria-hidden="true"></i><b>7 passos até o gate</b> →</a></div>
+  <div class="wrap"><a class="aba" href="#instalar"><span class="longo">Guia de instalação</span><i class="longo" aria-hidden="true"></i><b>7 passos até o primeiro PR</b> →</a></div>
   <main>
     <div class="wrap hero">
       <svg class="rede" viewBox="0 0 760 300" role="img" aria-label="Os papéis da Factory ligados ao gate no centro">
@@ -339,14 +378,57 @@ export function paginaInicial(): string {
 <g fill="none" stroke="#f0f0f0" stroke-width="3.2" stroke-linecap="round" opacity=".92"><path d="M360 172V138 M400 172V138 M353 136H407"/></g>
 <text x="380" y="165" text-anchor="middle" font-family="Geist Mono, ui-monospace, monospace" font-size="15" font-weight="500" fill="#f0f0f0">SF</text>
 </svg>
-      <p class="rotulo-hero">Super Factory</p>
-      <h1 aria-label="Conduza o pedido. Pare no gate."><span class="linha" aria-hidden="true"><span class="verbo"><span class="verbo-txt">Conduza</span></span> o pedido.</span> <span class="linha" aria-hidden="true">Pare no <span class="sub">gate</span>.</span></h1>
-      <p class="lead">Cada pedido vira um card e atravessa seis estágios. Em três momentos, ele só segue quando uma pessoa libera.</p>
+      <p class="rotulo-hero"><span class="gira" aria-hidden="true">✻</span> A factory que constrói factory</p>
+      <h1 aria-label="A programação morreu. A engenharia não."><span class="linha" aria-hidden="true">A programação morreu.</span> <span class="linha" aria-hidden="true">A <span class="sub">engenharia</span> não.</span></h1>
+      <p class="lead">Agentes escrevem o código. Engenharia é decidir o que entra. A Super Factory lê a demanda no Azure DevOps ou no GitHub, implementa e testa num container e abre o pull request. Você decide o merge.</p>
       <div class="acoes">
         <a class="primario" href="/studio">Abrir a Factory <span class="gira" aria-hidden="true">✻</span></a>
         <a class="seta" href="#instalar">Instalar ↗</a>
       </div>
     </div>
+
+    <section id="manifesto">
+      <div class="wrap">
+        <div class="manifesto">
+          <div class="frase" data-revela><h2>A programação morreu.</h2><p>Escrever código virou a parte barata. Um agente faz em minutos o que levava dias.</p></div>
+          <div class="frase" data-revela><h2>A <span class="sub">engenharia</span> não.</h2><p>Critério de aceite, arquitetura, risco e evidência continuam sendo trabalho de gente. É isso que a Factory protege.</p></div>
+          <div class="frase" data-revela><h2>Evidência antes de confiança.</h2><p>Cada pull request traz o teste que rodou, o código de saída e o que ficou de fora. Nada de “confia em mim”.</p></div>
+          <div class="frase" data-revela><h2>Você decide o merge.</h2><p>A Factory abre o pull request. Quem responde pelo que entra no produto é uma pessoa.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="autonomo">
+      <div class="wrap">
+        <div class="cabeca" data-revela>
+          <h2>Modo autônomo</h2>
+          <p>Do Azure DevOps ou do GitHub ao pull request. A Factory implementa e testa num container; você revisa e decide o merge.</p>
+        </div>
+        <div class="moldura" data-revela>
+          <div class="card grao brilho auto-grade">
+            <ol class="etapas">
+              <li><span class="mono">01</span><div><h3>Lê a demanda</h3><p>Work item do Azure DevOps ou issue do GitHub. Pedido vago, segredo ou force-push param na triagem.</p></div></li>
+              <li><span class="mono">02</span><div><h3>Abre um container</h3><p>Um Docker descartável por card, sem privilégios, com o repositório clonado numa branch <code class="c">factory/…</code>.</p></div></li>
+              <li><span class="mono">03</span><div><h3>Implementa e testa</h3><p>O Construtor escreve o código e os testes, e roda o teste do seu repositório até passar.</p></div></li>
+              <li><span class="mono">04</span><div><h3>Abre o pull request</h3><p>Pronto para revisão, com a evidência do sandbox na descrição. Com teste falhando, sai como rascunho.</p></div></li>
+              <li><span class="mono">05</span><div><h3>Você decide o merge</h3><p>A Factory não tem endpoint de merge nem de deploy.</p></div></li>
+            </ol>
+            <div class="terminal" aria-label="Sessão de exemplo do modo autônomo">
+              <div class="terminal-topo"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="sessao-titulo">factory · autonomo · C-14</span></div>
+              <div class="sessao" id="sessao">
+                <div class="l pedido">› Azure DevOps · work item 4812 · Filtro de datas com hora</div>
+                <div class="l tool"><b>⏺</b> triagem → ready, critério observável</div>
+                <div class="l tool"><b>⏺</b> sandbox node:22 · cap-drop ALL · branch factory/c-14</div>
+                <div class="l tool"><b>⏺</b> executar-comando npm test</div>
+                <div class="l res">⎿ ok 14 testes · 0 falhas · 2,8 s</div>
+                <div class="l pr">✓ PR #7 pronto para revisão · testes no sandbox: PASS</div>
+                <div class="l humano">✋ aguardando uma pessoa para o merge</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section id="papeis">
       <div class="wrap">
@@ -356,18 +438,17 @@ export function paginaInicial(): string {
         </div>
         <div class="moldura" data-revela>
           <div class="card destaque grao brilho" id="portao">
-            <h3>Três pausas com nome de gente</h3>
-            <p class="desc">O ciclo suspende antes da implementação, do merge e do release. Só segue com aprovado, aprovador e nota.</p>
-            <div class="rolagem"><svg class="diagrama" viewBox="0 0 1080 340" role="img" aria-label="Ciclo sdlc: triagem, especificação, gate, verificação, gate, entrega e gate. Pedido com segredo vai para blocked.">
-<path class="trilho" d="M90 230 C150 230 170 120 250 120 H1000"/><path class="trilho" d="M90 230 C150 230 170 290 250 290"/>
-<path class="corre" d="M90 230 C150 230 170 120 250 120 H1000"/>
+            <h3>Um gate só, com nome de gente</h3>
+            <p class="desc">Do pedido ao pull request, a Factory segue sozinha. O merge é de uma pessoa, pelo processo do seu repositório.</p>
+            <div class="rolagem"><svg class="diagrama" viewBox="0 0 960 340" role="img" aria-label="Modo autônomo: triagem, sandbox, construção, testes e pull request seguem sozinhos; o merge é de uma pessoa. Pedido com segredo vai para blocked.">
+<path class="trilho" d="M90 230 C150 230 170 120 250 120 H850"/><path class="trilho" d="M90 230 C150 230 170 290 250 290"/>
+<path class="corre" d="M90 230 C150 230 170 120 250 120 H850"/>
 <g><circle class="miolo" cx="90" cy="230" r="27"/><path class="borda" d="M60.9 205.6 A38 38 0 0 1 103.0 194.3"/><path class="borda" d="M119.1 254.4 A38 38 0 0 1 77.0 265.7"/><path class="ic" transform="translate(79.2 219.2) scale(0.9)" d="M4 5h16l-6 7v6l-4 2v-8z"/><text x="90" y="292" text-anchor="middle" class="">TRIAGEM</text></g>
-<g><circle class="miolo" cx="250" cy="120" r="27"/><path class="borda" d="M220.9 95.6 A38 38 0 0 1 263.0 84.3"/><path class="borda" d="M279.1 144.4 A38 38 0 0 1 237.0 155.7"/><path class="ic" transform="translate(239.2 109.2) scale(0.9)" d="M7 3h7l4 4v14H7z M14 3v4h4"/><text x="250" y="182" text-anchor="middle" class="">ESPECIFICAÇÃO</text></g>
-<g><circle class="miolo" cx="400" cy="120" r="27"/><path class="borda" d="M370.9 95.6 A38 38 0 0 1 413.0 84.3"/><path class="borda" d="M429.1 144.4 A38 38 0 0 1 387.0 155.7"/><path class="ic" transform="translate(389.2 109.2) scale(0.9)" d="M8 13V6a1.5 1.5 0 0 1 3 0v5 M11 11V4.5a1.5 1.5 0 0 1 3 0V11 M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6 7s-5-2-6.5-4.5L3 13a1.5 1.5 0 0 1 2.4-1.8L8 14"/><text x="400" y="182" text-anchor="middle" class="">GATE 1</text></g>
-<g><circle class="miolo" cx="550" cy="120" r="27"/><path class="borda" d="M520.9 95.6 A38 38 0 0 1 563.0 84.3"/><path class="borda" d="M579.1 144.4 A38 38 0 0 1 537.0 155.7"/><path class="ic" transform="translate(539.2 109.2) scale(0.9)" d="M5 12.5l4.5 4.5L19 7.5"/><text x="550" y="182" text-anchor="middle" class="">VERIFICAÇÃO</text></g>
-<g><circle class="miolo" cx="700" cy="120" r="27"/><path class="borda" d="M670.9 95.6 A38 38 0 0 1 713.0 84.3"/><path class="borda" d="M729.1 144.4 A38 38 0 0 1 687.0 155.7"/><path class="ic" transform="translate(689.2 109.2) scale(0.9)" d="M8 13V6a1.5 1.5 0 0 1 3 0v5 M11 11V4.5a1.5 1.5 0 0 1 3 0V11 M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6 7s-5-2-6.5-4.5L3 13a1.5 1.5 0 0 1 2.4-1.8L8 14"/><text x="700" y="182" text-anchor="middle" class="">GATE 2</text></g>
-<g><circle class="miolo" cx="850" cy="120" r="27"/><path class="borda" d="M820.9 95.6 A38 38 0 0 1 863.0 84.3"/><path class="borda" d="M879.1 144.4 A38 38 0 0 1 837.0 155.7"/><path class="ic" transform="translate(839.2 109.2) scale(0.9)" d="M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 9c0 6-12 3-12 9"/><text x="850" y="182" text-anchor="middle" class="">ENTREGA</text></g>
-<g><circle class="miolo" cx="1000" cy="120" r="27"/><path class="borda" d="M970.9 95.6 A38 38 0 0 1 1013.0 84.3"/><path class="borda" d="M1029.1 144.4 A38 38 0 0 1 987.0 155.7"/><path class="ic" transform="translate(989.2 109.2) scale(0.9)" d="M8 13V6a1.5 1.5 0 0 1 3 0v5 M11 11V4.5a1.5 1.5 0 0 1 3 0V11 M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6 7s-5-2-6.5-4.5L3 13a1.5 1.5 0 0 1 2.4-1.8L8 14"/><text x="1000" y="182" text-anchor="middle" class="">GATE 3</text></g>
+<g><circle class="miolo" cx="250" cy="120" r="27"/><path class="borda" d="M220.9 95.6 A38 38 0 0 1 263.0 84.3"/><path class="borda" d="M279.1 144.4 A38 38 0 0 1 237.0 155.7"/><path class="ic" transform="translate(239.2 109.2) scale(0.9)" d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5 M12 12v9 M12 12L4 7.5"/><text x="250" y="182" text-anchor="middle" class="">SANDBOX</text></g>
+<g><circle class="miolo" cx="400" cy="120" r="27"/><path class="borda" d="M370.9 95.6 A38 38 0 0 1 413.0 84.3"/><path class="borda" d="M429.1 144.4 A38 38 0 0 1 387.0 155.7"/><path class="ic" transform="translate(389.2 109.2) scale(0.9)" d="M8 8l-4 4 4 4 M16 8l4 4-4 4 M13.5 5l-3 14"/><text x="400" y="182" text-anchor="middle" class="">CONSTRUÇÃO</text></g>
+<g><circle class="miolo" cx="550" cy="120" r="27"/><path class="borda" d="M520.9 95.6 A38 38 0 0 1 563.0 84.3"/><path class="borda" d="M579.1 144.4 A38 38 0 0 1 537.0 155.7"/><path class="ic" transform="translate(539.2 109.2) scale(0.9)" d="M9 3h6 M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3 M7.5 15h9"/><text x="550" y="182" text-anchor="middle" class="">TESTES</text></g>
+<g><circle class="miolo" cx="700" cy="120" r="27"/><path class="borda" d="M670.9 95.6 A38 38 0 0 1 713.0 84.3"/><path class="borda" d="M729.1 144.4 A38 38 0 0 1 687.0 155.7"/><path class="ic" transform="translate(689.2 109.2) scale(0.9)" d="M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 9c0 6-12 3-12 9"/><text x="700" y="182" text-anchor="middle" class="">PULL REQUEST</text></g>
+<g><circle class="miolo" cx="850" cy="120" r="27"/><path class="borda humano" d="M820.9 95.6 A38 38 0 0 1 863.0 84.3"/><path class="borda humano" d="M879.1 144.4 A38 38 0 0 1 837.0 155.7"/><path class="ic" transform="translate(839.2 109.2) scale(0.9)" d="M8 13V6a1.5 1.5 0 0 1 3 0v5 M11 11V4.5a1.5 1.5 0 0 1 3 0V11 M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6 7s-5-2-6.5-4.5L3 13a1.5 1.5 0 0 1 2.4-1.8L8 14"/><text x="850" y="182" text-anchor="middle" class="">MERGE · PESSOA</text></g>
 <g><circle class="miolo" cx="250" cy="290" r="27"/><path class="borda" d="M220.9 265.6 A38 38 0 0 1 263.0 254.3"/><path class="borda" d="M279.1 314.4 A38 38 0 0 1 237.0 325.7"/><path class="ic" transform="translate(239.2 279.2) scale(0.9)" d="M7 7l10 10M17 7L7 17"/><text x="250" y="290" dx="96" dominant-baseline="middle" text-anchor="middle" class="apagado">BLOCKED</text></g>
 </svg></div>
           </div>
@@ -385,8 +466,8 @@ export function paginaInicial(): string {
           </article>
           <article class="card" data-revela>
             <h3>Gate humano</h3>
-            <p class="desc">Nenhum agente libera. Uma pessoa lê o card e decide, com o nome dela.</p>
-            <div class="mini"><div class="dialogo"><p><span aria-hidden="true">✋</span>O card C-14 quer seguir para o merge. Liberar o acompanhamento?</p><div class="botoes"><button type="button" class="sim" tabindex="-1">Liberar</button><button type="button" tabindex="-1">Recusar</button></div></div></div>
+            <p class="desc">Nenhum agente faz merge. Uma pessoa revisa o pull request e decide.</p>
+            <div class="mini"><div class="dialogo"><p><span aria-hidden="true">✋</span>O PR #7 está pronto. Testes no sandbox: PASS. Revisar e fazer o merge?</p><div class="botoes"><button type="button" class="sim" tabindex="-1">Revisar PR</button><button type="button" tabindex="-1">Pedir ajuste</button></div></div></div>
           </article>
           <article class="card" data-revela>
             <h3>Security</h3>
@@ -400,11 +481,11 @@ export function paginaInicial(): string {
           </article>
           <article class="card" data-revela>
             <h3>Integrations</h3>
-            <p class="desc">Abre issue ou work item. Sem credencial, diz que é simulado.</p>
-            <div class="mini provedores"><div>GitHub <small>issue · rascunho</small></div><div>Azure DevOps <small>work item</small></div><div>Merge <small class="laranja">não existe</small></div></div>
+            <p class="desc">Lê a demanda e abre o pull request no Azure DevOps ou no GitHub. Sem credencial, diz que é simulado.</p>
+            <div class="mini provedores"><div>Azure DevOps <small>work item · PR pronto</small></div><div>GitHub <small>issue · PR pronto</small></div><div>Merge <small class="laranja">não existe</small></div></div>
           </article>
         </div>
-        <p class="cabeca" style="margin: 28px auto 0; font-size: 15px; color: var(--muted)">Frontend, Backend e Docs completam os oito: cada um escreve só no próprio caminho.</p>
+        <p class="cabeca" style="margin: 28px auto 0; font-size: 15px; color: var(--muted)">Frontend, Backend e Docs completam os oito. No modo autônomo, o Construtor escreve o código dentro do container do card.</p>
       </div>
     </section>
 
@@ -412,32 +493,64 @@ export function paginaInicial(): string {
       <div class="wrap">
         <div class="cabeca" data-revela>
           <h2>Ciclo</h2>
-          <p>O workflow sdlc conduz o card da triagem ao release e guarda cada passo. Ele suspende, espera e retoma.</p>
+          <p>O workflow autonomo conduz o card da triagem ao pull request e guarda cada passo. O sdlc continua para quem quer três gates.</p>
         </div>
         <div class="grade dois">
           <article class="card grao" data-revela>
-            <h3>Suspende no gate</h3>
-            <p class="desc">Cada gate vira uma pausa de verdade no workflow. O estado fica salvo até a pessoa voltar.</p>
-            <div class="mini"><div class="suspende"><div class="linha"><b><span class="gira" aria-hidden="true">✻</span>Gate · beforeMerge</b><small>41 ms</small></div><p>C-14 · Filtro de datas com hora</p><div class="pills"><span>Entrada</span><span>Saída</span><span>Trilha</span></div></div></div>
+            <h3>Um container por card</h3>
+            <p class="desc">Tudo roda num Docker descartável. Nada toca a sua máquina nem produção.</p>
+            <div class="mini"><div class="suspende"><div class="linha"><b><span class="gira" aria-hidden="true">✻</span>sandbox · node:22</b><small>C-14</small></div><p>destruído no fim do card</p><div class="pills"><span>cap-drop ALL</span><span>no-new-privileges</span><span>512 processos</span><span>4 GB</span></div></div></div>
           </article>
           <article class="card grao" data-revela>
-            <h3>Retoma com nome</h3>
-            <p class="desc">A retomada pede três campos. Recusar fecha o card bloqueado, ou retido no release.</p>
-            <div class="mini"><pre aria-label="Exemplo de retomada">{
-  <span class="k">"aprovado"</span>: <span class="s">true</span>,
-  <span class="k">"aprovador"</span>: <span class="s">"Joana"</span>,
-  <span class="k">"nota"</span>: <span class="s">"Pode seguir, sem merge."</span>
+            <h3>Evidência observada</h3>
+            <p class="desc">O teste do seu repositório roda no container. O resultado vem do código de saída, não de relato.</p>
+            <div class="mini"><pre aria-label="Exemplo de evidência do sandbox">{
+  <span class="k">"nome"</span>: <span class="s">"testes-no-sandbox"</span>,
+  <span class="k">"resultado"</span>: <span class="s">"PASS"</span>,
+  <span class="k">"comando"</span>: <span class="s">"npm test"</span>,
+  <span class="k">"evidencia"</span>: <span class="s">"código de saída 0, 2814 ms"</span>
 }</pre></div>
           </article>
           <article class="card grao" data-revela>
-            <h3>Nada de segredo no disco</h3>
-            <p class="desc">O token colado no pedido vira marcador antes de qualquer gravação. A triagem ainda bloqueia o card.</p>
-            <div class="mini"><div class="tracejado"><span class="mono">workflow_snapshots</span><code>input.descricao → <b>[segredo:token-github]</b></code><code>trilha → Padrão de segredo. O valor não foi copiado.</code></div></div>
+            <h3>Token fora do container</h3>
+            <p class="desc">O token entra só no clone e no push. O diff é varrido antes do envio: com segredo, nada sai.</p>
+            <div class="mini"><div class="tracejado"><span class="mono">git push</span><code>FACTORY_GIT_AUTH → só no clone e no push</code><code>diff com <b>[segredo:token-github]</b> → bloqueado</code></div></div>
           </article>
           <article class="card grao" data-revela>
             <h3>GitHub e Azure DevOps</h3>
-            <p class="desc">Com credencial, a chamada é real. O pull request sai em rascunho, e não há endpoint de merge.</p>
-            <div class="mini chamadas"><div class="chamada"><code>criarIssueGithub()</code><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="30" fill="var(--card-2)"/><path d="M18 30 A36 36 0 0 1 40 13" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path d="M78 66 A36 36 0 0 1 56 83" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path transform="translate(36 36)" d="M7 3h7l4 4v14H7z M14 3v4h4" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="chamada"><code>criarRascunhoGithub()</code><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="30" fill="var(--card-2)"/><path d="M18 30 A36 36 0 0 1 40 13" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path d="M78 66 A36 36 0 0 1 56 83" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path transform="translate(36 36)" d="M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 9c0 6-12 3-12 9" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+            <p class="desc">Clona, envia a branch e abre o pull request pronto para revisão. Não há endpoint de merge.</p>
+            <div class="mini chamadas"><div class="chamada"><code>criarRascunhoAzure()</code><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="30" fill="var(--card-2)"/><path d="M18 30 A36 36 0 0 1 40 13" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path d="M78 66 A36 36 0 0 1 56 83" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path transform="translate(36 36)" d="M7 3h7l4 4v14H7z M14 3v4h4" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="chamada"><code>criarRascunhoGithub()</code><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="30" fill="var(--card-2)"/><path d="M18 30 A36 36 0 0 1 40 13" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path d="M78 66 A36 36 0 0 1 56 83" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path transform="translate(36 36)" d="M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 9c0 6-12 3-12 9" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="harness">
+      <div class="wrap">
+        <div class="cabeca" data-revela>
+          <h2>Harness evolutivo</h2>
+          <p>A factory que constrói factory. O jeito de trabalhar mora no repositório, e cada melhoria passa pelo mesmo pull request e pela mesma pessoa no merge.</p>
+        </div>
+        <div class="grade dois">
+          <article class="card grao" data-revela>
+            <h3>Skills versionadas</h3>
+            <p class="desc">Como construir, revisar e desenhar fica escrito em skills. Aprendeu um jeito melhor? Vira pull request na skill.</p>
+            <div class="mini pilhas"><span><i class="anel"></i>factory-ui</span><span><i class="anel"></i>super-review</span><span><i class="anel"></i>super-qa</span></div>
+          </article>
+          <article class="card grao" data-revela>
+            <h3>Regras do cliente, com autor</h3>
+            <p class="desc">A base do projeto guarda o que uma pessoa do cliente ditou, com o nome dela. Nenhum agente inventa regra.</p>
+            <div class="mini"><div class="tracejado"><span class="mono">base do projeto</span><code>branch protegida → <b>main</b> · autora: Joana</code><code>checks do cliente → typecheck, suíte</code></div></div>
+          </article>
+          <article class="card grao" data-revela>
+            <h3>Política no código, não no prompt</h3>
+            <p class="desc">Aprovação nas escritas externas, retry, limite de contexto e guarda na saída valem em toda chamada.</p>
+            <div class="mini linhas-check"><div>aprovação em criarIssueGithub <span class="ok">ativa</span></div><div>guarda: "fiz o merge" <span class="nr">removido</span></div><div>segredo no diff <span class="nr">bloqueado</span></div></div>
+          </article>
+          <article class="card grao" data-revela>
+            <h3>A Factory se constrói</h3>
+            <p class="desc">Este repositório foi feito assim: pedido, agente, pull request, testes e merge decidido por uma pessoa.</p>
+            <div class="mini provedores"><div>juliopessan/super-factory <small>pull requests</small></div><div>check · e2e <small class="verde">30 checagens</small></div><div>Merge <small class="laranja">sempre de uma pessoa</small></div></div>
           </article>
         </div>
       </div>
@@ -498,26 +611,26 @@ export function paginaInicial(): string {
       <div class="wrap">
         <div class="cabeca" data-revela>
           <h2>Limites</h2>
-          <p>O agente prepara. Uma pessoa decide. O que tem consequência fora do card continua com quem opera o repositório.</p>
+          <p>O agente faz o trabalho. Uma pessoa decide o que entra.</p>
         </div>
         <div class="moldura" data-revela>
           <div class="card grao lados">
             <div>
               <h3>A Factory faz</h3>
               <ul>
-                <li><b>✓</b>Triagem, especificação e plano do card</li>
-                <li><b>✓</b>Checks internos, com evidência do que observou</li>
-                <li><b>✓</b>Issue ou work item no provedor</li>
-                <li><b>✓</b>Pull request em rascunho, quando a branch existe</li>
+                <li><b>✓</b>Triagem e plano do card</li>
+                <li><b>✓</b>Código e testes num container descartável</li>
+                <li><b>✓</b>Pull request pronto para revisão, com evidência</li>
+                <li><b>✓</b>Card, trilha e relatório de cada passo</li>
               </ul>
             </div>
             <div>
               <h3>Fica com uma pessoa</h3>
               <ul>
-                <li><b>✋</b>Merge: a branch protegida não recebe push</li>
-                <li><b>✋</b>Deploy: o release não publica nada</li>
+                <li><b>✋</b>Merge: revisar o pull request e decidir</li>
+                <li><b>✋</b>Deploy: nada vai para produção</li>
                 <li><b>✋</b>Force-push e commit direto em main</li>
-                <li><b>✋</b>Rodar a suíte do produto e anexar o resultado</li>
+                <li><b>✋</b>Chaves e permissões do repositório</li>
               </ul>
             </div>
           </div>
@@ -529,23 +642,23 @@ export function paginaInicial(): string {
       <div class="wrap">
         <div class="cabeca" data-revela>
           <h2>Instalar</h2>
-          <p>Um passo de cada vez. Se o Terminal mostrar uma linha vermelha, cole no chat da Factory e a conversa continua dali. Não cole chave, token ou senha.</p>
+          <p>Um passo de cada vez. Os passos 1 a 6 ligam a Factory; o 7 libera o modo autônomo. Se o Terminal mostrar uma linha vermelha, cole no chat da Factory e a conversa continua dali. Não cole chave, token ou senha.</p>
         </div>
         <div class="passos">
           <article class="passo-card" id="passo-1" data-revela><span class="mono">Passo 1</span><h3>Node</h3><p>Baixe a versão 22 em nodejs.org. No Terminal, <code class="c">node -v</code> precisa mostrar v22.18 ou mais.</p></article>
-          <article class="passo-card" id="passo-2" data-revela><span class="mono">Passo 2</span><h3>Terminal</h3><p>No Mac, Command + espaço e escreva Terminal. No Windows, procure PowerShell no Iniciar.</p></article>
-          <article class="passo-card" id="passo-3" data-revela><span class="mono">Passo 3</span><h3>Projeto</h3><p>Na primeira vez, clone <code class="c">github.com/juliopessan/super-factory</code>. Se a pasta já existe, atualize a branch <code class="c">main</code>.</p></article>
+          <article class="passo-card" id="passo-2" data-revela><span class="mono">Passo 2</span><h3>Terminal</h3><p>No Mac, Command + espaço e escreva Terminal. No Windows, procure PowerShell no Iniciar. Confira o git com <code class="c">git --version</code>.</p></article>
+          <article class="passo-card" id="passo-3" data-revela><span class="mono">Passo 3</span><h3>Projeto</h3><p>Na primeira vez, clone <code class="c">github.com/juliopessan/super-factory</code>. Se a pasta já existe, atualize com <code class="c">git pull --ff-only</code>.</p></article>
           <article class="passo-card" id="passo-4" data-revela><span class="mono">Passo 4</span><h3>Peças</h3><p>Dentro da pasta, <code class="c">npm install</code>. Espere a linha <code class="c">added packages</code>. Não use sudo.</p></article>
           <article class="passo-card" id="passo-5" data-revela><span class="mono">Passo 5</span><h3>Ligar</h3><p><code class="c">npm run dev</code> e deixe a janela aberta. A linha saudável mostra 4721.</p></article>
           <article class="passo-card" id="passo-6" data-revela><span class="mono">Passo 6</span><h3>Factory</h3><p><code class="c">localhost:4721</code> é esta página. <code class="c">localhost:4721/studio</code> é a Factory.</p></article>
-          <article class="passo-card opcional" id="passo-7" data-revela><span class="mono">Passo 7 · opcional</span><h3>Chave, se quiser</h3><p>Sem chave, a Factory funciona e avisa quando a resposta é uma amostra.</p></article>
+          <article class="passo-card" id="passo-7" data-revela><span class="mono">Passo 7 · modo autônomo</span><h3>Docker e chaves</h3><p>Docker Desktop, ou Colima com <code class="c">colima start</code> e <code class="c">DOCKER_HOST</code> no <code class="c">.env</code>. Copie <code class="c">.env.example</code> para <code class="c">.env</code> e preencha <code class="c">ANTHROPIC_API_KEY</code>, <code class="c">GITHUB_TOKEN</code> e <code class="c">AZURE_DEVOPS_ORG</code> com <code class="c">AZURE_DEVOPS_PAT</code>. Comece por um repositório de teste.</p></article>
         </div>
       </div>
     </section>
 
     <div class="wrap fim" data-revela>
-      <h2>O pedido chega. O gate espera.</h2>
-      <p>Abra a Factory e conduza o primeiro card.</p>
+      <h2>A programação morreu. A engenharia está só começando.</h2>
+      <p>O pedido chega, o pull request sai e você decide o merge. Abra a Factory e conduza o primeiro card.</p>
       <div class="acoes"><a class="primario" href="/studio">Abrir a Factory <span class="gira" aria-hidden="true">✻</span></a><a class="seta" href="https://github.com/juliopessan/super-factory">Ver no GitHub ↗</a></div>
     </div>
   </main>
@@ -573,16 +686,19 @@ export function paginaInicial(): string {
       var passos = [
         { alvo: 'passo-1', titulo: 'Instale o Node', texto: 'Baixe a versão 22 em nodejs.org. No Terminal, node -v precisa mostrar v22.18 ou mais. Se a versão for antiga, fique neste passo.' },
         { alvo: 'passo-2', titulo: 'Abra o Terminal', texto: 'No Mac, Command e espaço, e escreva Terminal. No Windows, escreva PowerShell no Iniciar.' },
-        { alvo: 'passo-3', titulo: 'Traga o projeto', texto: 'Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize a branch main.' },
+        { alvo: 'passo-3', titulo: 'Traga o projeto', texto: 'Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize com git pull --ff-only.' },
         { alvo: 'passo-4', titulo: 'Instale as peças', texto: 'Dentro da pasta, npm install. Espere a linha added packages. Não use sudo. Se der erro, cole a mensagem no chat e continue daqui.' },
         { alvo: 'passo-5', titulo: 'Ligue a Factory', texto: 'npm run dev e deixe a janela aberta. A linha saudável mostra 4721.' },
         { alvo: 'passo-6', titulo: 'Abra no navegador', texto: 'localhost:4721 é esta página. localhost:4721/studio é a Factory, onde o chat continua a instalação.' },
-        { alvo: 'passo-7', titulo: 'A chave é opcional', texto: 'Sem chave, a Factory funciona e avisa quando a resposta é uma amostra. Não cole chave, token ou senha no chat.' },
-        { alvo: 'portao', titulo: 'O ciclo para no gate', texto: 'Um pedido passa por triagem e especificação e espera uma pessoa em implementação, merge e release. O agente não aprova.' },
-        { alvo: 'ciclo', titulo: 'Seis estágios', texto: 'Triagem, especificação, implementação, verificação, revisão humana e entrega. Cada passo deixa registro.' },
+        { alvo: 'passo-7', titulo: 'Docker e chaves', texto: 'Para o modo autônomo: Docker Desktop ou Colima, e o arquivo .env com ANTHROPIC_API_KEY e o acesso ao GitHub ou ao Azure DevOps. Comece por um repositório de teste. Não cole chave no chat.' },
+        { alvo: 'manifesto', titulo: 'A engenharia não morreu', texto: 'Código ficou barato. Critério, evidência e a decisão do merge continuam com gente. É isso que a Factory protege.' },
+        { alvo: 'autonomo', titulo: 'Modo autônomo', texto: 'A Factory lê a demanda no Azure DevOps ou no GitHub, implementa e testa num container e abre o pull request. Você decide o merge.' },
+        { alvo: 'harness', titulo: 'Harness evolutivo', texto: 'Skills, regras do cliente e guardas vivem no repositório. Cada melhoria passa pelo mesmo pull request.' },
+        { alvo: 'portao', titulo: 'Um gate só', texto: 'Triagem, sandbox, construção, testes e pull request seguem sozinhos. O merge é de uma pessoa.' },
+        { alvo: 'ciclo', titulo: 'O ciclo autônomo', texto: 'Um container por card, evidência observada dos testes e token fora do container. Cada passo deixa registro.' },
         { alvo: 'quadro', titulo: 'O quadro', texto: 'Pedido claro entra em ready. Pedido vago, segredo ou force-push fica blocked. A onda leva no máximo cinco cards.' },
         { alvo: 'papeis', titulo: 'Oito papéis', texto: 'Só o Chief of Staff abre card. Security é somente leitura. Nenhum papel aprova gate.' },
-        { alvo: 'limites', titulo: 'O que fica de fora', texto: 'Sem merge, sem deploy, sem force-push e sem comando. Teste de produto continua NOT_RUN até uma pessoa rodar fora daqui.' },
+        { alvo: 'limites', titulo: 'O que fica com você', texto: 'Merge, deploy, force-push e as chaves do repositório. A Factory faz o trabalho; você decide o que entra.' },
         { alvo: 'factory-cta', titulo: 'Agora a Factory', texto: 'Abra a Factory e escreva o passo em que você está, ou cole o erro. A conversa não volta ao começo.' }
       ]
       var i = 0
@@ -670,7 +786,7 @@ export function paginaInicial(): string {
         })
       })
 
-      var verbos = ['Conduza', 'Especifique', 'Planeje', 'Verifique', 'Revise']
+      var verbos = ['Conduza', 'Especifique', 'Implemente', 'Teste', 'Entregue']
       var caixa = document.querySelector('.verbo')
       var txt = document.querySelector('.verbo-txt')
       var v = 0
@@ -685,6 +801,128 @@ export function paginaInicial(): string {
         })
       }, 2600)
     })
+  </script>
+  <script>
+    // Animações no estilo do Claude, em JavaScript puro: ícone que pulsa em quadros,
+    // verbo com brilho e sessão que chega digitada. Com movimento reduzido, tudo fica parado.
+    (function () {
+      var reduz = false
+      try { reduz = matchMedia('(prefers-reduced-motion: reduce)').matches } catch (e) {}
+      if (reduz) return
+
+      var QUADROS = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢']
+      var q = 0
+      document.querySelectorAll('.gira').forEach(function (el) { el.classList.add('js-gira') })
+      setInterval(function () {
+        q = (q + 1) % QUADROS.length
+        document.querySelectorAll('.gira').forEach(function (el) { el.textContent = QUADROS[q] })
+      }, 120)
+
+      var sessao = document.getElementById('sessao')
+      var titulo = document.getElementById('sessao-titulo')
+      if (!sessao) return
+
+      var ROTEIROS = [
+        { titulo: 'factory · autonomo · C-14 · Azure DevOps', linhas: [
+          ['pedido', '› Azure DevOps · work item 4812 · Filtro de datas com hora', 'Lendo a demanda'],
+          ['tool', 'triagem → ready, critério observável', 'Triando'],
+          ['tool', 'sandbox node:22 · cap-drop ALL · factory/c-14-filtro-de-datas', 'Abrindo o container'],
+          ['tool', 'git clone fabrica/pedidos-api', 'Clonando'],
+          ['tool', 'ler-arquivo src/pedidos/filtro.ts', 'Lendo o código'],
+          ['tool', 'escrever-arquivo src/pedidos/filtro.ts  +18 −4', 'Implementando'],
+          ['tool', 'escrever-arquivo test/filtro.test.ts  +32', 'Escrevendo testes'],
+          ['tool', 'executar-comando npm test', 'Testando'],
+          ['res', '⎿ ok 14 testes · 0 falhas · 2,8 s', ''],
+          ['tool', 'varredura de segredo no diff → limpo', 'Conferindo'],
+          ['tool', 'git push factory/c-14-filtro-de-datas', 'Enviando'],
+          ['pr', '✓ PR #7 pronto para revisão · testes no sandbox: PASS', 'Abrindo o pull request'],
+          ['humano', '✋ aguardando uma pessoa para o merge', '']
+        ] },
+        { titulo: 'factory · autonomo · C-15 · GitHub', linhas: [
+          ['pedido', '› GitHub · issue #128 · Exportar pedidos em CSV', 'Lendo a demanda'],
+          ['tool', 'triagem → ready, critério observável', 'Triando'],
+          ['tool', 'sandbox node:22 · pnpm · factory/c-15-exportar-pedidos', 'Abrindo o container'],
+          ['tool', 'escrever-arquivo src/export/csv.ts  +41', 'Implementando'],
+          ['tool', 'executar-comando pnpm run test', 'Testando'],
+          ['res falha', '⎿ 1 falha · csv.test.ts:42 vírgula dentro do campo', ''],
+          ['tool', 'escrever-arquivo src/export/csv.ts  +3 −1', 'Corrigindo'],
+          ['tool', 'executar-comando pnpm run test', 'Testando de novo'],
+          ['res', '⎿ ok 22 testes · 0 falhas · 3,1 s', ''],
+          ['pr', '✓ PR #31 pronto para revisão · testes no sandbox: PASS', 'Abrindo o pull request'],
+          ['humano', '✋ aguardando uma pessoa para o merge', '']
+        ] }
+      ]
+
+      function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms) }) }
+
+      function linha(tipo) {
+        var el = document.createElement('div')
+        el.className = 'l ' + tipo
+        sessao.appendChild(el)
+        return el
+      }
+
+      async function girar(verbo, ms) {
+        if (!verbo) return
+        var el = linha('spin')
+        var icone = document.createElement('span')
+        icone.className = 'gira js-gira'
+        icone.textContent = '✻'
+        var vivo = document.createElement('span')
+        vivo.className = 'vivo'
+        vivo.textContent = ' ' + verbo + '…'
+        var tempo = document.createElement('small')
+        el.appendChild(icone); el.appendChild(vivo); el.appendChild(tempo)
+        var inicio = Date.now()
+        var relogio = setInterval(function () { tempo.textContent = '(' + Math.round((Date.now() - inicio) / 1000) + 's)' }, 250)
+        await esperar(ms)
+        clearInterval(relogio)
+        el.remove()
+      }
+
+      async function digitar(el, texto) {
+        el.classList.add('digitando')
+        for (var i = 1; i <= texto.length; i += 2) {
+          el.textContent = texto.slice(0, i)
+          await esperar(14)
+        }
+        el.textContent = texto
+        el.classList.remove('digitando')
+      }
+
+      async function rodar(roteiro) {
+        sessao.textContent = ''
+        if (titulo) titulo.textContent = roteiro.titulo
+        for (var i = 0; i < roteiro.linhas.length; i++) {
+          var tipo = roteiro.linhas[i][0], texto = roteiro.linhas[i][1], verbo = roteiro.linhas[i][2]
+          await girar(verbo, 700 + Math.random() * 900)
+          var el = linha(tipo)
+          if (tipo === 'tool') {
+            var ponto = document.createElement('b')
+            ponto.textContent = '⏺'
+            el.appendChild(ponto)
+            var resto = document.createElement('span')
+            el.appendChild(resto)
+            await digitar(resto, texto)
+          } else {
+            await digitar(el, texto)
+          }
+        }
+      }
+
+      var comecou = false
+      var observador = new IntersectionObserver(function (entradas) {
+        if (comecou || !entradas.some(function (e) { return e.isIntersecting })) return
+        comecou = true
+        ;(async function () {
+          for (var n = 0; ; n++) {
+            await rodar(ROTEIROS[n % ROTEIROS.length])
+            await esperar(4000)
+          }
+        })()
+      }, { threshold: 0.3 })
+      observador.observe(sessao)
+    })()
   </script>
 </body>
 </html>`

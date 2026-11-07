@@ -76,14 +76,22 @@ const PASSOS: Passo[] = [
     sucesso: /p[aá]gina aberta|super factory abriu|factory aberta|passo 6 ok/i,
   },
   {
-    titulo: 'Chaves, só se você tiver',
+    titulo: 'Modo autônomo: Docker e chaves',
     instrucao: [
-      'Sem chave, a Factory já funciona e avisa quando a resposta é uma amostra.',
-      'Se você tiver uma chave de modelo, do GitHub ou do Azure, copie o arquivo .env.example para .env na pasta super-factory e preencha só na sua máquina.',
+      'Sem este passo, a Factory já funciona e avisa quando a resposta é uma amostra. Ele libera o modo autônomo.',
+      'Docker: no Mac, instale o Docker Desktop, ou o Colima, que é gratuito. Para o Colima, cole uma linha de cada vez:',
+      'brew install colima docker',
+      'colima start',
+      'Confira com: docker info. Se a resposta trouxer Server Version, o Docker está pronto.',
+      'Com o Colima, acrescente ao .env a linha DOCKER_HOST=unix:///Users/SEU_USUARIO/.colima/default/docker.sock, trocando SEU_USUARIO pelo resultado de whoami. Com o Docker Desktop, não precisa.',
+      'Chaves: na pasta super-factory, cole: cp .env.example .env. Abra o arquivo .env e preencha só na sua máquina:',
+      'ANTHROPIC_API_KEY, para o agente escrever código.',
+      'GITHUB_TOKEN, para repositórios do GitHub, e AZURE_DEVOPS_ORG com AZURE_DEVOPS_PAT, para o Azure DevOps.',
+      'Comece por um repositório de teste. Depois de salvar o .env, pare a Factory com Control e C e rode npm run dev de novo.',
       'Não cole chave, token ou senha neste chat.',
-      'Quando terminar, ou se for ficar sem chave, escreva: instalação pronta.',
+      'Quando terminar, ou se for ficar sem o modo autônomo, escreva: instalação pronta.',
     ].join('\n'),
-    sucesso: /instala[cç][aã]o pronta|sem chave|j[aá] preenchi/i,
+    sucesso: /instala[cç][aã]o pronta|sem chave|j[aá] preenchi|server version/i,
   },
 ]
 
