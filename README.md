@@ -163,6 +163,7 @@ Copie `.env.example` para `.env` só na sua máquina. O `.env` não entra no rep
 - **GitHub.** Sem `GITHUB_TOKEN`, listar ou abrir issue devolve a amostra e a nota `Simulado`. Com o token, a chamada vai para `https://api.github.com`. O pull request, quando a branch de origem existe e não é a base, sai como rascunho. Não há endpoint de merge nem de push.
 - **Azure DevOps.** Sem `AZURE_DEVOPS_ORG` e `AZURE_DEVOPS_PAT` juntos, fica simulado. Com os dois, work items usam `https://dev.azure.com`. O projeto vem do campo do ciclo; pull request rascunho só quando esse campo vem como `projeto/repositorio`.
 - **Modelo.** Sem chave, a Factory local encaminha a frase para a ferramenta certa. Com `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` ou `GOOGLE_GENERATIVE_AI_API_KEY`, os agentes usam o provedor correspondente. `SUPER_FACTORY_MODEL` troca o modelo, no formato `provedor/modelo`; `FACTORY_MODEL` vale quando o primeiro está vazio.
+- **Rede.** Por padrão, a Factory só abre neste computador (`localhost`), porque o Studio não tem login: quem alcança a porta 4721 roda agentes e workflows. Para abrir para outras máquinas de propósito, use `SUPER_FACTORY_HOST=0.0.0.0`.
 
 Os identificadores passam por uma lista fechada de caracteres. O token não entra na URL e não é copiado para o relatório.
 
