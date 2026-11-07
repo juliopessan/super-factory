@@ -544,6 +544,34 @@ const pedidoIssue = await agente.generate('abre uma issue no github repo: acme/w
 assert.equal(pedidoIssue.finishReason, 'suspended', 'a issue espera aprovação humana')
 assert.equal((pedidoIssue as { suspendPayload?: { toolName?: string } }).suspendPayload?.toolName, 'criarIssueGithub')
 
+// --- Repositório: aceita o endereço copiado do navegador ou do git
+{
+  const { normalizarRepositorio, dividirRepositorio, dividirAzure } = await import('../factory/guards.ts')
+  const gh = (valor: string) => normalizarRepositorio('github', valor)
+  const az = (valor: string) => normalizarRepositorio('azure-devops', valor)
+  assert.equal(gh('acme/pedidos'), 'acme/pedidos')
+  assert.equal(gh('  acme/pedidos/ '), 'acme/pedidos')
+  assert.equal(gh('https://github.com/acme/pedidos'), 'acme/pedidos')
+  assert.equal(gh('https://github.com/acme/pedidos.git'), 'acme/pedidos')
+  assert.equal(gh('https://github.com/acme/pedidos/pull/3'), 'acme/pedidos')
+  assert.equal(gh('github.com/acme/pedidos'), 'acme/pedidos')
+  assert.equal(gh('git@github.com:acme/pedidos.git'), 'acme/pedidos')
+  assert.equal(gh('https://ghp_' + 'a'.repeat(36) + '@github.com/acme/pedidos'), 'acme/pedidos', 'o token do endereço é descartado')
+  assert.equal(az('Projeto'), 'Projeto')
+  assert.equal(az('Projeto/repo'), 'Projeto/repo')
+  assert.equal(az('https://dev.azure.com/org/Projeto/_git/repo'), 'Projeto/repo')
+  assert.equal(az('https://org@dev.azure.com/org/Projeto/_git/repo'), 'Projeto/repo')
+  assert.equal(az('https://dev.azure.com/org/Projeto'), 'Projeto')
+  assert.equal(az('https://org.visualstudio.com/Projeto/_git/repo'), 'Projeto/repo')
+  assert.equal(az('git@ssh.dev.azure.com:v3/org/Projeto/repo'), 'Projeto/repo')
+  assert.throws(() => dividirRepositorio(gh('pedidos')), /owner\/repo/)
+  assert.throws(() => dividirRepositorio(gh('https://dev.azure.com/org/Projeto/_git/repo')), /Azure DevOps/)
+  assert.throws(() => dividirAzure(az('https://github.com/acme/pedidos')), /GitHub/)
+  assert.doesNotThrow(() => dividirRepositorio(gh('https://github.com/acme/pedidos')))
+  const cartao = iniciar({ ...pedidoClaro, provedor: 'azure-devops', repositorio: 'https://dev.azure.com/org/Projeto/_git/repo' })
+  assert.equal(cartao.card.repositorio, 'Projeto/repo')
+}
+
 // --- Modo autônomo: sandbox, construtor e PR, com executor falso
 const { executarAutonomo, descobrirVerificacao, nomeDaBranch } = await import('../factory/autonomo.ts')
 const { criarExecutorFalso } = await import('../factory/sandbox.ts')

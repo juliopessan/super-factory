@@ -4,6 +4,7 @@ import { fatiasDe, fatiasDisjuntas, grauDe, lintarCriterios, rotear } from './bo
 import {
   dividirAzure,
   dividirRepositorio,
+  normalizarRepositorio,
   pedidoPerigoso,
   redigirSegredos,
   validarBranch,
@@ -36,7 +37,7 @@ export function normalizarPedido(input: PedidoBruto): Pedido {
       .map((linha) => linha.replace(/^[-*]\s*/, '').trim())
       .filter(Boolean),
     provedor: input.provedor,
-    repositorio: input.repositorio.trim(),
+    repositorio: normalizarRepositorio(input.provedor, input.repositorio),
     branchBase: (input.branchBase?.trim() || 'main'),
     branchHead: input.branchHead?.trim() ? input.branchHead.trim() : null,
   }

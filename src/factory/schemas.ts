@@ -111,7 +111,7 @@ export const pedidoSchema = z.object({
     .string()
     .min(3)
     .max(140)
-    .describe('GitHub: owner/repo. Azure DevOps: projeto ou projeto/repositorio.'),
+    .describe('GitHub: owner/repo. Azure DevOps: projeto ou projeto/repositorio. O endereço do repositório copiado do navegador também serve.'),
   branchBase: z
     .string()
     .min(1)

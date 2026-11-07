@@ -181,7 +181,7 @@ Abra o workflow `sdlc` e preencha:
 | descricao | O filtro da API de pedidos quebra quando a data vem só com o dia. Precisa aceitar intervalo com hora e recusar fim anterior ao início. |
 | criterios | Uma condição por linha, por exemplo `O endpoint devolve 400 quando o fim do intervalo é anterior ao início.` |
 | provedor | `github` ou `azure-devops` |
-| repositorio | GitHub: `owner/repo`. Azure: `projeto` ou `projeto/repositorio`. |
+| repositorio | GitHub: `owner/repo`. Azure: `projeto` ou `projeto/repositorio`. O endereço copiado do navegador (`https://github.com/acme/pedidos`, `https://dev.azure.com/org/Projeto/_git/repo`) também serve. |
 | branchBase | `main` |
 | branchHead | Uma branch que já existe, se quiser um pull request rascunho. Vazio só abre o item de acompanhamento. |
 
