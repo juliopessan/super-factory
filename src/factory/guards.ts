@@ -66,9 +66,66 @@ export function validarBranch(nome: string): string {
   return limpo
 }
 
+function segmentosDe(texto: string): { host: string; segs: string[] } | null {
+  try {
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(texto)) {
+      const url = new URL(texto) // o usuário e a senha do endereço (https://token@…) são descartados aqui
+      return { host: url.hostname.toLowerCase(), segs: url.pathname.split('/').filter(Boolean).map((parte) => decodeURIComponent(parte)) }
+    }
+    const ssh = /^[^@/\s]+@([^:/\s]+):(.+)$/.exec(texto)
+    if (ssh) return { host: (ssh[1] ?? '').toLowerCase(), segs: (ssh[2] ?? '').split('/').filter(Boolean) }
+    const solto = /^((?:[a-z0-9-]+\.)+[a-z]{2,})\/(.+)$/i.exec(texto)
+    if (solto && /(^|\.)(github\.com|dev\.azure\.com|visualstudio\.com)$/i.test(solto[1] ?? '')) {
+      return { host: (solto[1] ?? '').toLowerCase(), segs: (solto[2] ?? '').split('/').filter(Boolean) }
+    }
+  } catch {}
+  return null
+}
+
+/**
+ * Aceita o que a pessoa copia do navegador ou do git: https://github.com/acme/pedidos(.git),
+ * git@github.com:acme/pedidos.git, https://dev.azure.com/org/Projeto/_git/repo,
+ * https://org.visualstudio.com/Projeto/_git/repo e git@ssh.dev.azure.com:v3/org/Projeto/repo.
+ * Devolve owner/repo no GitHub e projeto ou projeto/repositorio no Azure DevOps.
+ * Um endereço de outro provedor passa sem mudar, e a validação explica o erro.
+ */
+export function normalizarRepositorio(provedor: 'github' | 'azure-devops', valor: string): string {
+  const texto = valor.trim().replace(/\/+$/, '')
+  const partes = segmentosDe(texto)
+  if (!partes) return provedor === 'github' ? texto.replace(/\.git$/i, '') : texto
+  const { host, segs } = partes
+  if (provedor === 'github') {
+    if ((host === 'github.com' || host === 'www.github.com') && segs.length >= 2) {
+      return `${segs[0]}/${(segs[1] ?? '').replace(/\.git$/i, '')}`
+    }
+    return texto
+  }
+  let projeto: string | undefined
+  let repositorio: string | undefined
+  if (host === 'dev.azure.com') {
+    projeto = segs[1]
+    repositorio = segs[2] === '_git' ? segs[3] : undefined
+  } else if (host === 'ssh.dev.azure.com') {
+    projeto = segs[2]
+    repositorio = segs[3]
+  } else if (host.endsWith('.visualstudio.com')) {
+    projeto = segs[0]
+    repositorio = segs[1] === '_git' ? segs[2] : undefined
+  } else {
+    return texto
+  }
+  if (!projeto) return texto
+  return repositorio ? `${projeto}/${repositorio.replace(/\.git$/i, '')}` : projeto
+}
+
 export function dividirRepositorio(valor: string): { owner: string; name: string } {
   const partes = valor.trim().split('/')
-  if (partes.length !== 2) throw new Error('Repositório GitHub precisa ser owner/repo.')
+  if (partes.length !== 2) {
+    if (/dev\.azure\.com|visualstudio\.com|_git/i.test(valor)) {
+      throw new Error('Este repositório parece ser do Azure DevOps. Escolha o provedor azure-devops e use projeto/repositorio.')
+    }
+    throw new Error('Repositório GitHub precisa ser owner/repo, por exemplo acme/pedidos. O endereço copiado do navegador também serve.')
+  }
   return { owner: segmento(partes[0] ?? '', 'Dono'), name: segmento(partes[1] ?? '', 'Repositório') }
 }
 
@@ -78,7 +135,10 @@ export function dividirAzure(valor: string): { project: string; repository: stri
   if (partes.length === 2) {
     return { project: segmento(partes[0] ?? '', 'Projeto'), repository: segmento(partes[1] ?? '', 'Repositório') }
   }
-  throw new Error('Azure DevOps espera projeto ou projeto/repositorio.')
+  if (/github\.com/i.test(valor)) {
+    throw new Error('Este repositório parece ser do GitHub. Escolha o provedor github e use owner/repo.')
+  }
+  throw new Error('Azure DevOps espera projeto ou projeto/repositorio. O endereço copiado do navegador também serve.')
 }
 
 const PROTEGIDAS = new Set(['main', 'master'])
