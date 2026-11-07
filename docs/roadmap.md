@@ -51,8 +51,12 @@ Tamanho: P (até 1 dia), M (alguns dias), G (uma semana ou mais).
 9. **Rotinas agendadas (P).** Com Schedules do Mastra: revisão diária do backlog e lembrete de gates parados há mais de um dia.
 10. **ACP (P).** Expor o Chief of Staff pelo Agent Client Protocol, para conversar com a Factory de dentro do editor, ao lado do MCP que já existe.
 
+## Decidido em novembro de 2026
+
+- **Modo autônomo com sandbox Docker.** A Super Factory evolui (não adota o Mastra Factory, que não tem Azure DevOps) e ganha o workflow `autonomo`: triagem, container Docker por card, agente construtor com Claude, testes do repositório e pull request pronto para revisão. Uma pessoa decide só no merge. Roda no Mac (Docker Desktop ou Colima) e em servidor Linux.
+
 ## Fora, por decisão
 
-- **Executar código, testes ou shell.** O Mastra oferece sandboxes (Docker, E2B, Daytona, Mastra) que transformariam `NOT_RUN` em evidência observada. É a maior mudança possível na proposta da Super Factory e precisa de decisão explícita antes de qualquer código: sandbox isolado, só leitura de rede, e o resultado entra como evidência, nunca como aprovação.
+- **Executar código fora do sandbox.** No modo autônomo, código e testes rodam só no container do card. Na máquina de quem opera e em produção, nada roda.
 - **Merge automático e deploy automático.** Continuam com uma pessoa.
 - **Troca automática de provedor de modelo.** Saiu porque o Studio esconde o seletor de provedor quando o modelo é uma lista. Volta se o Mastra passar a mostrar o seletor nesse caso.

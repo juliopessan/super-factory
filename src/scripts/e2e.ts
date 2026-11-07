@@ -144,6 +144,10 @@ async function testarWorkflow(): Promise<void> {
     .some((caminho) => fs.readFileSync(caminho).includes(SEGREDO))
   conferir('triagem: o segredo não entra no factory.db', !gravado)
 
+  const { corpo: criadoAuto } = await api('/api/workflows/autonomo/create-run', {})
+  const auto = await api(`/api/workflows/autonomo/start-async?runId=${criadoAuto.runId}`, { inputData: pedido })
+  conferir('autônomo: sem chave, para e pede a ANTHROPIC_API_KEY', /ANTHROPIC_API_KEY/.test(auto.corpo?.result?.motivo ?? ''), auto.corpo?.result?.motivo)
+
   const curto = await ciclo({ ...pedido, titulo: 'x' }, [])
   conferir('schema: título curto é recusado', curto.r.status >= 400 || curto.r.corpo?.status === 'failed', String(curto.r.status))
 }

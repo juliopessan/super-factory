@@ -81,6 +81,21 @@ Cada onda leva no máximo 5 cards prontos, sem dois mexendo no mesmo lugar.
 | Security | Procura segredo, push protegido e gate furado | Só lê |
 | Docs | Diz o que foi observado e o que ficou de fora | Relatório |
 
+## Modo autônomo: do pedido ao pull request
+
+O workflow `sdlc` para em três gates. O workflow `autonomo` segue sozinho até o pull request, e uma pessoa decide só no merge:
+
+1. **Triagem.** A mesma regra do `sdlc`: pedido vago, segredo ou force-push param o card antes de qualquer código.
+2. **Sandbox.** A Factory abre um container Docker descartável para o card e clona o repositório do GitHub ou do Azure DevOps na branch base. A branch de trabalho é `factory/<card>-<título>`, nunca `main` nem `master`.
+3. **Implementação.** O agente construtor (Claude) lê o código, escreve a mudança e os testes, e roda o teste do próprio repositório (`npm`, `pnpm`, `yarn`, `dotnet`, `go`, `pytest` ou `make`). Se o teste falhar, ele tenta mais uma vez com a falha na mão.
+4. **Evidência.** O check `testes-no-sandbox` guarda o comando, o código de saída e o fim da saída. É PASS ou FAIL observado, não relato.
+5. **Pull request.** Antes do push, a Factory confere se o diff não traz segredo. Com testes passando, o PR sai pronto para revisão; com falha, sai como rascunho, com a falha na descrição.
+6. **Merge.** Fica com uma pessoa, pelo processo normal do repositório. A Factory não tem endpoint de merge nem de deploy.
+
+**Segurança do sandbox.** Um container por card, destruído no fim. Sem privilégios extras (`cap-drop ALL`, `no-new-privileges`), com limite de processos, de memória e de tempo por comando. O token do repositório não fica no container: entra só no clone e no push, e nenhuma saída o mostra. O agente não tem `git push`, não lê credencial e não executa script baixado direto no shell.
+
+**Para rodar.** Docker ativo (Docker Desktop, Colima ou Docker Engine), `ANTHROPIC_API_KEY`, e `GITHUB_TOKEN` ou `AZURE_DEVOPS_ORG` com `AZURE_DEVOPS_PAT`, com permissão de escrita em branch. No Studio, abra o workflow `autonomo` e preencha os mesmos campos do `sdlc`; no Azure DevOps, o repositório vai como `projeto/repositorio`. Sem chave, o workflow para e diz o que falta.
+
 ## O que a Factory se recusa a fazer
 
 | A Factory faz | Fica com uma pessoa |
@@ -88,7 +103,8 @@ Cada onda leva no máximo 5 cards prontos, sem dois mexendo no mesmo lugar.
 | Triagem, especificação e plano | Merge: a branch protegida não recebe push |
 | Checks internos, com evidência | Deploy: o release não publica nada |
 | Issue ou work item no provedor | Force-push e commit direto em `main` |
-| Pull request em rascunho | Rodar a suíte do produto e anexar o resultado |
+| Pull request em rascunho (`sdlc`) ou pronto para revisão (`autonomo`) | Revisar o pull request e decidir o merge |
+| Código e testes só dentro do container do card (`autonomo`) | Rodar fora do sandbox, em produção |
 
 **Segredos não ficam guardados.** Todo corpo JSON que entra na API passa por uma redação antes de chegar ao Mastra: o token vira `[segredo:token-github]`. O valor não entra no snapshot do workflow, na memória nem nos spans, e a triagem continua bloqueando o card pelo marcador. Para limpar um `factory.db` antigo, rode `npm run limpar-segredos`.
 
