@@ -4,7 +4,10 @@ import { Memory } from '@mastra/memory'
 import { conhecimento, definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, relatarMerge } from '../conhecimento.ts'
 import { conduzirInstalacaoFerramenta } from '../instalacao.ts'
 import { habilidades } from '../habilidades.ts'
-import { modeloConfigurado } from '../model.ts'
+import { TokenLimiterProcessor } from '@mastra/core/processors'
+
+import { cadeiaDeModelos } from '../model.ts'
+import { guardaDeSaida } from '../processors/guarda-saida.ts'
 import { RedigirDadosPessoais } from '../processors/redigir-dados.ts'
 import {
   abrirCard,
@@ -32,6 +35,9 @@ const BASE = [
   'Na instalação, use conduzirInstalacao. Um erro fica no mesmo passo. Não peça chave, token ou senha.',
 ].join('\n')
 
+/** Tokens de entrada por chamada. Cabe com folga nos modelos da cadeia e evita estourar a janela. */
+export const LIMITE_DE_CONTEXTO = 32_000
+
 export const memoria = new Memory({ options: { lastMessages: 12, generateTitle: false } })
 
 function criar(id: string, name: string, description: string, papel: string, extra: string, tools: NonNullable<ConstructorParameters<typeof Agent>[0]['tools']>) {
@@ -40,13 +46,17 @@ function criar(id: string, name: string, description: string, papel: string, ext
     name,
     description,
     instructions: [`PAPEL: ${papel}`, extra, BASE].join('\n'),
-    model: () => modeloConfigurado(),
+    // Modelo escolhido com novas tentativas e os outros provedores com chave como reserva.
+    model: () => cadeiaDeModelos(),
     tools,
     memory: memoria,
     knowledge: conhecimento,
     workspace: habilidades,
     defaultOptions: { maxSteps: 4 },
-    inputProcessors: [new RedigirDadosPessoais()],
+    // Entrada: tira dados pessoais e segredos, depois corta o histórico que não cabe.
+    inputProcessors: [new RedigirDadosPessoais(), new TokenLimiterProcessor({ limit: LIMITE_DE_CONTEXTO })],
+    // Saída: o agente não afirma merge, deploy nem gate aprovado.
+    outputProcessors: [guardaDeSaida()],
   })
 }
 

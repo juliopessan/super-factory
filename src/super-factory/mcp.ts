@@ -6,8 +6,6 @@ import { conduzirInstalacaoFerramenta } from './instalacao.ts'
 import {
   abrirCard,
   avaliarGateMerge,
-  criarIssueGithub,
-  criarWorkItemAzure,
   lerLedger,
   lintarCriterios,
   listarAzure,
@@ -48,6 +46,8 @@ export const servidorMcp = new MCPServer({
     security,
     docs,
   },
+  // criarIssueGithub e criarWorkItemAzure ficam fora: o MCP executa a ferramenta direto,
+  // sem a aprovação humana que elas exigem no Studio.
   tools: {
     statusQuadro,
     validarManifesto,
@@ -57,9 +57,7 @@ export const servidorMcp = new MCPServer({
     avaliarGateMerge,
     lerLedger,
     listarGithub,
-    criarIssueGithub,
     listarAzure,
-    criarWorkItemAzure,
     lerBaseProjeto,
     registrarRegraProjeto,
     lerPoliticaProjeto,

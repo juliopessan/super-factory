@@ -179,6 +179,15 @@ Fale com o Chief of Staff para ver o quadro, abrir um card ou ler a trilha. Um c
 
 O Studio mostra o servidor MCP `super-factory` e a Factory, com um modo para cada papel. O servidor fica em `/api/mcp/super-factory/mcp` e expõe as ferramentas, os oito agentes e o workflow `sdlc`. A Factory não tem `submit_plan` nem subagente: uma tarefa concluída nela não é um gate. Clientes de fora podem falar com esse endereço; um servidor HTTP adicional entra pelo Studio, na área de MCP, quando alguém cola a URL.
 
+### O harness dos agentes
+
+Em volta do modelo, cada agente tem camadas que valem em toda chamada, escritas no código e não no prompt:
+
+- **Aprovação nas escritas externas.** `criarIssueGithub` e `criarWorkItemAzure` param no chat e só rodam quando uma pessoa aprova. Por isso ficam fora do servidor MCP, que não tem como pedir essa aprovação.
+- **Falhas transitórias.** O modelo escolhido tenta de novo até 2 vezes e, se houver outra chave, cai para o provedor reserva. Leituras no GitHub e no Azure DevOps repetem em erro de rede, 429 ou 5xx, respeitando o `Retry-After` até 5 s. Escritas tentam uma vez só, para não abrir a mesma issue duas vezes.
+- **Contexto.** Na entrada, dados pessoais e segredos saem do texto e o histórico é cortado em 32 mil tokens.
+- **Guarda na saída.** Se um agente escrever que fez merge, deploy ou aprovou um gate, a frase é trocada por um aviso. Negações como "nenhum merge foi feito" passam intactas.
+
 ### Skills
 
 As skills ficam em `skills/`, em leitura. A skill `super-factory` é o contrato desta Factory: os verbos do quadro viram ferramenta ou workflow `sdlc`. Script, shell, merge, force-push e deploy continuam de fora.
