@@ -89,9 +89,9 @@ export const mastra = new Mastra({
   server: {
     port: 4721,
     studioBase: '/studio',
-    // Escuta em todas as interfaces. O Studio usa o endereço da página,
-    // então o navegador fala com a mesma origem.
-    host: '0.0.0.0',
+    // Por padrão, só este computador abre a Factory: o Studio não tem login.
+    // SUPER_FACTORY_HOST=0.0.0.0 libera para a rede, de propósito.
+    host: process.env.SUPER_FACTORY_HOST?.trim() || 'localhost',
     cors: false,
     apiRoutes: [...KNOWLEDGE_ROUTES],
     middleware: marcaSuperFactory,
