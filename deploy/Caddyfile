@@ -1,16 +1,13 @@
 # Super Factory atrás do Caddy: HTTPS e login antes de qualquer página.
 # Sem domínio, o certificado é do próprio Caddy (tls internal). Com domínio,
 # troque __IP__ pelo domínio e apague a linha tls internal: entra o Let's Encrypt.
+# Se a porta 443 já tiver outro dono (Traefik de um modelo Docker), o instalador usa a 8443.
 
-https://__IP__ {
+https://__IP__:__PORTA__ {
 	tls internal
 	basic_auth {
 		__LOGIN__ __HASH__
 	}
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:4721
-}
-
-http://__IP__ {
-	redir https://{host}{uri} permanent
 }
