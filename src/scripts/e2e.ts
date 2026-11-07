@@ -167,6 +167,12 @@ async function testarNavegador(): Promise<void> {
     const texto = (await pagina.textContent('body')) ?? ''
     conferir('landing: fala em Factory', /Factory/.test(texto))
     conferir('landing: sem a palavra mesa', !/\bmesa\b/i.test(texto))
+    const ingles = await pagina.goto(BASE + '/en')
+    await pagina.waitForLoadState('networkidle')
+    const textoIngles = (await pagina.textContent('body')) ?? ''
+    conferir('landing /en: em inglês, com a bandeira dos EUA marcada', ingles?.status() === 200 && /Programming is dead/.test(textoIngles) && (await pagina.getAttribute('a[hreflang="en-US"]', 'aria-current')) === 'page')
+    await pagina.goto(BASE + '/')
+    await pagina.waitForLoadState('networkidle')
 
     await pagina.waitForTimeout(900)
     conferir('guia: abre sozinho na primeira visita', await painel.isVisible())

@@ -1,5 +1,9 @@
-export function paginaInicial(): string {
-  return `<!doctype html>
+import { traduzirParaIngles } from './landing-en.ts'
+
+export type Idioma = 'pt' | 'en'
+
+export function paginaInicial(idioma: Idioma = 'pt'): string {
+  const html = `<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -216,6 +220,11 @@ export function paginaInicial(): string {
 
 
 
+    .idiomas { display: flex; gap: 6px; align-items: center; }
+    .idiomas a { display: inline-flex; padding: 3px; border-radius: 6px; border: 1px solid transparent; opacity: .45; transition: opacity .15s var(--ease); }
+    .idiomas a:hover { opacity: .9; }
+    .idiomas a[aria-current="page"] { opacity: 1; border-color: var(--line-2); }
+    .idiomas svg { width: 22px; height: 16px; display: block; border-radius: 3px; }
     /* manifesto */
     .manifesto { border-top: 1px solid var(--line); }
     .frase { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 32px; align-items: baseline; padding: 36px 0; border-bottom: 1px solid var(--line); }
@@ -314,6 +323,7 @@ export function paginaInicial(): string {
         <a href="#instalar">Instalar</a>
       </nav>
       <div class="nav-cta">
+        <div class="idiomas" role="group" aria-label="Idioma"><a href="/" hreflang="pt-BR" aria-label="Português (Brasil)" aria-current="page"><svg viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="3" fill="#009b3a"/><path d="M14 3 25 10 14 17 3 10z" fill="#fedf00"/><circle cx="14" cy="10" r="4.2" fill="#002776"/><path d="M10 9.4c2.6-.6 5.4-.3 8 .9" stroke="#fff" stroke-width=".8" fill="none"/></svg></a><a href="/en" hreflang="en-US" aria-label="English (US)"><svg viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="3" fill="#fff"/><path d="M0 1.5h28M0 4.6h28M0 7.7h28M0 10.8h28M0 13.9h28M0 17h28" stroke="#b22234" stroke-width="1.55"/><rect width="12" height="10.8" rx="2" fill="#3c3b6e"/><g fill="#fff"><circle cx="2.5" cy="2.4" r=".6"/><circle cx="5.5" cy="2.4" r=".6"/><circle cx="8.5" cy="2.4" r=".6"/><circle cx="4" cy="4.8" r=".6"/><circle cx="7" cy="4.8" r=".6"/><circle cx="2.5" cy="7.2" r=".6"/><circle cx="5.5" cy="7.2" r=".6"/><circle cx="8.5" cy="7.2" r=".6"/></g></svg></a></div>
         <a class="link" href="https://github.com/juliopessan/super-factory">GitHub</a>
         <button class="link" type="button" id="guia-abrir">Guia-me</button>
         <a class="pilula" href="/studio" id="factory-cta">Abrir a Factory</a>
@@ -926,4 +936,5 @@ export function paginaInicial(): string {
   </script>
 </body>
 </html>`
+  return idioma === 'en' ? traduzirParaIngles(html) : html
 }

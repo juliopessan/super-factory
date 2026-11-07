@@ -145,6 +145,12 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   if (caminho === '/sf.svg' || caminho.endsWith('/sf.svg') || caminho.endsWith('/mastra-dark-tile.svg') || caminho.endsWith('/mastra-light-tile.svg')) {
     return icone()
   }
+  if (caminho === '/en' || caminho === '/en/') {
+    return new Response(paginaInicial('en'), {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', 'Content-Language': 'en-US' },
+    })
+  }
   if (caminho === '/' || caminho === '') {
     return new Response(paginaInicial(), {
       status: 200,
