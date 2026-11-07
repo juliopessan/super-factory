@@ -470,7 +470,7 @@ const agente = mesa.getAgent('chiefOfStaff')
 const resposta = await agente.generate('como está o quadro', { memory: { resource: 'check', thread: `check-${Date.now()}` } })
 assert.match(resposta.text, /ready/)
 assert.match(resposta.text, /C-1/)
-assert.match(resposta.text, /Mesa local/)
+assert.match(resposta.text, /Factory local/)
 
 console.log(
   JSON.stringify(
