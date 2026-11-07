@@ -18,6 +18,8 @@ São sete passos, um de cada vez. A página inicial tem o botão Guia-me: ele ap
 
 `npm run check` confere a fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão.
 
+`npm run e2e` sobe a Factory na porta 4721 sem chave e sem token, conduz o workflow `sdlc` pelos três portões, testa recusas e triagem, e abre a landing e o Studio no navegador, inclusive em larguras de celular. Pare o `npm run dev` antes, ou use `E2E_REUSE=1` para testar o servidor que já está aberto. Precisa do Playwright: `npm i -D playwright` e `npx playwright install chromium`.
+
 ## Onde está o código
 
 | Caminho | O que guarda |

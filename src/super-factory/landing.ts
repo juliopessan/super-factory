@@ -165,6 +165,7 @@ export function paginaInicial(): string {
     .roles { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 12px; }
     .role.wide { grid-column: span 2; background: linear-gradient(180deg, rgba(253, 172, 83, 0.1), var(--panel) 42%); }
     .limits { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 28px; align-items: start; }
+    .limits > * { min-width: 0; }
     .limit-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     pre {
       margin: 12px 0 0; padding: 16px; border-radius: 12px;
@@ -228,6 +229,10 @@ export function paginaInicial(): string {
       section { padding: 48px 0; }
       .guia-alvo { transform: none; }
       .guia-painel { bottom: 12px; }
+    }
+    @media (max-width: 420px) {
+      .top-inner { gap: 12px; }
+      .nav-cta a.btn.ghost { display: none; }
     }
   </style>
 </head>
