@@ -5,7 +5,7 @@ export function paginaInicial(): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Super Factory</title>
-  <meta name="description" content="A mesa em que um pedido vira card e só atravessa implementação, merge e release quando uma pessoa libera." />
+  <meta name="description" content="A Factory em que um pedido vira card e só atravessa implementação, merge e release quando uma pessoa libera." />
   <link rel="icon" href="/sf.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -250,7 +250,7 @@ export function paginaInicial(): string {
       <div class="nav-cta">
         <a class="btn ghost" href="#ciclo">Ciclo</a>
         <button class="btn ghost" type="button" id="guia-abrir">Guia-me</button>
-        <a class="btn solid" href="/studio" id="mesa-cta">Abrir a mesa</a>
+        <a class="btn solid" href="/studio" id="factory-cta">Abrir a Factory</a>
       </div>
     </div>
   </header>
@@ -259,9 +259,9 @@ export function paginaInicial(): string {
       <div class="hero">
         <p class="kicker">SDLC agentic · evidência antes de confiança</p>
         <h1>Conduza o pedido. <em>Pare</em> no portão.</h1>
-        <p class="lead">Super Factory é a mesa. Um pedido vira card, passa por triagem, especificação, plano, verificação e revisão, e para três vezes: implementação, merge e release. Agente não aprova, não faz merge e não publica.</p>
+        <p class="lead">A Factory conduz o pedido. Ele vira card, passa por triagem, especificação, plano, verificação e revisão, e para três vezes: implementação, merge e release. Agente não aprova, não faz merge e não publica.</p>
         <div class="actions">
-          <a class="btn solid" href="/studio">Abrir a mesa</a>
+          <a class="btn solid" href="/studio">Abrir a Factory</a>
           <a class="btn ghost" href="#instalar">Instalar</a>
           <a class="btn ghost" href="#ciclo">Ver o ciclo</a>
         </div>
@@ -298,8 +298,8 @@ export function paginaInicial(): string {
     <section id="proposta">
       <div class="wrap">
         <p class="section-kicker">proposta</p>
-        <h3>Uma mesa de operação, com o julgamento fora do agente.</h3>
-        <p class="intro">A mesa continua sendo o lugar de trabalhar. A página explica o contrato: o que a fábrica conduz, o que ela observa e o que ela se recusa a fazer sozinha.</p>
+        <h3>A Factory, com o julgamento fora do agente.</h3>
+        <p class="intro">A Factory é o lugar de trabalhar. A página explica o contrato: o que ela conduz, o que ela observa e o que ela se recusa a fazer sozinha.</p>
         <div class="grid">
           <article class="card">
             <em>01 · Evidência</em>
@@ -367,16 +367,16 @@ export function paginaInicial(): string {
       <div class="wrap">
         <p class="section-kicker">instalar</p>
         <h3>Um passo. Depois o próximo.</h3>
-        <p class="intro">Se uma linha vermelha aparecer, copie essa mensagem e cole no chat da mesa. A conversa fica nesse passo, explica o conserto e só então segue. Não cole chave, token ou senha.</p>
+        <p class="intro">Se uma linha vermelha aparecer, copie essa mensagem e cole no chat da Factory. A conversa fica nesse passo, explica o conserto e só então segue. Não cole chave, token ou senha.</p>
         <div class="grid">
           <article class="card" id="passo-1"><em>01</em><h4>Node</h4><p>Baixe a versão 22 em nodejs.org. No Terminal, node -v precisa mostrar v22.18 ou mais.</p></article>
           <article class="card" id="passo-2"><em>02</em><h4>Terminal</h4><p>No Mac, Command + espaço e escreva Terminal. No Windows, escreva PowerShell no Iniciar.</p></article>
           <article class="card" id="passo-3"><em>03</em><h4>Projeto</h4><p>Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize a branch main.</p></article>
           <article class="card" id="passo-4"><em>04</em><h4>Peças</h4><p>Dentro da pasta, npm install. Espere a linha added packages. Não use sudo.</p></article>
           <article class="card" id="passo-5"><em>05</em><h4>Ligar</h4><p>npm run dev e deixe a janela aberta. A linha saudável mostra 4721.</p></article>
-          <article class="card" id="passo-6"><em>06</em><h4>Mesa</h4><p>No navegador, localhost:4721 é a página. localhost:4721/studio é a mesa.</p></article>
+          <article class="card" id="passo-6"><em>06</em><h4>Factory</h4><p>No navegador, localhost:4721 é a página. localhost:4721/studio é a Factory.</p></article>
         </div>
-        <p class="intro" id="passo-7">O sétimo passo é a chave, e ele é opcional. Sem chave, a mesa funciona e avisa quando a resposta é uma amostra.</p>
+        <p class="intro" id="passo-7">O sétimo passo é a chave, e ele é opcional. Sem chave, a Factory funciona e avisa quando a resposta é uma amostra.</p>
       </div>
     </section>
     <section id="limites">
@@ -401,7 +401,7 @@ export function paginaInicial(): string {
   <div class="wrap">
     <footer>
       <span>SF · Super Factory</span>
-      <span><a href="/studio">Mesa</a> · <a href="https://github.com/juliopessan/super-factory">GitHub</a></span>
+      <span><a href="/studio">Factory</a> · <a href="https://github.com/juliopessan/super-factory">GitHub</a></span>
     </footer>
   </div>
   <div id="guia" hidden>
@@ -424,15 +424,15 @@ export function paginaInicial(): string {
         { alvo: 'passo-2', titulo: 'Abra o Terminal', texto: 'No Mac, Command e espaço, e escreva Terminal. No Windows, escreva PowerShell no Iniciar.' },
         { alvo: 'passo-3', titulo: 'Traga o projeto', texto: 'Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize a branch main.' },
         { alvo: 'passo-4', titulo: 'Instale as peças', texto: 'Dentro da pasta, npm install. Espere a linha added packages. Não use sudo. Se der erro, cole a mensagem no chat e continue daqui.' },
-        { alvo: 'passo-5', titulo: 'Ligue a mesa', texto: 'npm run dev e deixe a janela aberta. A linha saudável mostra 4721.' },
-        { alvo: 'passo-6', titulo: 'Abra no navegador', texto: 'localhost:4721 é esta página. localhost:4721/studio é a mesa, onde o chat continua a instalação.' },
-        { alvo: 'passo-7', titulo: 'A chave é opcional', texto: 'Sem chave, a mesa funciona e avisa quando a resposta é uma amostra. Não cole chave, token ou senha no chat.' },
+        { alvo: 'passo-5', titulo: 'Ligue a Factory', texto: 'npm run dev e deixe a janela aberta. A linha saudável mostra 4721.' },
+        { alvo: 'passo-6', titulo: 'Abra no navegador', texto: 'localhost:4721 é esta página. localhost:4721/studio é a Factory, onde o chat continua a instalação.' },
+        { alvo: 'passo-7', titulo: 'A chave é opcional', texto: 'Sem chave, a Factory funciona e avisa quando a resposta é uma amostra. Não cole chave, token ou senha no chat.' },
         { alvo: 'portao', titulo: 'O ciclo para no portão', texto: 'Um pedido passa por triagem e especificação e espera uma pessoa em implementação, merge e release. O agente não aprova.' },
         { alvo: 'ciclo', titulo: 'Seis estágios', texto: 'Triagem, especificação, implementação, verificação, revisão humana e entrega. Cada passo deixa registro.' },
         { alvo: 'quadro', titulo: 'O quadro', texto: 'Pedido claro entra em ready. Pedido vago, segredo ou force-push fica blocked. A onda leva no máximo cinco cards.' },
         { alvo: 'papeis', titulo: 'Oito papéis', texto: 'Só o Chief of Staff abre card. Security é somente leitura. Nenhum papel aprova portão.' },
         { alvo: 'limites', titulo: 'O que fica de fora', texto: 'Sem merge, sem deploy, sem force-push e sem comando. Teste de produto continua NOT_RUN até uma pessoa rodar fora daqui.' },
-        { alvo: 'mesa-cta', titulo: 'Agora a mesa', texto: 'Abra a mesa e escreva o passo em que você está, ou cole o erro. A conversa não volta ao começo.' }
+        { alvo: 'factory-cta', titulo: 'Agora a Factory', texto: 'Abra a Factory e escreva o passo em que você está, ou cole o erro. A conversa não volta ao começo.' }
       ]
       var i = 0
       var caixa = document.getElementById('guia')
