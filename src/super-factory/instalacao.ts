@@ -55,12 +55,12 @@ const PASSOS: Passo[] = [
     sucesso: /added \d+ packages|up to date|audited \d+ packages/i,
   },
   {
-    titulo: 'Ligar a mesa',
+    titulo: 'Ligar a Factory',
     instrucao: [
       'Cole:',
       'npm run dev',
       'Deixe essa janela aberta. O fim saudável é uma linha com 4721.',
-      'A página fica em http://localhost:4721 e a mesa em http://localhost:4721/studio.',
+      'A página fica em http://localhost:4721 e a Factory em http://localhost:4721/studio.',
     ].join('\n'),
     sucesso: /4721|ready in/i,
   },
@@ -69,16 +69,16 @@ const PASSOS: Passo[] = [
     instrucao: [
       'Abra o Chrome ou o Safari e cole este endereço:',
       'http://localhost:4721',
-      'A página diz Super Factory. Depois abra a mesa:',
+      'A página diz Super Factory. Depois abra a Factory:',
       'http://localhost:4721/studio',
-      'No chat da mesa, escreva: estou no passo 6. Se a página não abrir, cole o que o navegador mostrou.',
+      'No chat da Factory, escreva: estou no passo 6. Se a página não abrir, cole o que o navegador mostrou.',
     ].join('\n'),
-    sucesso: /p[aá]gina aberta|super factory abriu|mesa aberta|passo 6 ok/i,
+    sucesso: /p[aá]gina aberta|super factory abriu|factory aberta|passo 6 ok/i,
   },
   {
     titulo: 'Chaves, só se você tiver',
     instrucao: [
-      'Sem chave, a mesa já funciona e avisa quando a resposta é uma amostra.',
+      'Sem chave, a Factory já funciona e avisa quando a resposta é uma amostra.',
       'Se você tiver uma chave de modelo, do GitHub ou do Azure, copie o arquivo .env.example para .env na pasta super-factory e preencha só na sua máquina.',
       'Não cole chave, token ou senha neste chat.',
       'Quando terminar, ou se for ficar sem chave, escreva: instalação pronta.',
@@ -101,7 +101,7 @@ function passoDaFalha(relato: string): number | null {
 
 function correcao(relato: string): string {
   if (/eaddrinuse|address already in use|port(?:a)? 4721/i.test(relato)) {
-    return 'A mesa já está ligada nesta máquina. Não comece de novo. Abra http://localhost:4721 no navegador. Se quiser religar, feche a janela antiga do Terminal e só então cole npm run dev outra vez.'
+    return 'A Factory já está ligada nesta máquina. Não comece de novo. Abra http://localhost:4721 no navegador. Se quiser religar, feche a janela antiga do Terminal e só então cole npm run dev outra vez.'
   }
   if (/enoent|cannot find module|mastra: command not found|sh: mastra/i.test(relato)) {
     return 'O Terminal não está dentro da pasta super-factory, ou as peças ainda não foram instaladas. Cole cd ~/super-factory e, na linha seguinte, npm install. Ficamos neste passo.'
@@ -157,7 +157,7 @@ export function conduzirInstalacao(entrada: { passo?: number; relato?: string } 
       passo: total,
       total,
       titulo: 'Instalação pronta',
-      instrucao: 'A Super Factory está no ar. A página é http://localhost:4721 e a mesa é http://localhost:4721/studio. Um pedido entra pelo workflow sdlc e para nos três portões. Eu não aprovo, não faço merge e não publico.',
+      instrucao: 'A Super Factory está no ar. A página é http://localhost:4721 e a Factory é http://localhost:4721/studio. Um pedido entra pelo workflow sdlc e para nos três portões. Eu não aprovo, não faço merge e não publico.',
       pronto: true,
     }
   }
