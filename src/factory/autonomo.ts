@@ -146,110 +146,210 @@ function checkDoSandbox(execucao: Execucao | null, verificacao: Verificacao): Es
 
 export type ResultadoAutonomo = { estado: Estado; branch: string | null; verificacao: Verificacao | null }
 
+/**
+ * O que passa de uma fase para a outra. Vai para o snapshot do workflow, então
+ * não carrega segredo nem o container: o token é recalculado das credenciais
+ * e o container fica na sessão.
+ */
+export type ContextoAutonomo = ResultadoAutonomo & { estatistica: string | null }
+
+/** O que vive só na memória durante a execução: o container do card. */
+export type SessaoAutonomo = { executor: Executor | null }
+
+export type FaseAutonomo = {
+  id: string
+  titulo: string
+  descricao: string
+  /** Verbos que o Studio gira enquanto a fase roda. */
+  verbos: string[]
+  executar: (contexto: ContextoAutonomo, deps: DepsAutonomo, sessao: SessaoAutonomo) => Promise<ContextoAutonomo>
+}
+
+function pararCom(contexto: ContextoAutonomo, motivo: string): ContextoAutonomo {
+  return { ...contexto, estado: parar(contexto.estado, motivo) }
+}
+
+function executorDa(sessao: SessaoAutonomo): Executor {
+  if (!sessao.executor) throw new Error('O sandbox deste card não está mais aberto. Rode o modo autônomo de novo.')
+  return sessao.executor
+}
+
+export const FASES_AUTONOMO: FaseAutonomo[] = [
+  {
+    id: 'triar',
+    titulo: 'Triar o card',
+    descricao: 'Especifica o card, confere o repositório e as credenciais e escolhe a branch de trabalho. Nada roda ainda.',
+    verbos: ['Triando…', 'Lendo o card…', 'Especificando…', 'Escolhendo a branch…'],
+    async executar(contexto, deps) {
+      const estado = especificar(contexto.estado)
+      if (estado.parado) return { ...contexto, estado }
+      try {
+        alvoDoClone(estado, deps.credenciais ?? {})
+        return { ...contexto, estado, branch: nomeDaBranch(estado) }
+      } catch (erro) {
+        return { ...contexto, estado: parar(estado, erro instanceof Error ? erro.message : 'Repositório inválido.') }
+      }
+    },
+  },
+  {
+    id: 'abrir-sandbox',
+    titulo: 'Abrir o sandbox',
+    descricao: 'Sobe um container Docker isolado, só deste card. Todo código e todo teste rodam lá dentro.',
+    verbos: ['Subindo o container…', 'Isolando o card…', 'Preparando o sandbox…'],
+    async executar(contexto, deps, sessao) {
+      try {
+        sessao.executor = await deps.criarExecutor(contexto.estado.card.id)
+      } catch (erro) {
+        return pararCom(contexto, erro instanceof Error ? erro.message : 'O sandbox não abriu.')
+      }
+      const estado = anotarAuto(
+        { ...contexto.estado, card: { ...contexto.estado.card, coluna: 'build', branchHead: contexto.branch } },
+        'implementation',
+        `Sandbox ${sessao.executor.tipo} aberto para ${contexto.estado.card.id}.`,
+      )
+      return { ...contexto, estado }
+    },
+  },
+  {
+    id: 'clonar-e-preparar',
+    titulo: 'Clonar e preparar',
+    descricao: 'Clona a branch base, cria a branch de trabalho e instala as dependências com o comando do próprio repositório.',
+    verbos: ['Clonando…', 'Criando a branch…', 'Lendo o package.json…', 'Instalando dependências…'],
+    async executar(contexto, deps, sessao) {
+      const executor = executorDa(sessao)
+      const alvo = alvoDoClone(contexto.estado, deps.credenciais ?? {})
+      const branch = contexto.branch ?? nomeDaBranch(contexto.estado)
+      const base = validarBranch(contexto.estado.card.branchBase)
+      const clone = await executor.executar(
+        `git -c http.extraHeader="$FACTORY_GIT_AUTH" clone --depth 50 --branch '${base}' '${alvo.url}' '${PASTA_DO_REPOSITORIO}'`,
+        { cwd: '/workspace', env: alvo.env, timeoutMs: 5 * 60_000 },
+      )
+      if (clone.codigo !== 0) return pararCom(contexto, `O clone falhou: ${rabo(clone, 5)}`)
+      await executor.executar(`git checkout -b '${branch}' && git config user.name 'Super Factory' && git config user.email 'factory@super-factory.local'`)
+      let estado = anotarAuto(contexto.estado, 'implementation', `Repositório clonado na base ${base}. Branch ${branch}.`)
+      const verificacao = await descobrirVerificacao(executor)
+      if (verificacao.instalar) {
+        const instalacao = await executor.executar(verificacao.instalar, { timeoutMs: 15 * 60_000 })
+        estado = anotarAuto(estado, 'implementation', `Dependências: ${verificacao.instalar} → código ${instalacao.codigo}.`)
+        if (instalacao.codigo !== 0) return { ...contexto, verificacao, estado: parar(estado, `A instalação falhou: ${rabo(instalacao, 5)}`) }
+      }
+      return { ...contexto, estado, verificacao }
+    },
+  },
+  {
+    id: 'construir-e-testar',
+    titulo: 'Construir e testar',
+    descricao: 'O agente construtor escreve o código e a Factory roda os testes do repositório. Se falhar, ele lê o erro e tenta de novo.',
+    verbos: ['Lendo o código…', 'Escrevendo…', 'Rodando os testes…', 'Lendo o erro…', 'Corrigindo…', 'Conferindo evidência…'],
+    async executar(contexto, deps, sessao) {
+      const executor = executorDa(sessao)
+      const verificacao = contexto.verificacao ?? (await descobrirVerificacao(executor))
+      let estado = contexto.estado
+      const tentativas = Math.max(1, deps.tentativas ?? 2)
+      let teste: Execucao | null = null
+      for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+        const { resumo } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste })
+        estado = anotarAuto(estado, 'implementation', `Tentativa ${tentativa}: ${resumo}`, 'reported')
+        teste = verificacao.verificar ? await executor.executar(verificacao.verificar, { timeoutMs: 20 * 60_000 }) : null
+        estado = anotarAuto(estado, 'verification', teste ? `${verificacao.verificar} → código ${teste.codigo}.` : 'Sem comando de teste no repositório.')
+        if (!teste || teste.codigo === 0) break
+      }
+      const check = checkDoSandbox(teste, verificacao)
+      estado = { ...estado, checks: [...estado.checks.filter((item) => item.nome !== 'testes-no-sandbox'), check], evidencia: 'CURRENT', card: { ...estado.card, coluna: 'qa' } }
+      return { ...contexto, estado, verificacao }
+    },
+  },
+  {
+    id: 'revisar-e-enviar',
+    titulo: 'Revisar e enviar',
+    descricao: 'Confere se houve mudança, procura segredo no diff, faz o commit e envia a branch. Nunca envia para main.',
+    verbos: ['Lendo o diff…', 'Procurando segredo…', 'Fazendo o commit…', 'Enviando a branch…'],
+    async executar(contexto, deps, sessao) {
+      const executor = executorDa(sessao)
+      const branch = contexto.branch ?? nomeDaBranch(contexto.estado)
+      let estado = contexto.estado
+      const mudancas = await executor.executar('git status --porcelain')
+      if (!mudancas.saida.trim()) return pararCom(contexto, 'O agente não mudou nenhum arquivo.')
+      const diff = await executor.executar('git add -A && git diff --cached')
+      const segredos = varrerSegredos(diff.saida)
+      if (segredos.encontrado) return pararCom(contexto, `O diff tem padrão de segredo (${segredos.rotulos.join(', ')}). Nada foi enviado.`)
+      const estatistica = (await executor.executar('git diff --cached --stat')).saida.trim()
+      const mensagem = `${estado.card.id}: ${estado.card.titulo}`.replace(/'/g, '')
+      const commit = await executor.executar(`git commit -q -m '${mensagem}' --author='${AUTOR}'`)
+      if (commit.codigo !== 0) return pararCom(contexto, `O commit falhou: ${rabo(commit, 5)}`)
+      const alvo = alvoDoClone(estado, deps.credenciais ?? {})
+      const push = await executor.executar(`git -c http.extraHeader="$FACTORY_GIT_AUTH" push -u origin '${branch}'`, { env: alvo.env, timeoutMs: 5 * 60_000 })
+      if (push.codigo !== 0) return pararCom(contexto, `O push falhou: ${rabo(push, 5)}`)
+      estado = anotarAuto({ ...estado, card: { ...estado.card, coluna: 'review' } }, 'delivery', `Branch ${branch} enviada.`)
+      return { ...contexto, estado, estatistica }
+    },
+  },
+  {
+    id: 'abrir-pull-request',
+    titulo: 'Abrir o pull request',
+    descricao: 'Abre o PR com critérios de aceite e a evidência do sandbox. Pronto para revisão se os testes passaram; rascunho se não. O merge fica com uma pessoa.',
+    verbos: ['Redigindo o PR…', 'Anexando a evidência…', 'Abrindo o pull request…', 'Esperando o gate…'],
+    async executar(contexto, deps) {
+      let estado = contexto.estado
+      const branch = contexto.branch ?? nomeDaBranch(estado)
+      const base = validarBranch(estado.card.branchBase)
+      const check = estado.checks.find((item) => item.nome === 'testes-no-sandbox') ?? checkDoSandbox(null, contexto.verificacao ?? { instalar: null, verificar: null, origem: 'desconhecido' })
+      const passou = check.resultado === 'PASS'
+      const corpo = [
+        `## ${estado.card.id}: ${estado.card.titulo}`,
+        '',
+        estado.card.descricao,
+        '',
+        '### Critérios de aceite',
+        ...estado.card.criterios.map((criterio) => `- [ ] ${criterio}`),
+        '',
+        '### Evidência do sandbox',
+        `- Teste: \`${check.comando ?? 'nenhum'}\` → **${check.resultado}**`,
+        '',
+        '```',
+        check.evidencia.slice(0, 2500),
+        '```',
+        '',
+        '### Arquivos',
+        '```',
+        (contexto.estatistica ?? '').slice(0, 2000),
+        '```',
+        '',
+        passou
+          ? 'Aberto pela Super Factory. Merge e deploy ficam com uma pessoa.'
+          : 'Os testes não passaram no sandbox: aberto como rascunho. Merge e deploy ficam com uma pessoa.',
+      ].join('\n')
+      const titulo = `${estado.card.id}: ${estado.card.titulo}`.slice(0, 120)
+      const pr =
+        estado.card.provedor === 'github'
+          ? await criarRascunhoGithub(estado.card.repositorio, titulo, corpo, base, branch, deps.github, { rascunho: !passou })
+          : await criarRascunhoAzure(estado.card.repositorio, titulo, corpo, base, branch, deps.azure, { rascunho: !passou })
+      estado = {
+        ...estado,
+        entrega: { modo: pr.modo, provedor: estado.card.provedor, ok: pr.ok, itemId: null, itemUrl: null, pullRequestId: pr.id, pullRequestUrl: pr.url, nota: pr.nota },
+      }
+      if (!pr.ok) return { ...contexto, estado: parar(estado, pr.nota) }
+      estado = anotarAuto(estado, 'human-review', `${pr.nota} Aguardando revisão humana para o merge.`)
+      return { ...contexto, estado: { ...estado, desfecho: 'em-andamento' } }
+    },
+  },
+]
+
+export function contextoInicial(pedido: PedidoBruto): ContextoAutonomo {
+  return { estado: iniciar(pedido), branch: null, verificacao: null, estatistica: null }
+}
+
 /** Leva um pedido do card ao pull request. Para no primeiro bloqueio e explica. */
 export async function executarAutonomo(pedido: PedidoBruto, deps: DepsAutonomo): Promise<ResultadoAutonomo> {
-  let estado = especificar(iniciar(pedido))
-  if (estado.parado) return { estado, branch: null, verificacao: null }
-
-  let alvo: { url: string; env: Record<string, string> }
-  let branch: string
+  let contexto = contextoInicial(pedido)
+  const sessao: SessaoAutonomo = { executor: null }
   try {
-    alvo = alvoDoClone(estado, deps.credenciais ?? {})
-    branch = nomeDaBranch(estado)
-  } catch (erro) {
-    return { estado: parar(estado, erro instanceof Error ? erro.message : 'Repositório inválido.'), branch: null, verificacao: null }
-  }
-
-  let executor: Executor
-  try {
-    executor = await deps.criarExecutor(estado.card.id)
-  } catch (erro) {
-    return { estado: parar(estado, erro instanceof Error ? erro.message : 'O sandbox não abriu.'), branch, verificacao: null }
-  }
-  estado = anotarAuto({ ...estado, card: { ...estado.card, coluna: 'build', branchHead: branch } }, 'implementation', `Sandbox ${executor.tipo} aberto para ${estado.card.id}.`)
-
-  try {
-    const base = validarBranch(estado.card.branchBase)
-    const clone = await executor.executar(
-      `git -c http.extraHeader="$FACTORY_GIT_AUTH" clone --depth 50 --branch '${base}' '${alvo.url}' '${PASTA_DO_REPOSITORIO}'`,
-      { cwd: '/workspace', env: alvo.env, timeoutMs: 5 * 60_000 },
-    )
-    if (clone.codigo !== 0) return { estado: parar(estado, `O clone falhou: ${rabo(clone, 5)}`), branch, verificacao: null }
-    await executor.executar(`git checkout -b '${branch}' && git config user.name 'Super Factory' && git config user.email 'factory@super-factory.local'`)
-    estado = anotarAuto(estado, 'implementation', `Repositório clonado na base ${base}. Branch ${branch}.`)
-
-    const verificacao = await descobrirVerificacao(executor)
-    if (verificacao.instalar) {
-      const instalacao = await executor.executar(verificacao.instalar, { timeoutMs: 15 * 60_000 })
-      estado = anotarAuto(estado, 'implementation', `Dependências: ${verificacao.instalar} → código ${instalacao.codigo}.`)
-      if (instalacao.codigo !== 0) return { estado: parar(estado, `A instalação falhou: ${rabo(instalacao, 5)}`), branch, verificacao }
+    for (const fase of FASES_AUTONOMO) {
+      contexto = await fase.executar(contexto, deps, sessao)
+      if (contexto.estado.parado) break
     }
-
-    const tentativas = Math.max(1, deps.tentativas ?? 2)
-    let teste: Execucao | null = null
-    for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
-      const { resumo } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste })
-      estado = anotarAuto(estado, 'implementation', `Tentativa ${tentativa}: ${resumo}`, 'reported')
-      teste = verificacao.verificar ? await executor.executar(verificacao.verificar, { timeoutMs: 20 * 60_000 }) : null
-      estado = anotarAuto(estado, 'verification', teste ? `${verificacao.verificar} → código ${teste.codigo}.` : 'Sem comando de teste no repositório.')
-      if (!teste || teste.codigo === 0) break
-    }
-    const check = checkDoSandbox(teste, verificacao)
-    estado = { ...estado, checks: [...estado.checks.filter((item) => item.nome !== 'testes-no-sandbox'), check], evidencia: 'CURRENT', card: { ...estado.card, coluna: 'qa' } }
-
-    const mudancas = await executor.executar('git status --porcelain')
-    if (!mudancas.saida.trim()) return { estado: parar(estado, 'O agente não mudou nenhum arquivo.'), branch, verificacao }
-    const diff = await executor.executar('git add -A && git diff --cached')
-    const segredos = varrerSegredos(diff.saida)
-    if (segredos.encontrado) {
-      return { estado: parar(estado, `O diff tem padrão de segredo (${segredos.rotulos.join(', ')}). Nada foi enviado.`), branch, verificacao }
-    }
-    const estatistica = (await executor.executar('git diff --cached --stat')).saida.trim()
-    const mensagem = `${estado.card.id}: ${estado.card.titulo}`.replace(/'/g, '')
-    const commit = await executor.executar(`git commit -q -m '${mensagem}' --author='${AUTOR}'`)
-    if (commit.codigo !== 0) return { estado: parar(estado, `O commit falhou: ${rabo(commit, 5)}`), branch, verificacao }
-    const push = await executor.executar(`git -c http.extraHeader="$FACTORY_GIT_AUTH" push -u origin '${branch}'`, { env: alvo.env, timeoutMs: 5 * 60_000 })
-    if (push.codigo !== 0) return { estado: parar(estado, `O push falhou: ${rabo(push, 5)}`), branch, verificacao }
-    estado = anotarAuto({ ...estado, card: { ...estado.card, coluna: 'review' } }, 'delivery', `Branch ${branch} enviada.`)
-
-    const passou = check.resultado === 'PASS'
-    const corpo = [
-      `## ${estado.card.id}: ${estado.card.titulo}`,
-      '',
-      estado.card.descricao,
-      '',
-      '### Critérios de aceite',
-      ...estado.card.criterios.map((criterio) => `- [ ] ${criterio}`),
-      '',
-      '### Evidência do sandbox',
-      `- Teste: \`${check.comando ?? 'nenhum'}\` → **${check.resultado}**`,
-      '',
-      '```',
-      check.evidencia.slice(0, 2500),
-      '```',
-      '',
-      '### Arquivos',
-      '```',
-      estatistica.slice(0, 2000),
-      '```',
-      '',
-      passou
-        ? 'Aberto pela Super Factory. Merge e deploy ficam com uma pessoa.'
-        : 'Os testes não passaram no sandbox: aberto como rascunho. Merge e deploy ficam com uma pessoa.',
-    ].join('\n')
-    const titulo = `${estado.card.id}: ${estado.card.titulo}`.slice(0, 120)
-    const pr =
-      estado.card.provedor === 'github'
-        ? await criarRascunhoGithub(estado.card.repositorio, titulo, corpo, base, branch, deps.github, { rascunho: !passou })
-        : await criarRascunhoAzure(estado.card.repositorio, titulo, corpo, base, branch, deps.azure, { rascunho: !passou })
-    estado = {
-      ...estado,
-      entrega: { modo: pr.modo, provedor: estado.card.provedor, ok: pr.ok, itemId: null, itemUrl: null, pullRequestId: pr.id, pullRequestUrl: pr.url, nota: pr.nota },
-    }
-    if (!pr.ok) return { estado: parar(estado, pr.nota), branch, verificacao }
-    estado = anotarAuto(estado, 'human-review', `${pr.nota} Aguardando revisão humana para o merge.`)
-    return { estado: { ...estado, desfecho: 'em-andamento' }, branch, verificacao }
   } finally {
-    await executor.encerrar()
+    await sessao.executor?.encerrar()
   }
+  return { estado: contexto.estado, branch: contexto.branch, verificacao: contexto.verificacao }
 }

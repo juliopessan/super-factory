@@ -115,7 +115,7 @@ export function paginaConfiguracoes(opcoes: { embed: boolean; tema: 'dark' | 'li
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 "Geist", ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   main { max-width: 640px; margin: 0 auto; padding: 28px 20px 40px; }
   h1 { margin: 0 0 6px; font-size: 24px; font-weight: 500; letter-spacing: -.03em; display: flex; align-items: center; gap: 10px; }
-  h1 .marca { width: 26px; height: 26px; border-radius: 8px; background: #ff8c00; color: #1a1a1a; display: grid; place-items: center; font: 500 11px "Geist Mono", monospace; }
+  h1 .marca { width: 26px; height: 26px; border-radius: 8px; background: #f0f0f0; color: #080808; display: grid; place-items: center; font: 600 11.5px Greed, ui-sans-serif, system-ui, sans-serif; letter-spacing: .2px; }
   h2 { margin: 28px 0 10px; font: 500 12px "Geist Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   p { margin: 0; color: var(--muted); }
   .aviso { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--card); font-size: 14px; }

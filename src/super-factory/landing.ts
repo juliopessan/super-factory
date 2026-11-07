@@ -60,7 +60,7 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
     .top { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); }
     .top-inner { display: flex; align-items: center; gap: 28px; min-height: 60px; }
     .brand { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 17px; letter-spacing: -.02em; }
-    .mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: #ff8c00; color: #1a1a1a; font-family: var(--mono); font-size: 11px; font-weight: 500; }
+    .mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: #f0f0f0; color: #080808; font-family: Greed, ui-sans-serif, system-ui, sans-serif; font-size: 11.5px; font-weight: 600; letter-spacing: .2px; }
     nav { display: flex; gap: 24px; }
     nav a { color: var(--muted); font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
     nav a::before { content: ""; width: 4px; height: 4px; border-radius: 9px; background: var(--faint); }
