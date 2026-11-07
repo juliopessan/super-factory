@@ -49,7 +49,7 @@ async function subirServidor(): Promise<ChildProcess | null> {
     console.error('A porta 4721 já está em uso. Pare o npm run dev ou rode com E2E_REUSE=1.')
     process.exit(2)
   }
-  const env: NodeJS.ProcessEnv = { ...process.env, FACTORY_STATE_PATH: path.join(saida, 'state.json'), SUPER_FACTORY_KEYS_PATH: path.join(saida, 'cofre', 'chaves.enc.json') }
+  const env: NodeJS.ProcessEnv = { ...process.env, FACTORY_STATE_PATH: path.join(saida, 'state.json'), SUPER_FACTORY_KEYS_PATH: path.join(saida, 'cofre', 'chaves.enc.json'), SUPER_FACTORY_ENSAIO_MS: '60' }
   for (const nome of [
     'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY',
     'SUPER_FACTORY_MODEL', 'FACTORY_MODEL', 'GITHUB_TOKEN', 'GH_TOKEN',
@@ -152,7 +152,11 @@ async function testarWorkflow(): Promise<void> {
 
   const { corpo: criadoAuto } = await api('/api/workflows/autonomo/create-run', {})
   const auto = await api(`/api/workflows/autonomo/start-async?runId=${criadoAuto.runId}`, { inputData: { ...pedido, repositorio: 'https://github.com/acme/pedidos.git' } })
-  conferir('autônomo: aceita o endereço do GitHub e, sem chave, pede a ANTHROPIC_API_KEY', /ANTHROPIC_API_KEY/.test(auto.corpo?.result?.motivo ?? ''), auto.corpo?.result?.motivo)
+  conferir('autônomo: aceita o endereço do GitHub e, sem chave, para no primeiro nó pedindo a ANTHROPIC_API_KEY', auto.corpo?.status === 'failed' && /Receber o pedido: .*ANTHROPIC_API_KEY/.test(JSON.stringify(auto.corpo)), JSON.stringify(auto.corpo).slice(0, 200))
+  const { corpo: criadoEnsaio } = await api('/api/workflows/autonomo/create-run', {})
+  const ensaio = await api(`/api/workflows/autonomo/start-async?runId=${criadoEnsaio.runId}`, { inputData: { ...pedido, ensaio: true } })
+  const passos = Object.keys(ensaio.corpo?.steps ?? {})
+  conferir('autônomo (ensaio): percorre as seis fases e termina aguardando revisão humana', ensaio.corpo?.status === 'success' && ensaio.corpo?.result?.card?.coluna === 'review' && ['triar', 'abrir-sandbox', 'clonar-e-preparar', 'construir-e-testar', 'revisar-e-enviar', 'abrir-pull-request'].every((id) => passos.includes(id)), `${ensaio.corpo?.status} ${passos.join(',')}`)
 
   const status = await fetch(BASE + '/configuracoes/chaves')
   const itens = ((await status.json()) as { itens?: Array<{ nome: string; valor: string | null }> }).itens ?? []
@@ -235,6 +239,10 @@ async function testarNavegador(): Promise<void> {
     await pagina.locator('#sf-chaves-fundo').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {})
     conferir('chaves: Esc fecha o popup', (await pagina.locator('#sf-chaves-fundo').count()) === 0)
     await pagina.screenshot({ path: path.join(saida, 'studio.png') })
+    await pagina.goto(BASE + '/studio/workflows/autonomo/graph')
+    await pagina.locator('#sf-fases li').first().waitFor({ timeout: 15000 }).catch(() => {})
+    conferir('autônomo: o canvas mostra o painel com as seis fases', (await pagina.locator('#sf-fases li').count()) === 6)
+    conferir('autônomo: o ícone da marca é o tile branco', (await pagina.locator('svg[data-sf="1"] rect').first().getAttribute('fill')) === '#f0f0f0')
     conferir('navegador: sem erro de JavaScript', erros.length === 0, erros.slice(0, 3).join(' | '))
   } finally {
     await navegador.close()

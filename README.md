@@ -226,6 +226,14 @@ sudo bash /opt/super-factory/deploy/atualizar.sh
 
 **Acesso à VPS.** Prefira chave SSH a senha de root: crie a chave no seu computador com `ssh-keygen -t ed25519`, cadastre a chave pública no painel da hospedagem e desligue `PasswordAuthentication` no `/etc/ssh/sshd_config`.
 
+## Modo autônomo, fase por fase
+
+No Studio, em **Workflows → autonomo**, o canvas acende uma fase de cada vez: triar o card, abrir o sandbox, clonar e preparar, construir e testar, revisar e enviar, abrir o pull request. Um painel sobre o canvas mostra a fase atual com um verbo girando (Clonando…, Rodando os testes…, Procurando segredo…), e o nó que está rodando ganha contorno e a mesma etiqueta.
+
+Se o card parar, o nó da fase fica vermelho com o motivo, e as fases seguintes não começam. O estado do card continua salvo no quadro.
+
+Para conhecer o fluxo sem tocar repositório, marque **ensaio** no formulário: as mesmas fases rodam com um sandbox de mentira, sem rede e sem chave.
+
 ## Chaves pelo painel
 
 Para o time não precisar de SSH nem de editor de texto, o Studio tem o botão **Chaves e acessos** (canto inferior direito). Ele abre um popup para colar `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, `AZURE_DEVOPS_ORG`, `AZURE_DEVOPS_PAT` e, se quiser, `OPENAI_API_KEY` e `GOOGLE_API_KEY`. A mesma tela abre direto em `/configuracoes`.
