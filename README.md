@@ -2,19 +2,19 @@
 
 https://github.com/juliopessan/super-factory
 
-A raiz é a apresentação. O Studio, em `/studio`, é a mesa. Um pedido vira card, passa por triagem, especificação, plano, verificação e revisão, e só segue quando uma pessoa libera os três portões: implementação, merge e release. O ciclo não faz merge, não faz push em `main` ou `master` e não coloca nada em produção.
+A raiz é a apresentação. O endereço `/studio` é a Factory. Um pedido vira card, passa por triagem, especificação, plano, verificação e revisão, e só segue quando uma pessoa libera os três portões: implementação, merge e release. O ciclo não faz merge, não faz push em `main` ou `master` e não coloca nada em produção.
 
 ## Instalar
 
-São sete passos, um de cada vez. A página inicial tem o botão Guia-me: ele aproxima cada passo da instalação e, depois, o portão, o ciclo, o quadro, os papéis e os limites. A parte Instalar diz a mesma coisa. Quando a mesa já estiver aberta, o chat continua do passo em que a pessoa parou: cole o que o Terminal mostrou. Um erro não volta ao começo. Não cole chave, token ou senha.
+São sete passos, um de cada vez. A página inicial tem o botão Guia-me: ele aproxima cada passo da instalação e, depois, o portão, o ciclo, o quadro, os papéis e os limites. A parte Instalar diz a mesma coisa. Quando a Factory já estiver aberta, o chat continua do passo em que a pessoa parou: cole o que o Terminal mostrou. Um erro não volta ao começo. Não cole chave, token ou senha.
 
 1. Instale o Node 22.18 ou mais novo, pelo site nodejs.org. No Terminal, `node -v` precisa começar com `v22` nessa faixa, ou com um número maior.
 2. Abra o Terminal.
 3. Primeira vez: `git clone https://github.com/juliopessan/super-factory.git` e entre na pasta. Se a pasta `super-factory` já existe, não clone de novo. Use `cd ~/super-factory`, `git fetch origin` e `git checkout -B main origin/main`.
 4. `npm install`
 5. `npm run dev` e deixe essa janela aberta. A linha saudável mostra `4721`.
-6. No navegador, abra `http://localhost:4721` e a mesa em `http://localhost:4721/studio`.
-7. Chave é opcional. Sem ela, a mesa responde em amostra. O arquivo `.env` fica só na máquina.
+6. No navegador, abra `http://localhost:4721` e a Factory em `http://localhost:4721/studio`.
+7. Chave é opcional. Sem ela, a Factory responde em amostra. O arquivo `.env` fica só na máquina.
 
 `npm run check` confere a fábrica. `npm run build` gera o servidor, e `npm start` sobe essa versão.
 
@@ -73,17 +73,17 @@ Os identificadores passam por uma lista fechada de caracteres. O token não entr
 
 ## Base do projeto
 
-Cada repositório tem a própria base. Ela guarda a regra que uma pessoa daquele cliente ditou: escrita, pastas, branch, evidência, glossário. `lerBaseProjeto` lê. `registrarRegraProjeto` grava, e o autor é o nome dessa pessoa. Um papel da mesa não entra como autor. Base vazia continua vazia: o ciclo segue e ninguém inventa regra de cliente.
+Cada repositório tem a própria base. Ela guarda a regra que uma pessoa daquele cliente ditou: escrita, pastas, branch, evidência, glossário. `lerBaseProjeto` lê. `registrarRegraProjeto` grava, e o autor é o nome dessa pessoa. Um papel da Factory não entra como autor. Base vazia continua vazia: o ciclo segue e ninguém inventa regra de cliente.
 
 `lerPoliticaProjeto` lê a política. Sem página gravada, a autonomia já é entrega humana. `definirPoliticaProjeto` registra a branch protegida e os checks que o cliente nomeou. A fábrica não executa esses checks e não aceita merge automático. `relatarMerge` guarda interpretação, premissas e confiança (`confiante` ou `entrega`). Confiança não aprova o portão `beforeMerge`.
 
 ## Skills
 
-As skills ficam em `skills/`, em leitura. O pacote veio do super-board, licença MIT, Copyright 2026 Eric Tech, copiada em `skills/UPSTREAM-LICENSE`. A skill `super-factory` é o contrato desta mesa: os verbos do quadro viram ferramenta ou workflow `sdlc`. Script, shell, merge, force-push e deploy continuam de fora.
+As skills ficam em `skills/`, em leitura. O pacote veio do super-board, licença MIT, Copyright 2026 Eric Tech, copiada em `skills/UPSTREAM-LICENSE`. A skill `super-factory` é o contrato desta Factory: os verbos do quadro viram ferramenta ou workflow `sdlc`. Script, shell, merge, force-push e deploy continuam de fora.
 
-## MCP e mesa
+## MCP e Factory
 
-O Studio mostra o servidor MCP `super-factory` e a mesa `mesa`, com um modo para cada papel. O servidor fica em `/api/mcp/super-factory/mcp` e expõe as ferramentas, os oito agentes e o workflow `sdlc`. A mesa não tem `submit_plan` nem subagente: uma tarefa concluída nela não é um portão. O modo Security continua só com leitura.
+O Studio mostra o servidor MCP `super-factory` e a Factory, com um modo para cada papel. O servidor fica em `/api/mcp/super-factory/mcp` e expõe as ferramentas, os oito agentes e o workflow `sdlc`. A Factory não tem `submit_plan` nem subagente: uma tarefa concluída nela não é um portão. O modo Security continua só com leitura.
 
 Clientes de fora podem falar com esse endereço. A fábrica não sobe comando local para conectar em outro servidor. Um servidor HTTP adicional entra pelo Studio, na área de MCP, quando alguém cola a URL.
 
@@ -93,7 +93,7 @@ Fale com o Chief of Staff para ver o quadro, abrir um card ou ler a trilha. Um c
 
 Security responde em leitura. Se o pedido for escrever, ele recusa.
 
-Sem chave de modelo, a mesa local encaminha a frase para a ferramenta certa. Com `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` ou `GOOGLE_GENERATIVE_AI_API_KEY`, os agentes usam o provedor correspondente. `SUPER_FACTORY_MODEL` troca o modelo, no formato `provedor/modelo`. `FACTORY_MODEL` continua valendo quando o primeiro está vazio.
+Sem chave de modelo, a Factory local encaminha a frase para a ferramenta certa. Com `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` ou `GOOGLE_GENERATIVE_AI_API_KEY`, os agentes usam o provedor correspondente. `SUPER_FACTORY_MODEL` troca o modelo, no formato `provedor/modelo`. `FACTORY_MODEL` continua valendo quando o primeiro está vazio.
 
 ## O que fica de fora de propósito
 
