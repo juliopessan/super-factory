@@ -100,8 +100,8 @@ REDIRECIONAR_HTTP=sim
 echo "Caddy em https://$IP:$PORTA_HTTPS"
 
 passo "Login do proxy"
-# Refaz o Caddyfile quando ele não aponta para esta porta (primeira vez, ou porta trocada).
-if ! grep -qF "https://$IP:$PORTA_HTTPS {" /etc/caddy/Caddyfile 2>/dev/null; then
+# Refaz o Caddyfile na primeira vez, quando a porta muda ou quando o modelo do kit mudou (marca de versão).
+if ! grep -qF "https://$IP:$PORTA_HTTPS {" /etc/caddy/Caddyfile 2>/dev/null || ! grep -qF "super-factory-caddyfile v2" /etc/caddy/Caddyfile; then
   if [ -f /etc/caddy/super-factory.login ]; then
     . /etc/caddy/super-factory.login
     echo "Usando o login já guardado ($LOGIN)."
@@ -124,7 +124,10 @@ caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 systemctl enable caddy
 systemctl restart caddy
 sleep 2
-systemctl is-active --quiet caddy || falha "O Caddy não subiu. Veja: journalctl -u caddy -n 40"
+if ! systemctl is-active --quiet caddy; then
+  journalctl -u caddy -n 25 --no-pager | grep -iE 'error|bind|address|permission' | tail -8 || true
+  falha "O Caddy não subiu. As linhas acima mostram o motivo; o log inteiro está em: journalctl -u caddy -n 40"
+fi
 
 passo "Firewall: só SSH, 80 e 443"
 ufw allow OpenSSH >/dev/null
