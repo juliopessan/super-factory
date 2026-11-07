@@ -203,7 +203,8 @@ export const listarGithub = createTool({
 
 export const criarIssueGithub = createTool({
   id: 'criar-issue-github',
-  description: 'Abre uma issue. Não abre pull request, não faz merge e não faz push.',
+  description: 'Abre uma issue. Não abre pull request, não faz merge e não faz push. Uma pessoa aprova antes de rodar.',
+  requireApproval: true,
   inputSchema: z.object({
     repositorio: z.string().min(3),
     titulo: z.string().min(4).max(120),
@@ -244,7 +245,8 @@ export const listarAzure = createTool({
 
 export const criarWorkItemAzure = createTool({
   id: 'criar-work-item-azure',
-  description: 'Abre uma user story. Não faz merge e não coloca nada em produção.',
+  description: 'Abre uma user story. Não faz merge e não coloca nada em produção. Uma pessoa aprova antes de rodar.',
+  requireApproval: true,
   inputSchema: z.object({
     projeto: z.string().min(1),
     titulo: z.string().min(4).max(120),

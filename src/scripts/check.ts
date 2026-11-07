@@ -472,6 +472,67 @@ assert.match(resposta.text, /ready/)
 assert.match(resposta.text, /C-1/)
 assert.match(resposta.text, /Factory local/)
 
+// --- Harness: retry, cadeia de modelos, guarda na saída e aprovação humana
+const { buscarComRetry, espera } = await import('../factory/retry.ts')
+const esperas: number[] = []
+const esperarTeste = async (ms: number) => { esperas.push(ms) }
+let tentativasRetry = 0
+const instavel = async () => (++tentativasRetry < 3 ? new Response('ocupado', { status: 503 }) : new Response('{}', { status: 200 }))
+assert.equal((await buscarComRetry(instavel, 'GET', { esperar: esperarTeste })).status, 200)
+assert.equal(tentativasRetry, 3)
+assert.deepEqual(esperas, [300, 900])
+tentativasRetry = 0
+assert.equal((await buscarComRetry(instavel, 'POST', { esperar: esperarTeste })).status, 503)
+assert.equal(tentativasRetry, 1, 'escrita não repete')
+let quedas = 0
+const caiUmaVez = async () => { if (++quedas === 1) throw new Error('rede'); return new Response('{}', { status: 200 }) }
+assert.equal((await buscarComRetry(caiUmaVez, undefined, { esperar: esperarTeste })).status, 200)
+assert.equal(espera(1, '2'), 2000)
+assert.equal(espera(1, '60'), 5000)
+await assert.rejects(buscarComRetry(async () => { throw new Error('rede') }, 'GET', { esperar: esperarTeste }))
+let chamadasGithub = 0
+const leituraGithub = await listarIssuesGithub('acme/widgets', {
+  token: 'teste',
+  esperar: esperarTeste,
+  fetch: async () => (++chamadasGithub === 1 ? new Response('limite', { status: 429, headers: { 'retry-after': '1' } }) : new Response('[]', { status: 200 })),
+})
+assert.equal(leituraGithub.ok, true)
+assert.equal(chamadasGithub, 2)
+
+const { cadeiaDeModelos } = await import('../super-factory/model.ts')
+assert.equal(cadeiaDeModelos().length, 1, 'sem chave, só o modelo local')
+process.env.ANTHROPIC_API_KEY = 'teste'
+process.env.OPENAI_API_KEY = 'teste'
+process.env.SUPER_FACTORY_MODEL = 'anthropic/claude-sonnet-5-5'
+const cadeia = cadeiaDeModelos()
+assert.deepEqual(cadeia.map((item) => item.model), ['anthropic/claude-sonnet-5-5', 'openai/gpt-6.1-sol'])
+assert.deepEqual(cadeia.map((item) => item.maxRetries), [2, 1])
+delete process.env.ANTHROPIC_API_KEY
+delete process.env.OPENAI_API_KEY
+delete process.env.SUPER_FACTORY_MODEL
+
+const { guardarTexto, guardaDeSaida, AVISO_SAIDA } = await import('../super-factory/processors/guarda-saida.ts')
+for (const afirmacao of ['Pronto, fiz o merge na main.', 'O deploy foi feito às 10h.', 'Eu aprovei o gate de release.', 'Já subi o release.', 'O gate beforeMerge foi aprovado por mim.']) {
+  assert.ok(guardarTexto(afirmacao).includes(AVISO_SAIDA), afirmacao)
+}
+for (const negacao of ['Nenhum merge foi feito.', 'Não fiz o merge.', 'Merge e deploy não saem daqui.', 'O merge não foi feito: falta o gate.', 'Uma pessoa precisa liberar o merge.', 'Gate, merge e deploy não saem daqui.']) {
+  assert.equal(guardarTexto(negacao), negacao, negacao)
+}
+assert.ok(guardaDeSaida())
+
+const ferramentas = await import('../super-factory/tools/factory.ts')
+assert.equal(ferramentas.criarIssueGithub.requireApproval, true)
+assert.equal(ferramentas.criarWorkItemAzure.requireApproval, true)
+const mcpFonte = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'super-factory', 'mcp.ts'), 'utf8')
+assert.equal(/^\s+criarIssueGithub,$/m.test(mcpFonte), false, 'MCP não expõe escrita sem aprovação')
+assert.equal(/^\s+criarWorkItemAzure,$/m.test(mcpFonte), false, 'MCP não expõe escrita sem aprovação')
+
+const pedidoIssue = await agente.generate('abre uma issue no github repo: acme/widgets sobre o filtro de datas', {
+  memory: { resource: 'check', thread: `check-aprovacao-${Date.now()}` },
+})
+assert.equal(pedidoIssue.finishReason, 'suspended', 'a issue espera aprovação humana')
+assert.equal((pedidoIssue as { suspendPayload?: { toolName?: string } }).suspendPayload?.toolName, 'criarIssueGithub')
+
 console.log(
   JSON.stringify(
     {

@@ -1,3 +1,4 @@
+import { buscarComRetry, type Esperar } from './retry.ts'
 import { dividirRepositorio, semSegredo } from './guards.ts'
 
 export type ItemRemoto = {
@@ -27,6 +28,7 @@ export type CriacaoRemota = {
 export type GithubDeps = {
   fetch?: typeof fetch
   token?: string
+  esperar?: Esperar
 }
 
 const FIXTURE_ISSUES: ItemRemoto[] = [
@@ -39,13 +41,13 @@ function tokenDe(deps?: GithubDeps): string | null {
   return token || null
 }
 
-function cliente(deps?: GithubDeps): { fetch: typeof fetch; token: string } | null {
+function cliente(deps?: GithubDeps): { fetch: typeof fetch; token: string; esperar?: Esperar } | null {
   const token = tokenDe(deps)
   if (!token) return null
-  return { fetch: deps?.fetch ?? fetch, token }
+  return { fetch: deps?.fetch ?? fetch, token, esperar: deps?.esperar }
 }
 
-async function pedir(url: string, deps: { fetch: typeof fetch; token: string }, init: RequestInit = {}): Promise<unknown> {
+async function pedir(url: string, deps: { fetch: typeof fetch; token: string; esperar?: Esperar }, init: RequestInit = {}): Promise<unknown> {
   if (!url.startsWith('https://api.github.com/')) throw new Error('Host do GitHub recusado.')
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${deps.token}`)
@@ -54,7 +56,7 @@ async function pedir(url: string, deps: { fetch: typeof fetch; token: string }, 
   headers.set('X-GitHub-Api-Version', '2022-11-28')
   let response: Response
   try {
-    response = await deps.fetch(url, { ...init, headers, signal: AbortSignal.timeout(8000) })
+    response = await buscarComRetry(() => deps.fetch(url, { ...init, headers, signal: AbortSignal.timeout(8000) }), init.method, { esperar: deps.esperar })
   } catch {
     throw new Error('Tempo esgotado ao falar com o GitHub.')
   }

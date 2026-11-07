@@ -1,3 +1,4 @@
+import { buscarComRetry, type Esperar } from './retry.ts'
 import { dividirAzure, segmento, semSegredo } from './guards.ts'
 
 export type ItemAzure = {
@@ -28,6 +29,7 @@ export type AzureDeps = {
   fetch?: typeof fetch
   pat?: string
   org?: string
+  esperar?: Esperar
 }
 
 const FIXTURE_ITENS: ItemAzure[] = [
@@ -43,7 +45,7 @@ export function modoAzure(deps?: AzureDeps): 'fixture' | 'live' | 'incomplete' {
   return 'live'
 }
 
-function cliente(deps?: AzureDeps): { fetch: typeof fetch; pat: string; org: string } | { erro: string } | null {
+function cliente(deps?: AzureDeps): { fetch: typeof fetch; pat: string; org: string; esperar?: Esperar } | { erro: string } | null {
   const modo = modoAzure(deps)
   if (modo === 'fixture') return null
   if (modo === 'incomplete') {
@@ -52,7 +54,7 @@ function cliente(deps?: AzureDeps): { fetch: typeof fetch; pat: string; org: str
   try {
     const org = segmento((deps?.org ?? process.env.AZURE_DEVOPS_ORG ?? '').trim(), 'Organização')
     const pat = (deps?.pat ?? process.env.AZURE_DEVOPS_PAT ?? '').trim()
-    return { fetch: deps?.fetch ?? fetch, pat, org }
+    return { fetch: deps?.fetch ?? fetch, pat, org, esperar: deps?.esperar }
   } catch (error) {
     return { erro: error instanceof Error ? error.message : 'Organização inválida.' }
   }
@@ -60,7 +62,7 @@ function cliente(deps?: AzureDeps): { fetch: typeof fetch; pat: string; org: str
 
 async function pedir(
   url: string,
-  deps: { fetch: typeof fetch; pat: string },
+  deps: { fetch: typeof fetch; pat: string; esperar?: Esperar },
   init: RequestInit = {},
 ): Promise<unknown> {
   if (!url.startsWith('https://dev.azure.com/')) throw new Error('Host do Azure DevOps recusado.')
@@ -69,7 +71,7 @@ async function pedir(
   headers.set('Accept', 'application/json')
   let response: Response
   try {
-    response = await deps.fetch(url, { ...init, headers, signal: AbortSignal.timeout(8000) })
+    response = await buscarComRetry(() => deps.fetch(url, { ...init, headers, signal: AbortSignal.timeout(8000) }), init.method, { esperar: deps.esperar })
   } catch {
     throw new Error('Tempo esgotado ao falar com o Azure DevOps.')
   }
