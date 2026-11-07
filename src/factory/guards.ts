@@ -1,26 +1,34 @@
-const AWS = /AKIA[0-9A-Z]{16}/
-const GITHUB = /ghp_[A-Za-z0-9]{20,}/
-const GITHUB_PAT = /github_pat_[A-Za-z0-9_]{20,}/
-const CHAVE = /-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/
-const ATRIBUIDO = /(api[_-]?key|token|password|secret|pat)\s*[:=]\s*['"][^'"]{8,}['"]/gi
+// Cada padrão tem um rótulo. O marcador [segredo:rotulo] é o que fica no lugar
+// do valor: a entrada da API já chega assim, e a triagem continua bloqueando.
+const PADROES: Array<[string, RegExp]> = [
+  ['chave-privada', /-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/g],
+  ['chave-aws', /AKIA[0-9A-Z]{16}/g],
+  ['pat-github', /github_pat_[A-Za-z0-9_]{20,}/g],
+  ['token-github', /gh[pousr]_[A-Za-z0-9]{20,}/g],
+  ['credencial-atribuida', /(api[_-]?key|token|password|secret|pat)\s*[:=]\s*['"][^'"]{8,}['"]/gi],
+]
+const MARCADOR = /\[segredo:([a-z-]+)\]/g
 
 export function varrerSegredos(texto: string): { encontrado: boolean; rotulos: string[] } {
-  const rotulos: string[] = []
-  if (AWS.test(texto)) rotulos.push('chave-aws')
-  if (GITHUB.test(texto)) rotulos.push('token-github')
-  if (GITHUB_PAT.test(texto)) rotulos.push('pat-github')
-  if (CHAVE.test(texto)) rotulos.push('chave-privada')
-  if (ATRIBUIDO.test(texto)) rotulos.push('credencial-atribuida')
-  return { encontrado: rotulos.length > 0, rotulos }
+  const rotulos = new Set<string>()
+  for (const [rotulo, padrao] of PADROES) {
+    if (texto.match(padrao)) rotulos.add(rotulo)
+  }
+  for (const marca of texto.matchAll(MARCADOR)) rotulos.add(marca[1] ?? 'segredo')
+  return { encontrado: rotulos.size > 0, rotulos: [...rotulos] }
+}
+
+/** Troca todo segredo por [segredo:rotulo]. Usado na porta da API, antes de qualquer gravação. */
+export function marcarSegredos(texto: string): string {
+  let saida = texto
+  for (const [rotulo, padrao] of PADROES) saida = saida.replace(padrao, `[segredo:${rotulo}]`)
+  return saida
 }
 
 export function redigirSegredos(texto: string): string {
-  return texto
-    .replace(CHAVE, '[segredo]')
-    .replace(AWS, '[segredo]')
-    .replace(GITHUB_PAT, '[segredo]')
-    .replace(GITHUB, '[segredo]')
-    .replace(ATRIBUIDO, '[segredo]')
+  let saida = texto.replace(MARCADOR, '[segredo]')
+  for (const [, padrao] of PADROES) saida = saida.replace(padrao, '[segredo]')
+  return saida
 }
 
 export function pedidoPerigoso(texto: string): string[] {

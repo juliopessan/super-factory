@@ -1,3 +1,4 @@
+import { marcarSegredos } from '../factory/guards.ts'
 import { paginaInicial } from './landing.ts'
 
 const ICONE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
@@ -46,8 +47,42 @@ function icone(): Response {
   })
 }
 
-export async function marcaSuperFactory(c: { req: { path: string }; res: Response }, next: () => Promise<void>) {
+type Pedido = { path: string; method: string; raw: Request; bodyCache?: Record<string, unknown> }
+
+function marcarValores(valor: unknown): unknown {
+  if (typeof valor === 'string') return marcarSegredos(valor)
+  if (Array.isArray(valor)) return valor.map(marcarValores)
+  if (valor && typeof valor === 'object') {
+    return Object.fromEntries(Object.entries(valor).map(([chave, item]) => [chave, marcarValores(item)]))
+  }
+  return valor
+}
+
+// Todo corpo JSON que entra na API passa por aqui antes de chegar ao Mastra.
+// Assim o segredo não entra no snapshot do workflow, na memória nem nos spans:
+// no lugar dele fica [segredo:rotulo], que a triagem ainda reconhece e bloqueia.
+async function limparEntrada(req: Pedido): Promise<void> {
+  if (!['POST', 'PUT', 'PATCH'].includes(req.method)) return
+  if (!req.path.startsWith('/api/')) return
+  if (!(req.raw.headers.get('content-type') ?? '').includes('application/json')) return
+  const texto = await req.raw.clone().text()
+  let dados: unknown
+  try {
+    dados = JSON.parse(texto)
+  } catch {
+    return
+  }
+  const limpo = JSON.stringify(marcarValores(dados))
+  if (limpo === JSON.stringify(dados)) return
+  const headers = new Headers(req.raw.headers)
+  headers.delete('content-length')
+  req.raw = new Request(req.raw.url, { method: req.raw.method, headers, body: limpo, signal: req.raw.signal })
+  req.bodyCache = { text: Promise.resolve(limpo) }
+}
+
+export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next: () => Promise<void>) {
   const caminho = c.req.path
+  await limparEntrada(c.req)
   if (caminho === '/sf.svg' || caminho.endsWith('/sf.svg') || caminho.endsWith('/mastra-dark-tile.svg') || caminho.endsWith('/mastra-light-tile.svg')) {
     return icone()
   }

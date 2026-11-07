@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const BASE = 'http://localhost:4721'
 const saida = process.env.E2E_OUT ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sf-e2e-'))
-const SEGREDO = 'ghp_' + 'A'.repeat(36)
+const SEGREDO = 'ghp_' + Array.from({ length: 36 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('')
 
 type Resultado = { nome: string; ok: boolean; detalhe: string }
 const resultados: Resultado[] = []
@@ -136,6 +136,13 @@ async function testarWorkflow(): Promise<void> {
   conferir('triagem: o segredo não entra no estado do card', !JSON.stringify(perigoso.estado).includes(SEGREDO))
   const arquivo = path.join(saida, 'state.json')
   conferir('triagem: o segredo não entra no arquivo de estado', !fs.existsSync(arquivo) || !fs.readFileSync(arquivo, 'utf8').includes(SEGREDO))
+
+  await new Promise((r) => setTimeout(r, 1500))
+  const gravado = ['factory.db', 'factory.db-wal']
+    .map((nome) => path.join(raiz, nome))
+    .filter((caminho) => fs.existsSync(caminho))
+    .some((caminho) => fs.readFileSync(caminho).includes(SEGREDO))
+  conferir('triagem: o segredo não entra no factory.db', !gravado)
 
   const curto = await ciclo({ ...pedido, titulo: 'x' }, [])
   conferir('schema: título curto é recusado', curto.r.status >= 400 || curto.r.corpo?.status === 'failed', String(curto.r.status))
