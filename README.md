@@ -191,10 +191,10 @@ O workflow suspende três vezes. Em cada uma, retome com o JSON do gate. `aprova
 
 ## Deploy numa VPS
 
-Um kit em `deploy/` instala a Super Factory numa VPS Ubuntu 22.04 ou 24.04 (Hostinger, DigitalOcean, Hetzner e afins), com o modo autônomo ligado:
+Um kit em `deploy/` instala a Super Factory numa VPS Ubuntu 22.04 ou 24.04, com o modo autônomo ligado. O instalador olha o que a VPS já tem e escolhe o caminho sozinho:
 
-- **O que instala:** Node 22, Docker Engine (para os containers dos cards), Caddy, um usuário `factory` sem login de shell, o build da Factory e o serviço `super-factory` no `systemd`.
-- **Como protege:** a Factory escuta só em `127.0.0.1`. Na frente, o Caddy pede usuário e senha antes de qualquer página, com HTTPS. Sem domínio, o certificado é do próprio Caddy, e o navegador avisa uma vez. O firewall deixa abertas só as portas 22, 80 e 443.
+- **Com Traefik** (modelo Docker da Hostinger, Coolify e afins). A Factory vira um container em `/docker/super-factory/`, com labels, igual às outras aplicações. O Traefik não é alterado: ele ganha uma rota nova em `factory.<hostname>.hstgr.cloud`, com certificado do Let's Encrypt, HTTPS e login com usuário e senha (hash bcrypt) antes de qualquer página.
+- **Sem proxy.** Instala Node 22, Docker, Caddy (HTTPS e login) e um serviço `systemd`, e fecha o firewall em 22, 80 e 443. Sem domínio, o certificado é do próprio Caddy e o navegador avisa uma vez.
 
 Na VPS, como root:
 
@@ -206,23 +206,23 @@ curl -fsSL https://raw.githubusercontent.com/juliopessan/super-factory/main/depl
 sudo bash instalar-vps.sh
 ```
 
-O script pergunta o usuário e a senha de acesso à Factory e, no fim, mostra o endereço (`https://IP-DA-VPS`). Depois, preencha as chaves do modo autônomo e reinicie:
+O script pergunta o usuário e a senha de acesso à Factory (mínimo de 10 caracteres; use uma senha só para ela) e, no fim, mostra o endereço. Com Traefik, o nome padrão é `factory.<hostname>.hstgr.cloud`; para outro, `DOMINIO=factory.suaempresa.com sudo -E bash instalar-vps.sh`. O nome precisa apontar para o IP da VPS. Depois, preencha as chaves do modo autônomo e recrie o container:
 
 ```bash
-sudo -u factory nano /opt/super-factory/.env
+nano /opt/super-factory/.env
 ```
 
 ```bash
-sudo systemctl restart super-factory
+docker compose -f /docker/super-factory/docker-compose.yml up -d --force-recreate
 ```
 
-Para atualizar com o que entrou no `main`:
+Para atualizar com o que entrou no `main` (nos dois caminhos):
 
 ```bash
 sudo bash /opt/super-factory/deploy/atualizar.sh
 ```
 
-Com domínio, troque o IP pelo domínio em `/etc/caddy/Caddyfile`, apague a linha `tls internal` e rode `sudo systemctl reload caddy`: o Caddy pede o certificado do Let's Encrypt sozinho. Para ver o log do serviço: `journalctl -u super-factory -f`.
+**Segurança.** O container da Factory monta o socket do Docker para abrir um container por card no modo autônomo. Quem alcança esse socket controla o Docker da VPS, por isso o login na frente é obrigatório. Para desligar o modo autônomo na VPS, apague a linha do `docker.sock` em `/docker/super-factory/docker-compose.yml`. O banco e o estado ficam no volume `factory-data`. Para trocar a senha de acesso: `REFAZER_LOGIN=1 sudo -E bash instalar-vps.sh`. Para ver o log: `docker logs -f super-factory`.
 
 **Acesso à VPS.** Prefira chave SSH a senha de root: crie a chave no seu computador com `ssh-keygen -t ed25519`, cadastre a chave pública no painel da hospedagem e desligue `PasswordAuthentication` no `/etc/ssh/sshd_config`.
 

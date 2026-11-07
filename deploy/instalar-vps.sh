@@ -22,6 +22,26 @@ falha() { printf '\n\033[1;31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 IP="${IP:-$(curl -fsS --max-time 5 https://api.ipify.org || hostname -I | awk '{print $1}')}"
 [ -n "$IP" ] || falha "Não descobri o IP público. Rode de novo com IP=seu.ip sudo -E bash instalar-vps.sh"
 
+passo "Procurando um proxy que já usa as portas 80 e 443"
+usa_traefik() {
+  if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}} {{.Image}}' 2>/dev/null | grep -qi traefik; then return 0; fi
+  ss -ltnpH 'sport = :443' 2>/dev/null | grep -qi traefik
+}
+if usa_traefik; then
+  echo "Traefik encontrado. A Factory entra atrás dele, como as outras aplicações da VPS."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -q
+  apt-get install -y -q ca-certificates curl git
+  if [ -d "$PASTA/.git" ]; then
+    sudo -u "$(stat -c %U "$PASTA")" git -C "$PASTA" pull --ff-only
+  else
+    git clone "$REPO" "$PASTA"
+  fi
+  export IP PASTA
+  exec bash "$PASTA/deploy/instalar-traefik.sh"
+fi
+echo "Nenhum proxy encontrado. Usando o Caddy."
+
 passo "Pacotes básicos"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q

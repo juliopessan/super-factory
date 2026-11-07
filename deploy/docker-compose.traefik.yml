@@ -1,0 +1,33 @@
+# Super Factory atrás do Traefik que já existe na VPS (modelo Docker da Hostinger).
+# Gerado por deploy/instalar-vps.sh: __HOST__ e __AUTH__ são preenchidos na instalação.
+# Mesmo padrão das outras aplicações: labels no container, entrypoint websecure, resolver letsencrypt.
+services:
+  super-factory:
+    build:
+      context: /opt/super-factory
+      dockerfile: deploy/Dockerfile
+    image: super-factory:latest
+    container_name: super-factory
+    restart: unless-stopped
+    env_file:
+      - /opt/super-factory/.env
+    environment:
+      SUPER_FACTORY_HOST: 0.0.0.0
+    volumes:
+      - factory-data:/data
+      # O modo autônomo abre um container por card. Quem alcança este socket controla o Docker
+      # da VPS: por isso o acesso à Factory fica atrás do login. Para desligar o modo
+      # autônomo, apague esta linha.
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.super-factory.entrypoints=websecure
+      - traefik.http.routers.super-factory.rule=Host(`__HOST__`)
+      - traefik.http.routers.super-factory.tls.certresolver=letsencrypt
+      - traefik.http.routers.super-factory.middlewares=super-factory-auth,super-factory-hsts
+      - traefik.http.middlewares.super-factory-auth.basicauth.users=__AUTH__
+      - traefik.http.middlewares.super-factory-hsts.headers.stsSeconds=31536000
+      - traefik.http.services.super-factory.loadbalancer.server.port=4721
+
+volumes:
+  factory-data:

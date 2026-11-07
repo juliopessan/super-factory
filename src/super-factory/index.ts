@@ -33,7 +33,8 @@ import { sdlcWorkflow } from './workflows/sdlc.ts'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const storage = new LibSQLStore({
   id: 'super-factory-storage',
-  url: `file:${path.join(root, 'factory.db')}`,
+  // SUPER_FACTORY_DB aponta o banco para um volume (container); sem ela, fica na pasta do projeto.
+  url: process.env.SUPER_FACTORY_DB?.trim() || `file:${path.join(root, 'factory.db')}`,
 })
 
 export const mastra = new Mastra({

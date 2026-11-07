@@ -1,0 +1,8 @@
+node_modules
+.mastra
+.git
+.env
+.env.*
+factory.db*
+data
+docs/img
