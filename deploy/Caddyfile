@@ -3,6 +3,13 @@
 # troque __IP__ pelo domínio e apague a linha tls internal: entra o Let's Encrypt.
 # Se a porta 443 já tiver outro dono (Traefik de um modelo Docker), o instalador usa a 8443.
 
+# super-factory-caddyfile v2
+{
+	# Sem redirecionamento automático na porta 80: ela pode ser de outro proxy (Traefik).
+	# Quando o Caddy fica com a 80, o instalador escreve o redirecionamento abaixo.
+	auto_https disable_redirects
+}
+
 https://__IP__:__PORTA__ {
 	tls internal
 	basic_auth {
