@@ -6,7 +6,7 @@ import { conduzirInstalacaoFerramenta } from '../instalacao.ts'
 import { habilidades } from '../habilidades.ts'
 import { TokenLimiterProcessor } from '@mastra/core/processors'
 
-import { cadeiaDeModelos } from '../model.ts'
+import { modeloConfigurado } from '../model.ts'
 import { guardaDeSaida } from '../processors/guarda-saida.ts'
 import { RedigirDadosPessoais } from '../processors/redigir-dados.ts'
 import {
@@ -46,8 +46,9 @@ function criar(id: string, name: string, description: string, papel: string, ext
     name,
     description,
     instructions: [`PAPEL: ${papel}`, extra, BASE].join('\n'),
-    // Modelo escolhido com novas tentativas e os outros provedores com chave como reserva.
-    model: () => cadeiaDeModelos(),
+    // Modelo único, para o Studio mostrar o seletor de provedor e modelo. Falha transitória tenta de novo até 2 vezes.
+    model: () => modeloConfigurado(),
+    maxRetries: 2,
     tools,
     memory: memoria,
     knowledge: conhecimento,
