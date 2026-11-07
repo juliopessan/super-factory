@@ -5,7 +5,7 @@ import { definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, registrarRe
 import { conduzirInstalacaoFerramenta } from './instalacao.ts'
 import {
   abrirCard,
-  avaliarPortaoMerge,
+  avaliarGateMerge,
   criarIssueGithub,
   criarWorkItemAzure,
   lerLedger,
@@ -21,7 +21,7 @@ import { sdlcWorkflow } from './workflows/sdlc.ts'
 const INSTRUCOES = [
   'Este servidor é a Super Factory.',
   'O ciclo governado é o workflow sdlc. Ele suspende em implementação, merge e release.',
-  'Quem retoma um portão é uma pessoa, com aprovado, aprovador e nota. Um agente não aprova.',
+  'Quem retoma um gate é uma pessoa, com aprovado, aprovador e nota. Um agente não aprova.',
   'Não há ferramenta de shell, merge, force-push ou deploy.',
   'Sem credencial, GitHub e Azure DevOps respondem em modo simulado e dizem isso.',
 ].join('\n')
@@ -30,7 +30,7 @@ export const servidorMcp = new MCPServer({
   id: 'super-factory',
   name: 'Super Factory',
   version: '1.0.0',
-  description: 'Quadro, portões humanos, GitHub, Azure DevOps e o workflow sdlc. Sem merge, sem deploy e sem shell.',
+  description: 'Quadro, gates humanos, GitHub, Azure DevOps e o workflow sdlc. Sem merge, sem deploy e sem shell.',
   instructions: INSTRUCOES,
   websiteUrl: 'https://github.com/juliopessan/super-factory',
   repository: {
@@ -54,7 +54,7 @@ export const servidorMcp = new MCPServer({
     lintarCriterios,
     abrirCard,
     planejarOnda,
-    avaliarPortaoMerge,
+    avaliarGateMerge,
     lerLedger,
     listarGithub,
     criarIssueGithub,

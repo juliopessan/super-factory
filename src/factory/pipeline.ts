@@ -63,10 +63,10 @@ export function observado(
     throw new Error(`PASS sem evidência em ${nome}.`)
   }
   if (resultado === 'PASS' && comando !== null) {
-    throw new Error(`Esta fábrica não marca PASS a partir de um comando externo (${nome}).`)
+    throw new Error(`Esta Factory não marca PASS a partir de um comando externo (${nome}).`)
   }
   if (nome === 'testes-do-produto' && resultado === 'PASS') {
-    throw new Error('Testes do produto não recebem PASS nesta fábrica.')
+    throw new Error('Testes do produto não recebem PASS nesta Factory.')
   }
   return { nome, resultado, comando, evidencia }
 }
@@ -207,7 +207,7 @@ export function aprovar(
       card: { ...proximo.card, coluna: 'review' },
     }
   }
-  if (!entrada.aprovado) return parar(proximo, `Portão ${entrada.portao} recusado por ${entrada.aprovador}.`)
+  if (!entrada.aprovado) return parar(proximo, `Gate ${entrada.portao} recusado por ${entrada.aprovador}.`)
   if (entrada.portao === 'beforeImplementation') {
     return { ...proximo, estagio: 'implementation', card: { ...proximo.card, coluna: 'build' } }
   }
@@ -227,9 +227,9 @@ export function comoRetomada(valor: unknown): Retomada | null {
 }
 
 function textoDoPortao(portao: Portao): string {
-  if (portao === 'beforeImplementation') return 'Uma pessoa precisa liberar a implementação. O agente não aprova este portão.'
-  if (portao === 'beforeMerge') return 'Uma pessoa precisa liberar o acompanhamento. A fábrica não faz merge.'
-  return 'Uma pessoa precisa aceitar o release. A fábrica não faz deploy.'
+  if (portao === 'beforeImplementation') return 'Uma pessoa precisa liberar a implementação. O agente não aprova este gate.'
+  if (portao === 'beforeMerge') return 'Uma pessoa precisa liberar o acompanhamento. A Factory não faz merge.'
+  return 'Uma pessoa precisa aceitar o release. A Factory não faz deploy.'
 }
 
 export function podePedirMerge(estado: Estado): string[] {
@@ -312,13 +312,13 @@ export function verificar(estado: Estado): Estado {
       'invariantes-do-manifesto',
       manifesto.ok ? 'PASS' : 'FAIL',
       manifesto.ok
-        ? 'Portões humanos, sem deploy automático, segurança somente leitura.'
+        ? 'Gates humanos, sem deploy automático, segurança somente leitura.'
         : manifesto.falhas.join(' '),
     ),
     observado(
       'testes-do-produto',
       'NOT_RUN',
-      'A fábrica não executa comandos do card. Rode a suíte no repositório e anexe o resultado.',
+      'A Factory não executa comandos do card. Rode a suíte no repositório e anexe o resultado.',
     ),
   ]
   let proximo: Estado = {
@@ -380,7 +380,7 @@ function corpo(estado: Estado): string {
     'Checks:',
     ...estado.checks.map((check) => `- ${check.resultado} ${check.nome}: ${check.evidencia}`),
     '',
-    'Aberto pela fábrica. Merge e deploy não foram feitos.',
+    'Aberto pela Factory. Merge e deploy não foram feitos.',
   ].join('\n')
 }
 

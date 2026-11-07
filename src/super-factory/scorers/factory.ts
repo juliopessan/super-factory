@@ -12,7 +12,7 @@ function estadoDe(value: unknown): Estado | null {
 
 export const evidenciaScorer = createScorer({
   id: 'evidencia-honesta',
-  description: 'Recusa PASS sem evidência e PASS nos testes de produto, que esta fábrica não executa.',
+  description: 'Recusa PASS sem evidência e PASS nos testes de produto, que esta Factory não executa.',
 })
   .preprocess(({ run }) => estadoDe(run.output))
   .generateScore(({ results }) => {
@@ -36,7 +36,7 @@ function humano(estado: Estado, portao: Estado['aprovacoes'][number]['portao']):
 }
 
 export const portoesScorer = createScorer({
-  id: 'portoes-humanos',
+  id: 'gates-humanos',
   description: 'Confere se implementação, merge e release só avançam com aprovação humana.',
 })
   .preprocess(({ run }) => estadoDe(run.output))
@@ -58,12 +58,12 @@ export const portoesScorer = createScorer({
     return 0
   })
   .generateReason(({ score }) =>
-    score === 1 ? 'Nenhum portão foi marcado por um agente.' : 'O desfecho avançou sem a aprovação humana correspondente.',
+    score === 1 ? 'Nenhum gate foi marcado por um agente.' : 'O desfecho avançou sem a aprovação humana correspondente.',
   )
 
 export const relatorioScorer = createScorer({
   id: 'relatorio-completo',
-  description: 'Confere se o relatório traz contexto, critérios, donos, evidência, portões e o próximo passo.',
+  description: 'Confere se o relatório traz contexto, critérios, donos, evidência, gates e o próximo passo.',
 })
   .preprocess(({ run }) => {
     const estado = estadoDe(run.output)

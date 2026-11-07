@@ -54,15 +54,15 @@ export function validarManifesto(manifesto: Manifesto = MANIFEST): { ok: boolean
   }
   if (manifesto.gates.beforeMerge.agentMayApprove) falhas.push('Agente não aprova o merge.')
   if (!manifesto.gates.beforeRelease.human) falhas.push('Release exige uma pessoa.')
-  if (manifesto.gates.beforeRelease.deploys) falhas.push('O portão de release não publica sozinho.')
+  if (manifesto.gates.beforeRelease.deploys) falhas.push('O gate de release não publica sozinho.')
   if (manifesto.gates.beforeRelease.agentMayApprove) falhas.push('Agente não aprova o release.')
   if (!manifesto.invariants.securityIsReadOnly) falhas.push('Segurança precisa ser somente leitura.')
-  if (!manifesto.invariants.agentsCannotApproveGates) falhas.push('Agente não registra portão.')
+  if (!manifesto.invariants.agentsCannotApproveGates) falhas.push('Agente não registra gate.')
   if (!manifesto.invariants.noFalsePass) falhas.push('PASS exige evidência observada.')
   if (!manifesto.invariants.disjointWriteSets) falhas.push('As escritas dos donos precisam ser disjuntas.')
   if (!manifesto.invariants.noDirectPushToProtectedBranches) falhas.push('Branch protegida não recebe push direto.')
   if (!manifesto.invariants.noAutoDeploy) falhas.push('Não há deploy automático.')
-  if (!manifesto.invariants.productTestsAreNotExecutedHere) falhas.push('Teste de produto não roda nesta fábrica.')
+  if (!manifesto.invariants.productTestsAreNotExecutedHere) falhas.push('Teste de produto não roda nesta Factory.')
   if (!manifesto.invariants.chiefIsOnlyDelegator) falhas.push('Só o chief of staff delega.')
   if (!manifesto.agents.includes('security') || !manifesto.agents.includes('chief-of-staff')) {
     falhas.push('Faltam os papéis de chief of staff e segurança.')

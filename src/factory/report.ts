@@ -1,6 +1,6 @@
 import type { Estado } from './schemas.ts'
 
-const SECOES = ['Contexto', 'Critérios', 'Donos', 'Evidência', 'Portões', 'Próximo passo']
+const SECOES = ['Contexto', 'Critérios', 'Donos', 'Evidência', 'Gates', 'Próximo passo']
 
 export function secoesDoRelatorio(): string[] {
   return [...SECOES]
@@ -23,7 +23,7 @@ export function relatorioDe(estado: Estado): string {
     .join('\n')
   const proximo =
     estado.desfecho === 'aceito-com-ressalvas'
-      ? 'Rode os testes do produto fora da fábrica e anexe o resultado. Nenhum deploy foi feito.'
+      ? 'Rode os testes do produto fora da Factory e anexe o resultado. Nenhum deploy foi feito.'
       : estado.desfecho === 'retido'
         ? 'O release continua retido. Nada foi publicado.'
         : 'O card está bloqueado. Ajuste o pedido e abra outro ciclo. Nenhum merge foi feito.'
@@ -50,7 +50,7 @@ export function relatorioDe(estado: Estado): string {
     '',
     `Estado da evidência: ${estado.evidencia}.`,
     '',
-    '## Portões',
+    '## Gates',
     portoes,
     '',
     '## Próximo passo',

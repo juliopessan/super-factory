@@ -96,7 +96,7 @@ export async function lerBaseDoProjeto(repositorio: string): Promise<{ resumo: s
   const regras = raiz ? await regrasDoEscopo(raiz.id, read, []) : []
   if (regras.length === 0) {
     return {
-      resumo: `A base de ${repositorio.trim()} está vazia. Quem registra a regra é uma pessoa. A fábrica não inventa regra de cliente.`,
+      resumo: `A base de ${repositorio.trim()} está vazia. Quem registra a regra é uma pessoa. A Factory não inventa regra de cliente.`,
     }
   }
   return { resumo: `Base de ${repositorio.trim()}\n${regras.join('\n')}` }
@@ -116,7 +116,7 @@ export async function registrarRegraDoProjeto(entrada: {
   const texto = entrada.texto.trim()
   if (nome.length < 2 || nome.length > 80) throw new Error('Nome da regra inválido.')
   if (texto.length < 20 || texto.length > 4000) throw new Error('A regra precisa do texto que a pessoa ditou.')
-  if (pedeMergeAutomatico(`${nome}\n${texto}`)) throw new Error('A política desta fábrica é entrega humana.')
+  if (pedeMergeAutomatico(`${nome}\n${texto}`)) throw new Error('A política desta Factory é entrega humana.')
   if (varrerSegredos(texto).encontrado || varrerSegredos(nome).encontrado) throw new Error('A regra não guarda segredo.')
   await conhecimento.upsertPage({
     scope: `projeto:${slug}`,
@@ -125,14 +125,14 @@ export async function registrarRegraDoProjeto(entrada: {
     body: texto,
     author: autor,
   })
-  return { resumo: `Regra ${chave} gravada em ${entrada.repositorio.trim()} por ${autor}. Isso não aprova portão.` }
+  return { resumo: `Regra ${chave} gravada em ${entrada.repositorio.trim()} por ${autor}. Isso não aprova gate.` }
 }
 
 const POLITICA_PADRAO = [
   'Autonomia: entrega humana.',
   'Branch protegida: main.',
   'Checks que o cliente nomeou: nenhum.',
-  'A fábrica não executa esses checks e não funde.',
+  'A Factory não executa esses checks e não funde.',
 ].join('\n')
 
 async function corpoDaPagina(repositorio: string, chave: string): Promise<string | null> {
@@ -165,13 +165,13 @@ export async function definirPoliticaDoProjeto(entrada: {
   const branch = validarBranch(entrada.branch?.trim() || 'main')
   const checks = entrada.checks?.trim() ?? ''
   if (checks && (checks.length < 10 || checks.length > 500)) throw new Error('Os checks nomeados precisam do texto que a pessoa ditou.')
-  if (pedeMergeAutomatico(checks)) throw new Error('A política desta fábrica é entrega humana.')
+  if (pedeMergeAutomatico(checks)) throw new Error('A política desta Factory é entrega humana.')
   if (checks && varrerSegredos(checks).encontrado) throw new Error('A política não guarda segredo.')
   const corpo = [
     'Autonomia: entrega humana.',
     `Branch protegida: ${branch}.`,
     checks ? `Checks que o cliente nomeou: ${checks}` : 'Checks que o cliente nomeou: nenhum.',
-    'A fábrica não executa esses checks e não funde.',
+    'A Factory não executa esses checks e não funde.',
   ].join('\n')
   await conhecimento.upsertPage({
     scope: `projeto:${slug}`,
@@ -180,7 +180,7 @@ export async function definirPoliticaDoProjeto(entrada: {
     body: corpo,
     author: autor,
   })
-  return { resumo: `Política de ${entrada.repositorio.trim()} gravada por ${autor}. Autonomia: entrega humana. Isso não aprova portão.` }
+  return { resumo: `Política de ${entrada.repositorio.trim()} gravada por ${autor}. Autonomia: entrega humana. Isso não aprova gate.` }
 }
 
 export async function relatarMergeDoProjeto(entrada: {
@@ -210,7 +210,7 @@ export async function relatarMergeDoProjeto(entrada: {
     ...premissas.map((item) => `- ${item}`),
     `Confiança: ${entrada.confianca}.`,
     motivo ? `Motivo: ${motivo}` : 'Motivo: nenhum.',
-    'Este relato não aprova o portão beforeMerge. A política é entrega humana.',
+    'Este relato não aprova o gate beforeMerge. A política é entrega humana.',
   ].join('\n')
   await conhecimento.upsertPage({
     scope: `projeto:${slug}`,
@@ -220,7 +220,7 @@ export async function relatarMergeDoProjeto(entrada: {
     author: entrada.papel,
   })
   return {
-    resumo: `Relato de merge gravado em ${entrada.repositorio.trim()}. Confiança: ${entrada.confianca}. Isso não aprova o portão.`,
+    resumo: `Relato de merge gravado em ${entrada.repositorio.trim()}. Confiança: ${entrada.confianca}. Isso não aprova o gate.`,
   }
 }
 
@@ -241,7 +241,7 @@ export const definirPoliticaProjeto = createTool({
     repositorio: z.string(),
     autor: z.string().describe('Nome da pessoa que ditou a política.'),
     branch: z.string().optional().describe('Branch protegida. Sem valor, fica main.'),
-    checks: z.string().optional().describe('Checks que o cliente já usa. A fábrica não os executa.'),
+    checks: z.string().optional().describe('Checks que o cliente já usa. A Factory não os executa.'),
   }),
   outputSchema: z.object({ resumo: z.string() }),
   execute: async (entrada) => definirPoliticaDoProjeto(entrada),
@@ -249,7 +249,7 @@ export const definirPoliticaProjeto = createTool({
 
 export const relatarMerge = createTool({
   id: 'relatar-merge',
-  description: 'Grava interpretação, premissas e confiança sobre um pedido. Não aprova o portão de merge.',
+  description: 'Grava interpretação, premissas e confiança sobre um pedido. Não aprova o gate de merge.',
   inputSchema: z.object({
     repositorio: z.string(),
     papel: z.enum(['qa', 'chief-of-staff']),
