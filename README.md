@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/img/landing.png" alt="Página inicial da Super Factory: Conduza o pedido. Pare no portão." width="100%" />
+  <img src="docs/img/landing.png" alt="Página inicial da Super Factory: Conduza o pedido. Pare no gate." width="100%" />
 </p>
 
 # Super Factory
@@ -18,17 +18,17 @@ Agentes de código ficaram rápidos. Em minutos eles leem o pedido, escrevem a m
 
 Na maioria dos fluxos, a resposta é ninguém. Um teste que nunca rodou vira "passou". Um token colado no pedido acaba num log. Um "pode mandar" vago vira merge. A velocidade é real, e o julgamento some junto com o atrito.
 
-## A virada: o portão
+## A virada: o gate
 
 A Super Factory parte de uma regra simples: **evidência antes de confiança.**
 
-Os agentes fazem o trabalho que dá para observar: triagem, especificação, plano, checks internos, issue e pull request em rascunho. Mas o ciclo para em três portões, e cada um só abre com o nome de uma pessoa, a decisão dela e uma nota:
+Os agentes fazem o trabalho que dá para observar: triagem, especificação, plano, checks internos, issue e pull request em rascunho. Mas o ciclo para em três gates, e cada um só abre com o nome de uma pessoa, a decisão dela e uma nota:
 
 ```json
 { "aprovado": true, "aprovador": "Joana", "nota": "Pode seguir, sem merge." }
 ```
 
-Nenhum agente preenche isso. Nenhum papel aprova portão. O que muda o repositório passa por gente.
+Nenhum agente preenche isso. Nenhum papel aprova gate. O que muda o repositório passa por gente.
 
 ## Um pedido, do começo ao fim
 
@@ -42,19 +42,19 @@ Segunda-feira de manhã. A Joana abre a Factory com um problema concreto:
 
 **2. Especificação.** O pedido vira especificação registrada. Nada no repositório muda.
 
-**3. Primeiro portão: implementação.** O ciclo suspende. A Joana lê a especificação e libera.
+**3. Primeiro gate: implementação.** O ciclo suspende. A Joana lê a especificação e libera.
 
 **4. Plano.** O Architect separa donos e caminhos: Frontend escreve em `src/ui/`, Backend em `src/api/`. Se duas fatias cobrissem o mesmo lugar, o card pararia.
 
-**5. Verificação e revisão.** Os checks internos registram o que foi observado. O teste do produto fica `NOT_RUN`, porque a Factory não executa shell, build nem suíte, e não finge que executou. Security, somente leitura, procura segredo, push protegido e portão furado.
+**5. Verificação e revisão.** Os checks internos registram o que foi observado. O teste do produto fica `NOT_RUN`, porque a Factory não executa shell, build nem suíte, e não finge que executou. Security, somente leitura, procura segredo, push protegido e gate furado.
 
-**6. Segundo portão: merge.** O ciclo suspende de novo. A Joana libera o acompanhamento, e não um merge: a Factory não tem endpoint de merge.
+**6. Segundo gate: merge.** O ciclo suspende de novo. A Joana libera o acompanhamento, e não um merge: a Factory não tem endpoint de merge.
 
 **7. Entrega.** A Factory abre a issue no GitHub ou o work item no Azure DevOps e, se existir uma branch de trabalho, um pull request **em rascunho**.
 
-**8. Terceiro portão: release.** A Joana aceita o release. O desfecho é `aceito-com-ressalvas`: o release foi aceito e os testes do produto continuam com quem opera o repositório. Se ela recusasse, o card ficaria `retido` e nada seria publicado.
+**8. Terceiro gate: release.** A Joana aceita o release. O desfecho é `aceito-com-ressalvas`: o release foi aceito e os testes do produto continuam com quem opera o repositório. Se ela recusasse, o card ficaria `retido` e nada seria publicado.
 
-No fim, o relatório fecha com contexto, critérios, donos, evidência, portões e o próximo passo. Cada passo deixou uma linha na trilha.
+No fim, o relatório fecha com contexto, critérios, donos, evidência, gates e o próximo passo. Cada passo deixou uma linha na trilha.
 
 ### O quadro
 
@@ -63,7 +63,7 @@ No fim, o relatório fecha com contexto, critérios, donos, evidência, portões
 | `backlog` | Ainda não foi triado |
 | `ready` | Pedido claro ou bug com critério observável |
 | `build` · `qa` · `review` | Em andamento no ciclo |
-| `blocked` | Pedido vago, segredo, force-push ou portão recusado |
+| `blocked` | Pedido vago, segredo, force-push ou gate recusado |
 | `done` | Ciclo fechado |
 
 Cada onda leva no máximo 5 cards prontos, sem dois mexendo no mesmo lugar.
@@ -78,7 +78,7 @@ Cada onda leva no máximo 5 cards prontos, sem dois mexendo no mesmo lugar.
 | Backend | Escreve a API na implementação | `src/api/` |
 | Integrations | Lê e abre issue ou work item; não faz merge | GitHub, Azure DevOps |
 | QA | Lê a evidência; não transforma `NOT_RUN` em `PASS` | Só lê |
-| Security | Procura segredo, push protegido e portão furado | Só lê |
+| Security | Procura segredo, push protegido e gate furado | Só lê |
 | Docs | Diz o que foi observado e o que ficou de fora | Relatório |
 
 ## O que a Factory se recusa a fazer
@@ -128,7 +128,7 @@ Abra o workflow `sdlc` e preencha:
 | branchBase | `main` |
 | branchHead | Uma branch que já existe, se quiser um pull request rascunho. Vazio só abre o item de acompanhamento. |
 
-O workflow suspende três vezes. Em cada uma, retome com o JSON do portão. `aprovado: false` recusa: na implementação ou no merge, o card fecha bloqueado; no release, fica retido.
+O workflow suspende três vezes. Em cada uma, retome com o JSON do gate. `aprovado: false` recusa: na implementação ou no merge, o card fecha bloqueado; no release, fica retido.
 
 ---
 
@@ -139,10 +139,10 @@ O workflow suspende três vezes. Em cada uma, retome com o JSON do portão. `apr
 | Caminho | O que guarda |
 | --- | --- |
 | `src/super-factory/` | Landing, marca SF, agentes, ferramentas e o workflow `sdlc` |
-| `src/factory/` | Quadro, portões, trilha, guardas de segredo, GitHub e Azure DevOps |
+| `src/factory/` | Quadro, gates, trilha, guardas de segredo, GitHub e Azure DevOps |
 | `src/scripts/check.ts` | Checagem do ciclo, sem shell e sem suíte de produto |
 | `src/scripts/e2e.ts` | Teste de ponta a ponta, pela API e no navegador |
-| `factory.json` | Manifesto: estágios, três portões, oito papéis, evidência |
+| `factory.json` | Manifesto: estágios, três gates, oito papéis, evidência |
 
 ### Comandos
 
@@ -150,7 +150,7 @@ O workflow suspende três vezes. Em cada uma, retome com o JSON do portão. `apr
 | --- | --- |
 | `npm run dev` | Sobe a Factory em `localhost:4721` |
 | `npm run check` | Typecheck e checagem do ciclo |
-| `npm run e2e` | Sobe a Factory sem chave e sem token, conduz o `sdlc` pelos três portões, testa recusas, triagem e redação de segredo, e abre a landing e o Studio no navegador, inclusive em larguras de celular |
+| `npm run e2e` | Sobe a Factory sem chave e sem token, conduz o `sdlc` pelos três gates, testa recusas, triagem e redação de segredo, e abre a landing e o Studio no navegador, inclusive em larguras de celular |
 | `npm run limpar-segredos` | Troca segredos já gravados no `factory.db` por marcadores e roda `VACUUM` |
 | `npm run build` · `npm start` | Gera o servidor e sobe essa versão |
 
@@ -170,13 +170,13 @@ Os identificadores passam por uma lista fechada de caracteres. O token não entr
 
 Cada repositório tem a própria base, com as regras que uma pessoa daquele cliente ditou: escrita, pastas, branch, evidência, glossário. `lerBaseProjeto` lê; `registrarRegraProjeto` grava, e o autor é o nome dessa pessoa, nunca um papel da Factory. Base vazia continua vazia: o ciclo segue e ninguém inventa regra de cliente.
 
-`lerPoliticaProjeto` lê a política. Sem página gravada, a autonomia já é entrega humana. `definirPoliticaProjeto` registra a branch protegida e os checks que o cliente nomeou; a Factory não executa esses checks e não aceita merge automático. `relatarMerge` guarda interpretação, premissas e confiança (`confiante` ou `entrega`). Confiança não aprova o portão `beforeMerge`.
+`lerPoliticaProjeto` lê a política. Sem página gravada, a autonomia já é entrega humana. `definirPoliticaProjeto` registra a branch protegida e os checks que o cliente nomeou; a Factory não executa esses checks e não aceita merge automático. `relatarMerge` guarda interpretação, premissas e confiança (`confiante` ou `entrega`). Confiança não aprova o gate `beforeMerge`.
 
 ### Agentes, MCP e Studio
 
-Fale com o Chief of Staff para ver o quadro, abrir um card ou ler a trilha. Um card aberto pelo agente não atravessa os portões: isso só acontece no workflow `sdlc`. Security responde em leitura e recusa pedido de escrita.
+Fale com o Chief of Staff para ver o quadro, abrir um card ou ler a trilha. Um card aberto pelo agente não atravessa os gates: isso só acontece no workflow `sdlc`. Security responde em leitura e recusa pedido de escrita.
 
-O Studio mostra o servidor MCP `super-factory` e a Factory, com um modo para cada papel. O servidor fica em `/api/mcp/super-factory/mcp` e expõe as ferramentas, os oito agentes e o workflow `sdlc`. A Factory não tem `submit_plan` nem subagente: uma tarefa concluída nela não é um portão. Clientes de fora podem falar com esse endereço; um servidor HTTP adicional entra pelo Studio, na área de MCP, quando alguém cola a URL.
+O Studio mostra o servidor MCP `super-factory` e a Factory, com um modo para cada papel. O servidor fica em `/api/mcp/super-factory/mcp` e expõe as ferramentas, os oito agentes e o workflow `sdlc`. A Factory não tem `submit_plan` nem subagente: uma tarefa concluída nela não é um gate. Clientes de fora podem falar com esse endereço; um servidor HTTP adicional entra pelo Studio, na área de MCP, quando alguém cola a URL.
 
 ### Skills
 
@@ -185,6 +185,6 @@ As skills ficam em `skills/`, em leitura. A skill `super-factory` é o contrato 
 ## Créditos e escolhas
 
 - O quadro e a triagem (claro, nebuloso, bug) seguem o modelo operacional do super-board, licença MIT, Copyright 2026 Eric Tech, copiada em `skills/UPSTREAM-LICENSE`.
-- O manifesto em `factory.json` reescreve o núcleo (estágios, três portões humanos, oito papéis, evidência e escritas disjuntas) em vez de copiar os textos da Agent Factory.
+- O manifesto em `factory.json` reescreve o núcleo (estágios, três gates humanos, oito papéis, evidência e escritas disjuntas) em vez de copiar os textos da Agent Factory.
 - A Factory é construída sobre o [Mastra](https://mastra.ai). O nome aparece nos pacotes `@mastra/*` e no comando `mastra dev`; na tela, a marca é Super Factory.
 - Gerar código no repositório, executar a suíte, fazer merge, force-push ou deploy ficam de fora de propósito.
