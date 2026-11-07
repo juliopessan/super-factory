@@ -189,6 +189,43 @@ O workflow suspende três vezes. Em cada uma, retome com o JSON do gate. `aprova
 
 ---
 
+## Deploy numa VPS
+
+Um kit em `deploy/` instala a Super Factory numa VPS Ubuntu 22.04 ou 24.04 (Hostinger, DigitalOcean, Hetzner e afins), com o modo autônomo ligado:
+
+- **O que instala:** Node 22, Docker Engine (para os containers dos cards), Caddy, um usuário `factory` sem login de shell, o build da Factory e o serviço `super-factory` no `systemd`.
+- **Como protege:** a Factory escuta só em `127.0.0.1`. Na frente, o Caddy pede usuário e senha antes de qualquer página, com HTTPS. Sem domínio, o certificado é do próprio Caddy, e o navegador avisa uma vez. O firewall deixa abertas só as portas 22, 80 e 443.
+
+Na VPS, como root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/juliopessan/super-factory/main/deploy/instalar-vps.sh -o instalar-vps.sh
+```
+
+```bash
+sudo bash instalar-vps.sh
+```
+
+O script pergunta o usuário e a senha de acesso à Factory e, no fim, mostra o endereço (`https://IP-DA-VPS`). Depois, preencha as chaves do modo autônomo e reinicie:
+
+```bash
+sudo -u factory nano /opt/super-factory/.env
+```
+
+```bash
+sudo systemctl restart super-factory
+```
+
+Para atualizar com o que entrou no `main`:
+
+```bash
+sudo bash /opt/super-factory/deploy/atualizar.sh
+```
+
+Com domínio, troque o IP pelo domínio em `/etc/caddy/Caddyfile`, apague a linha `tls internal` e rode `sudo systemctl reload caddy`: o Caddy pede o certificado do Let's Encrypt sozinho. Para ver o log do serviço: `journalctl -u super-factory -f`.
+
+**Acesso à VPS.** Prefira chave SSH a senha de root: crie a chave no seu computador com `ssh-keygen -t ed25519`, cadastre a chave pública no painel da hospedagem e desligue `PasswordAuthentication` no `/etc/ssh/sshd_config`.
+
 ## Por dentro
 
 ### Onde está o código
