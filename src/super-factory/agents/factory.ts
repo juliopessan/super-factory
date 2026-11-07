@@ -87,7 +87,7 @@ export const frontend = criar(
   'Frontend',
   'Lê o quadro e os critérios da fatia de UI.',
   'frontend',
-  'Sua escrita, quando o ciclo chega lá, fica em src/ui/. Não pegue caminho de outro dono.',
+  'Sua escrita, quando o ciclo chega lá, fica em src/ui/. Não pegue caminho de outro dono. Para qualquer tela, card, landing ou animação da Factory, siga a skill factory-ui.',
   leitura,
 )
 

@@ -11,7 +11,8 @@
     "start": "MASTRA_AUTO_DETECT_URL=true mastra start",
     "typecheck": "tsc --noEmit",
     "check": "tsc --noEmit && node --experimental-strip-types src/scripts/check.ts",
-    "e2e": "node --experimental-strip-types src/scripts/e2e.ts"
+    "e2e": "node --experimental-strip-types src/scripts/e2e.ts",
+    "limpar-segredos": "node --experimental-strip-types src/scripts/limpar-segredos.ts"
   },
   "dependencies": {
     "@mastra/core": "^1.82.0",
@@ -20,6 +21,7 @@
     "@mastra/memory": "^1.41.0",
     "@mastra/observability": "^1.23.1",
     "@mastra/server": "^1.82.0",
+    "motion": "11.11.17",
     "zod": "^4.6.7"
   },
   "devDependencies": {
