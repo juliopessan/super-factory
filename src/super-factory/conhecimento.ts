@@ -50,7 +50,7 @@ function autorHumano(autor: string): string {
   if (nome.length < 2 || nome.length > 60 || !/^[\p{L}][\p{L}\s.'-]{1,59}$/u.test(nome)) {
     throw new Error('A regra precisa do nome de uma pessoa.')
   }
-  if (PAPEIS.has(nome.toLowerCase())) throw new Error('Um papel da mesa não registra regra de cliente.')
+  if (PAPEIS.has(nome.toLowerCase())) throw new Error('Um papel da Factory não registra regra de cliente.')
   return nome
 }
 
@@ -274,7 +274,7 @@ export const lerBaseProjeto = createTool({
 
 export const registrarRegraProjeto = createTool({
   id: 'registrar-regra-projeto',
-  description: 'Grava uma regra que uma pessoa ditou para o repositório dela. O autor é o nome dessa pessoa, nunca um papel da mesa.',
+  description: 'Grava uma regra que uma pessoa ditou para o repositório dela. O autor é o nome dessa pessoa, nunca um papel da Factory.',
   inputSchema: z.object({
     repositorio: z.string(),
     autor: z.string().describe('Nome da pessoa que ditou a regra.'),
