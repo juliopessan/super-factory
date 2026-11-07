@@ -46,6 +46,11 @@ assert.match(pagina, /passo-7/)
 assert.equal(pagina.includes('Mastra'), false)
 assert.equal(pagina.toLowerCase().includes('lorem'), false)
 {
+  // Sem --studio, o build de produção só tem a API e /studio mostra a página do servidor.
+  const pacote = JSON.parse(fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), 'package.json'), 'utf8')) as { scripts: Record<string, string> }
+  assert.match(pacote.scripts.build ?? '', /--studio/, 'o build precisa de --studio para o /studio abrir em produção')
+}
+{
   const { PARES_EN } = await import('../super-factory/landing-en.ts')
   const velhos = PARES_EN.filter(([pt]) => !pagina.includes(pt)).map(([pt]) => pt.slice(0, 80))
   assert.deepEqual(velhos, [], 'todo par de tradução precisa existir na página em português')
