@@ -84,33 +84,66 @@ systemctl daemon-reload
 systemctl enable super-factory
 systemctl restart super-factory
 
+passo "Portas do proxy"
+# Modelos de VPS com Docker, Coolify, Dokploy ou n8n já trazem um Traefik nas portas 80 e 443.
+# Nesse caso a Factory não mexe nele: o Caddy usa a 8443.
+dono_da_porta() { ss -ltnpH "sport = :$1" 2>/dev/null | grep -v caddy || true; }
+PORTA_HTTPS="${PORTA_HTTPS:-443}"
+if [ "$PORTA_HTTPS" = 443 ] && [ -n "$(dono_da_porta 443)" ]; then
+  echo "A porta 443 já é usada por outro serviço:"
+  dono_da_porta 443
+  PORTA_HTTPS=8443
+fi
+[ -z "$(dono_da_porta "$PORTA_HTTPS")" ] || falha "A porta $PORTA_HTTPS também está ocupada. Rode de novo com PORTA_HTTPS=outra_porta sudo -E bash instalar-vps.sh"
+REDIRECIONAR_HTTP=sim
+[ -z "$(dono_da_porta 80)" ] || REDIRECIONAR_HTTP=nao
+echo "Caddy em https://$IP:$PORTA_HTTPS"
+
 passo "Login do proxy"
-if ! grep -q basic_auth /etc/caddy/Caddyfile 2>/dev/null; then
-  read -r -p "Usuário para entrar na Factory: " LOGIN </dev/tty
-  [ -n "$LOGIN" ] || falha "O usuário não pode ficar vazio."
-  echo "Agora a senha (não aparece enquanto você digita):"
-  HASH="$(caddy hash-password </dev/tty)"
-  sed -e "s|__IP__|$IP|g" -e "s|__LOGIN__|$LOGIN|g" -e "s|__HASH__|$HASH|g" deploy/Caddyfile > /etc/caddy/Caddyfile
+# Refaz o Caddyfile quando ele não aponta para esta porta (primeira vez, ou porta trocada).
+if ! grep -qF "https://$IP:$PORTA_HTTPS {" /etc/caddy/Caddyfile 2>/dev/null; then
+  if [ -f /etc/caddy/super-factory.login ]; then
+    . /etc/caddy/super-factory.login
+    echo "Usando o login já guardado ($LOGIN)."
+  else
+    read -r -p "Usuário para entrar na Factory: " LOGIN </dev/tty
+    [ -n "$LOGIN" ] || falha "O usuário não pode ficar vazio."
+    echo "Agora a senha (não aparece enquanto você digita):"
+    HASH="$(caddy hash-password </dev/tty)"
+    printf 'LOGIN=%q\nHASH=%q\n' "$LOGIN" "$HASH" > /etc/caddy/super-factory.login
+    chmod 600 /etc/caddy/super-factory.login
+  fi
+  sed -e "s|__IP__|$IP|g" -e "s|__PORTA__|$PORTA_HTTPS|g" -e "s|__LOGIN__|$LOGIN|g" -e "s|__HASH__|$HASH|g" deploy/Caddyfile > /etc/caddy/Caddyfile
+  if [ "$REDIRECIONAR_HTTP" = sim ] && [ "$PORTA_HTTPS" = 443 ]; then
+    printf '\nhttp://%s {\n\tredir https://{host}{uri} permanent\n}\n' "$IP" >> /etc/caddy/Caddyfile
+  fi
   chmod 640 /etc/caddy/Caddyfile
   chown root:caddy /etc/caddy/Caddyfile
 fi
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 systemctl enable caddy
-systemctl reload caddy || systemctl restart caddy
+systemctl restart caddy
+sleep 2
+systemctl is-active --quiet caddy || falha "O Caddy não subiu. Veja: journalctl -u caddy -n 40"
 
 passo "Firewall: só SSH, 80 e 443"
 ufw allow OpenSSH >/dev/null
 ufw allow 80/tcp >/dev/null
 ufw allow 443/tcp >/dev/null
+ufw allow "$PORTA_HTTPS"/tcp >/dev/null
 ufw --force enable >/dev/null
 ufw status
 
 passo "Pronto"
-sleep 3
+for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:4721/ && break; sleep 2; done
 systemctl is-active --quiet super-factory || falha "O serviço não subiu. Veja: journalctl -u super-factory -n 80"
+curl -fsS -o /dev/null http://127.0.0.1:4721/ || falha "A Factory não respondeu em 127.0.0.1:4721. Veja: journalctl -u super-factory -n 80"
+CODIGO="$(curl -ks -o /dev/null -w '%{http_code}' "https://127.0.0.1:$PORTA_HTTPS/" -H "Host: $IP" || true)"
+[ "$CODIGO" = 401 ] || echo "Aviso: o Caddy respondeu $CODIGO em https://$IP:$PORTA_HTTPS (esperado 401, o pedido de login)."
+ENDERECO="https://$IP"; [ "$PORTA_HTTPS" = 443 ] || ENDERECO="https://$IP:$PORTA_HTTPS"
 cat <<FIM
 
-  A Factory está em https://$IP  (Studio em https://$IP/studio)
+  A Factory está em $ENDERECO  (Studio em $ENDERECO/studio)
   O navegador vai avisar que o certificado não é conhecido: é o certificado
   do próprio Caddy, porque ainda não há domínio. Aceite uma vez.
 
