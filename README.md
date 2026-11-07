@@ -248,6 +248,8 @@ sudo bash /opt/super-factory/deploy/atualizar.sh
 | `npm run limpar-segredos` | Troca segredos já gravados no `factory.db` por marcadores e roda `VACUUM` |
 | `npm run build` · `npm start` | Gera o servidor e sobe essa versão |
 
+`E2E_PROD=1 npm run e2e` roda o mesmo teste no build de produção (`npm run build` e `npm start`), que é o que roda na VPS e no container.
+
 O `npm run e2e` precisa da porta 4721 livre (ou `E2E_REUSE=1` para usar o servidor aberto) e do Playwright: `npm i -D playwright` e `npx playwright install chromium`.
 
 ### Credenciais

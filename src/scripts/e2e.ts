@@ -56,7 +56,13 @@ async function subirServidor(): Promise<ChildProcess | null> {
     'AZURE_DEVOPS_PAT', 'AZURE_DEVOPS_ORG', 'AZURE_DEVOPS_PROJECT',
   ]) delete env[nome]
   const log = fs.openSync(path.join(saida, 'server.log'), 'w')
-  const filho = spawn('npm', ['run', 'dev'], { cwd: raiz, env, stdio: ['ignore', log, log], detached: true })
+  // E2E_PROD=1 testa o que roda na VPS: o build de produção, com `npm start`.
+  const producao = process.env.E2E_PROD === '1'
+  if (producao) {
+    console.log('Modo produção: construindo (npm run build)…')
+    execSync('npm run build', { cwd: raiz, env, stdio: ['ignore', log, log] })
+  }
+  const filho = spawn('npm', producao ? ['start'] : ['run', 'dev'], { cwd: raiz, env, stdio: ['ignore', log, log], detached: true })
   const limite = Date.now() + 120_000
   while (Date.now() < limite) {
     if (await respondendo()) return filho
@@ -210,6 +216,7 @@ async function testarNavegador(): Promise<void> {
     await pagina.waitForTimeout(1500)
     conferir('studio: responde 200', studio?.status() === 200)
     const marcaStudio = await pagina.evaluate(() => document.title + ' ' + document.body.innerText)
+    conferir('studio: é a interface (menu Agents e Workflows), não a página do servidor', /Agents/.test(marcaStudio) && /Workflows/.test(marcaStudio) && !/(Super Factory|Mastra) Server/.test(marcaStudio))
     conferir('studio: sem a marca Mastra visível', !/mastra/i.test(marcaStudio), (marcaStudio.match(/.{0,40}mastra.{0,40}/i) || [''])[0])
     conferir('studio: menu chama o grupo de Factory, não Primitives', !/\bPrimitives\b/.test(marcaStudio) && /\bFactory\b/.test(marcaStudio))
     await pagina.screenshot({ path: path.join(saida, 'studio.png') })
