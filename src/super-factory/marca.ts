@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import { marcarSegredos } from '../factory/guards.ts'
+import { paginaConfiguracoes, tratarChaves } from './configuracoes.ts'
 import { paginaInicial } from './landing.ts'
 
 const ICONE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
@@ -67,9 +68,53 @@ const SCRIPT = `(function () {
     css.textContent = '[data-sf-verbo]::before{content:"✻";display:inline-block;margin-right:.45em;color:#ff8c00;animation:sf-gira 1.6s linear infinite}@keyframes sf-gira{to{transform:rotate(360deg)}}@media (prefers-reduced-motion: reduce){[data-sf-verbo]::before{animation:none}}'
     document.head.appendChild(css)
   }
+
+  // Botão "Chaves e acessos": abre /configuracoes num popup dentro do Studio.
+  function popupDeChaves() {
+    if (document.getElementById('sf-chaves-fundo')) return
+    var tema = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    var fundo = document.createElement('div')
+    fundo.id = 'sf-chaves-fundo'
+    fundo.setAttribute('role', 'dialog')
+    fundo.setAttribute('aria-modal', 'true')
+    fundo.setAttribute('aria-label', 'Chaves e acessos')
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px'
+    var caixa = document.createElement('iframe')
+    caixa.src = '/configuracoes?embed=1&tema=' + tema
+    caixa.title = 'Chaves e acessos'
+    caixa.style.cssText = 'width:min(680px,100%);height:min(780px,100%);border:1px solid rgba(255,255,255,.18);border-radius:20px;background:' + (tema === 'dark' ? '#050505' : '#f4f4f2')
+    fundo.appendChild(caixa)
+    var anterior = document.activeElement
+    function fechar() {
+      window.removeEventListener('keydown', tecla, true)
+      window.removeEventListener('message', mensagem)
+      fundo.remove()
+      if (anterior && anterior.focus) anterior.focus()
+    }
+    function tecla(e) { if (e.key === 'Escape') { e.stopPropagation(); fechar() } }
+    function mensagem(e) { if (e.origin === location.origin && e.data && e.data.sf === 'fechar-chaves') fechar() }
+    fundo.addEventListener('mousedown', function (e) { if (e.target === fundo) fechar() })
+    window.addEventListener('keydown', tecla, true)
+    window.addEventListener('message', mensagem)
+    document.body.appendChild(fundo)
+    caixa.addEventListener('load', function () { caixa.focus() })
+  }
+  function botaoDeChaves() {
+    var noStudio = location.pathname === '/studio' || location.pathname.indexOf('/studio/') === 0
+    if (document.getElementById('sf-chaves-botao') || !noStudio) return
+    var b = document.createElement('button')
+    b.id = 'sf-chaves-botao'
+    b.type = 'button'
+    b.textContent = '✻ Chaves e acessos'
+    b.setAttribute('aria-haspopup', 'dialog')
+    b.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147482000;padding:9px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:#141414;color:#ededed;font:500 13px ui-sans-serif,system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.35)'
+    b.addEventListener('click', popupDeChaves)
+    document.body.appendChild(b)
+  }
   function ligar() {
     estilo()
-    new MutationObserver(marcar).observe(document.documentElement, { subtree: true, childList: true, characterData: true })
+    botaoDeChaves()
+    new MutationObserver(function () { marcar(); botaoDeChaves() }).observe(document.documentElement, { subtree: true, childList: true, characterData: true })
     marcar()
   }
   if (document.body) ligar()
@@ -142,6 +187,12 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   const caminho = c.req.path
   await limparEntrada(c.req)
   if (caminho === '/motion.js') return motionJs()
+  if (caminho === '/configuracoes' || caminho === '/configuracoes/') {
+    const consulta = new URL(c.req.raw.url).searchParams
+    const tema = consulta.get('tema')
+    return paginaConfiguracoes({ embed: consulta.get('embed') === '1', tema: tema === 'dark' || tema === 'light' ? tema : null })
+  }
+  if (caminho === '/configuracoes/chaves') return tratarChaves(c.req.raw)
   if (caminho === '/sf.svg' || caminho.endsWith('/sf.svg') || caminho.endsWith('/mastra-dark-tile.svg') || caminho.endsWith('/mastra-light-tile.svg')) {
     return icone()
   }

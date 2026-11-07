@@ -95,6 +95,9 @@ passo "Arquivo .env"
 if [ ! -f .env ]; then
   sudo -u "$USUARIO" cp .env.example .env
 fi
+if ! grep -qE '^SUPER_FACTORY_MASTER_KEY=.+' .env; then
+  printf '\nSUPER_FACTORY_MASTER_KEY=%s\n' "$(openssl rand -base64 32)" >> .env
+fi
 chmod 600 .env
 chown "$USUARIO:$USUARIO" .env
 

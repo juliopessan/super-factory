@@ -7,6 +7,7 @@ import { KNOWLEDGE_ROUTES } from '@mastra/server/server-adapter'
 import { Observability, MastraStorageExporter, SensitiveDataFilter } from '@mastra/observability'
 
 import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
+import { carregarChavesSalvas } from '../factory/chaves.ts'
 import { marcaSuperFactory } from './marca.ts'
 import { conhecimento, definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, registrarRegraProjeto, relatarMerge } from './conhecimento.ts'
 import { habilidades } from './habilidades.ts'
@@ -31,6 +32,9 @@ import { autonomoWorkflow } from './workflows/autonomo.ts'
 import { sdlcWorkflow } from './workflows/sdlc.ts'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+
+// Chaves salvas pelo painel (/configuracoes) valem mais que o .env.
+carregarChavesSalvas()
 const storage = new LibSQLStore({
   id: 'super-factory-storage',
   // SUPER_FACTORY_DB aponta o banco para um volume (container); sem ela, fica na pasta do projeto.

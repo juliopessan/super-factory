@@ -41,6 +41,9 @@ fi
 
 passo "Arquivo .env (chaves do modo autônomo)"
 [ -f .env ] || cp .env.example .env
+if ! grep -qE '^SUPER_FACTORY_MASTER_KEY=.+' .env; then
+  printf '\nSUPER_FACTORY_MASTER_KEY=%s\n' "$(openssl rand -base64 32)" >> .env
+fi
 chmod 600 .env
 
 passo "Login da Factory"
