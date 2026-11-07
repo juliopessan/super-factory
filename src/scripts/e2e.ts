@@ -192,6 +192,8 @@ async function testarNavegador(): Promise<void> {
     await pagina.waitForLoadState('networkidle')
     await pagina.waitForTimeout(1500)
     conferir('studio: responde 200', studio?.status() === 200)
+    const marcaStudio = await pagina.evaluate(() => document.title + ' ' + document.body.innerText)
+    conferir('studio: sem a marca Mastra visível', !/mastra/i.test(marcaStudio), (marcaStudio.match(/.{0,40}mastra.{0,40}/i) || [''])[0])
     await pagina.screenshot({ path: path.join(saida, 'studio.png') })
     conferir('navegador: sem erro de JavaScript', erros.length === 0, erros.slice(0, 3).join(' | '))
   } finally {

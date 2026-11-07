@@ -29,7 +29,7 @@ const { criarWorkItemAzure, listarWorkItemsAzure } = await import('../factory/az
 const { MANIFEST, validarManifesto } = await import('../factory/manifest.ts')
 const { aprovar, avaliarMerge, iniciar, observado } = await import('../factory/pipeline.ts')
 const { chiefOfStaff, security } = await import('../super-factory/agents/factory.ts')
-const { planejarMesa } = await import('../super-factory/factory-model.ts')
+const { planejarFactory } = await import('../super-factory/factory-model.ts')
 const { evidenciaScorer, portoesScorer, relatorioScorer } = await import('../super-factory/scorers/factory.ts')
 const { sdlcWorkflow } = await import('../super-factory/workflows/sdlc.ts')
 const { paginaInicial } = await import('../super-factory/landing.ts')
@@ -45,15 +45,15 @@ assert.equal(pagina.toLowerCase().includes('lorem'), false)
 assert.match(fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), 'src/super-factory/index.ts'), 'utf8'), /studioBase:\s*'\/studio'/)
 assert.match(fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), 'src/super-factory/index.ts'), 'utf8'), /KNOWLEDGE_ROUTES/)
 const { servidorMcp } = await import('../super-factory/mcp.ts')
-const { criarMesa } = await import('../super-factory/mesa.ts')
+const { criarFactory } = await import('../super-factory/controle.ts')
 assert.equal(servidorMcp.id, 'super-factory')
 const ferramentasMcp = await Promise.resolve(servidorMcp.getToolListInfo())
 const nomesMcp = ferramentasMcp.tools.map((ferramenta) => ferramenta.name)
 assert.ok(nomesMcp.some((nome) => nome.includes('status') || nome.includes('quadro')))
 assert.equal(nomesMcp.some((nome) => /shell|spawn|exec/.test(nome)), false)
-const mesaCheck = criarMesa(new LibSQLStore({ id: 'mesa-check', url: `file:${path.join(diretorio, 'mesa.db')}` }))
-assert.equal(mesaCheck.listModes().length, 8)
-const seguranca = mesaCheck.listModes().find((modo) => modo.id === 'security')
+const factoryCheck = criarFactory(new LibSQLStore({ id: 'factory-check', url: `file:${path.join(diretorio, 'factory-check.db')}` }))
+assert.equal(factoryCheck.listModes().length, 8)
+const seguranca = factoryCheck.listModes().find((modo) => modo.id === 'security')
 assert.ok(seguranca)
 assert.equal(seguranca.availableTools?.includes('abrirCard'), false)
 assert.equal(seguranca.availableTools?.includes('criarIssueGithub'), false)
@@ -131,7 +131,7 @@ await assert.rejects(() =>
     confianca: 'entrega',
   }),
 )
-const qaModo = mesaCheck.listModes().find((modo) => modo.id === 'qa')
+const qaModo = factoryCheck.listModes().find((modo) => modo.id === 'qa')
 assert.equal(qaModo?.availableTools?.includes('relatarMerge'), true)
 const { conduzirInstalacao } = await import('../super-factory/instalacao.ts')
 const primeiro = conduzirInstalacao()
@@ -268,14 +268,14 @@ const forca = iniciar({
 })
 assert.match(forca.motivo ?? '', /force-push/)
 
-const mesa = new Mastra({
+const factory = new Mastra({
   agents: { chiefOfStaff, security },
   workflows: { sdlc: sdlcWorkflow },
   storage: new LibSQLStore({ id: 'factory-check', url: `file:${path.join(diretorio, 'check.db')}` }),
 })
 
 async function conduzir(input: PedidoBruto, decisoes: Record<string, { aprovado: boolean; aprovador: string; nota: string }>) {
-  const run = await mesa.getWorkflow('sdlc').createRun({ disableScorers: true })
+  const run = await factory.getWorkflow('sdlc').createRun({ disableScorers: true })
   let atual = comoCiclo(await run.start({ inputData: input }))
   const vistos: string[] = []
   while (atual.status === 'suspended') {
@@ -439,12 +439,12 @@ assert.equal(JSON.stringify(criado).includes(pat), false)
 const amostra = await listarWorkItemsAzure('fabrica', { fetch: fetchAzure })
 assert.equal(amostra.modo, 'fixture')
 
-const saudacao = planejarMesa({ userText: 'oi', systemText: 'PAPEL: chief-of-staff' })
+const saudacao = planejarFactory({ userText: 'oi', systemText: 'PAPEL: chief-of-staff' })
 assert.equal(saudacao.kind, 'text')
-const quadro = planejarMesa({ userText: 'como está o quadro', systemText: 'PAPEL: chief-of-staff' })
+const quadro = planejarFactory({ userText: 'como está o quadro', systemText: 'PAPEL: chief-of-staff' })
 assert.equal(quadro.kind, 'tool')
 if (quadro.kind === 'tool') assert.equal(quadro.toolName, 'statusQuadro')
-const bloqueio = planejarMesa({
+const bloqueio = planejarFactory({
   userText:
     'Filtro de datas da API\nrepo: acme/widgets\n- O endpoint devolve 400 quando o fim é anterior ao início.',
   systemText: 'PAPEL: security\nVocê é somente leitura.',
@@ -466,7 +466,7 @@ for (const arquivo of [...listarFontes(path.join(raiz, 'src/factory')), ...lista
   assert.equal(/\bspawn\(/.test(texto), false, arquivo)
 }
 
-const agente = mesa.getAgent('chiefOfStaff')
+const agente = factory.getAgent('chiefOfStaff')
 const resposta = await agente.generate('como está o quadro', { memory: { resource: 'check', thread: `check-${Date.now()}` } })
 assert.match(resposta.text, /ready/)
 assert.match(resposta.text, /C-1/)

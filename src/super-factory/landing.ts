@@ -5,410 +5,454 @@ export function paginaInicial(): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Super Factory</title>
-  <meta name="description" content="A Factory em que um pedido vira card e só atravessa implementação, merge e release quando uma pessoa libera." />
+  <meta name="description" content="Na Factory, um pedido vira card e só atravessa implementação, merge e release quando uma pessoa libera." />
   <link rel="icon" href="/sf.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Geist:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400&display=swap" rel="stylesheet" />
   <style>
+    /* Tokens do design system Codos. Fraunces substitui a GT Alpina Typewriter (licença de teste). */
     :root {
-      --bg: #080808;
-      --panel: #0f0f0f;
-      --panel-2: #121212;
-      --ink: #f0f0f0;
-      --muted: #939393;
-      --line: #1c1c1c;
-      --line-2: #242424;
-      --orange: #fdac53;
-      --orange-2: #e0993f;
-      --orange-ink: #1a1208;
-      --green: #7aff78;
-      --red: #ff4931;
-      --sans: "Geist", "Avenir Next", "Segoe UI", sans-serif;
-      --mono: "Geist Mono", ui-monospace, monospace;
+      --ground-pink: #f9def2;
+      --ground-lilac: #eae3ee;
+      --ground-peach: #f3d9b8;
+      --ground-mint: #e6eee3;
+      --bg: #ebe1f0;
+      --panel: #c8bfcc;
+      --panel-tab: #b9afbd;
+      --chip: #ffffff;
+      --text: #1a1a1a;
+      --muted: #3a3a3a;
+      --faint: #1a1a1a8c;
+      --border: #1a1a1a1f;
+      --border-strong: #1a1a1a38;
+      --hairline: #1a1a1a14;
+      --accent: #ff8c00;
+      --accent-ring: #ff8c001f;
+      --sun: #ffe100;
+      --signal: #00c22d;
+      --success: #2c5a44;
+      --warning: #9a6a00;
+      --danger: #7a3a1c;
+      --footer-bg: #171619;
+      --footer-text: #eee8f1;
+      --veil: #1a1a1a73;
+      --headline: "GT Alpina Typewriter", "Fraunces", Georgia, serif;
+      --body: "DM Mono", "Geist Mono", ui-monospace, monospace;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 16px;
+      --gutter: clamp(1rem, 5.6vw, 5.6rem);
+      --ease: cubic-bezier(.22, 1, .36, 1);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ground-pink: #000000; --ground-lilac: #000000; --ground-peach: #000000; --ground-mint: #000000;
+        --bg: #000000; --panel: #ffffff0a; --panel-tab: #ffffff14; --chip: #ffffff14;
+        --text: #ffffff; --muted: #9ca3af; --faint: #ffffff8c;
+        --border: #ffffff1a; --border-strong: #ffffff38; --hairline: #ffffff0f;
+        --accent: #f97316; --accent-ring: #f9731638;
+        --success: #4ade80; --warning: #fbbf24; --danger: #f87171;
+        --footer-bg: #0b0b0c; --veil: #000000a6;
+      }
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
     body {
       margin: 0;
       background: var(--bg);
-      color: var(--ink);
-      font-family: var(--sans);
-      font-size: 16px;
-      line-height: 1.5;
+      color: var(--text);
+      font-family: var(--body);
+      font-size: clamp(.9375rem, .9rem + .2vw, 1.0625rem);
+      line-height: 1.6;
     }
-    a { color: inherit; text-decoration: none; }
-    button, .btn { font-family: inherit; }
-    .banner {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      align-items: center;
-      min-height: 36px;
-      padding: 8px 16px;
-      background: #101010;
-      border-bottom: 1px solid var(--line);
-      color: var(--muted);
-      font-size: 13px;
-      text-align: center;
-    }
-    .banner b { color: var(--ink); font-weight: 500; }
-    .banner a { color: var(--orange); }
-    .top {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      background: rgba(8, 8, 8, 0.86);
-      backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--line);
-    }
-    .wrap { width: min(1160px, calc(100% - 40px)); margin: 0 auto; }
-    .top-inner { display: flex; align-items: center; gap: 22px; min-height: 64px; }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.03em; }
-    .mark {
-      width: 28px; height: 28px; border-radius: 7px;
-      display: grid; place-items: center;
-      background: var(--orange); color: var(--orange-ink);
-      font-size: 12px; font-weight: 600;
-    }
-    nav { display: flex; gap: 18px; }
-    nav a { color: var(--muted); font-size: 14px; }
-    nav a:hover { color: var(--ink); }
+    a { color: inherit; }
+    :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: var(--radius-sm); }
+    .wrap { width: 100%; max-width: 90rem; margin: 0 auto; padding: 0 var(--gutter); }
+    h1, h2, h3, h4 { font-family: var(--headline); font-weight: 400; margin: 0; }
+
+    .top { position: sticky; top: 0; z-index: 5; background: var(--ground-pink); border-bottom: 1px solid var(--border); }
+    .top-inner { display: flex; align-items: center; gap: 24px; min-height: 68px; }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--headline); font-size: 21px; }
+    .mark { width: 28px; height: 28px; border-radius: var(--radius-md); display: grid; place-items: center; background: var(--accent); color: #1a1a1a; font-family: var(--body); font-size: 12px; font-weight: 500; }
+    nav { display: flex; gap: 22px; }
+    nav a { color: var(--muted); font-size: 14px; text-decoration: none; }
+    nav a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 4px; }
     .nav-cta { margin-left: auto; display: flex; gap: 8px; }
+
     .btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-height: 36px; padding: 0 14px; border-radius: 8px;
-      border: 1px solid transparent; font-size: 14px; font-weight: 500;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      min-height: 40px; padding: 0 16px; border-radius: var(--radius-md);
+      border: 1px solid transparent; font-family: var(--body); font-size: 14px; letter-spacing: .005em;
+      text-decoration: none; cursor: pointer; transition: background .15s var(--ease), border-color .15s var(--ease);
     }
-    .btn.solid { background: var(--orange); color: var(--orange-ink); }
-    .btn.solid:hover { background: var(--orange-2); }
-    .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
-    .btn.ghost:hover { border-color: #3a3a3a; }
-    .hero { padding: 72px 0 28px; max-width: 820px; }
-    .kicker {
-      margin: 0 0 18px;
-      font-family: var(--mono);
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--orange);
+    .btn.solid { background: var(--text); color: var(--bg); }
+    .btn.solid:hover { background: var(--muted); }
+    .btn.ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
+    .btn.ghost:hover { border-color: var(--text); }
+    .btn.lg { min-height: 52px; padding: 0 22px; font-size: clamp(.9375rem, .8rem + .4vw, 1.125rem); }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 4px 10px; border-radius: var(--radius-sm); background: var(--chip); color: var(--text);
+      font-size: 12px; letter-spacing: .1em; line-height: 1.45;
     }
-    h1 {
-      margin: 0;
-      font-size: clamp(46px, 6.2vw, 76px);
-      font-weight: 500;
-      letter-spacing: -0.048em;
-      line-height: 0.96;
-    }
-    h1 em { font-style: normal; color: var(--orange); }
-    .lead { margin: 22px 0 0; max-width: 58ch; color: var(--muted); font-size: 18px; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
-    .frame {
-      margin: 28px 0 8px;
-      border: 1px solid var(--line-2);
-      border-radius: 16px;
-      background: #0c0c0c;
-      overflow: hidden;
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
-    }
-    .frame-bar {
-      display: flex; align-items: center; gap: 10px;
-      min-height: 44px; padding: 0 14px;
-      border-bottom: 1px solid var(--line);
-      color: var(--muted);
-      font-family: var(--mono);
-      font-size: 12px;
-    }
+    .dot { width: 7px; height: 7px; border-radius: 9999px; background: var(--signal); display: inline-block; }
+    .dot.hold { background: var(--accent); }
+
+    .ground-pink { background: var(--ground-pink); }
+    .ground-lilac { background: var(--ground-lilac); }
+    .ground-peach { background: var(--ground-peach); }
+    .ground-mint { background: var(--ground-mint); }
+    section { padding: clamp(56px, 7vw, 100px) 0; }
+
+    .hero { padding-top: clamp(56px, 8vw, 112px); padding-bottom: clamp(40px, 5vw, 64px); }
+    .hero h1 { font-size: clamp(2.5rem, .5rem + 6.2vw, 7rem); line-height: 1; letter-spacing: -.02em; max-width: 14ch; margin-top: 24px; }
+    .marca { background: var(--sun); color: #1a1a1a; padding: 0 .08em; }
+    .intro { margin: 28px 0 0; max-width: 46ch; color: var(--muted); font-size: clamp(1.0625rem, .85rem + .8vw, 1.5rem); line-height: 1.4; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+
+    .panel { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--panel); overflow: hidden; }
+    .panel-bar { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 14px; background: var(--panel-tab); font-size: 12px; letter-spacing: .1em; color: var(--muted); }
     .dots { display: flex; gap: 6px; }
-    .dots i { width: 8px; height: 8px; border-radius: 99px; background: #2b2b2b; display: block; }
-    .dots i:first-child { background: var(--orange); }
-    .frame-grid { display: grid; grid-template-columns: 210px 1fr 280px; min-height: 360px; }
-    .tree, .evals { background: var(--panel); }
-    .tree { border-right: 1px solid var(--line); padding: 14px 8px; }
-    .evals { border-left: 1px solid var(--line); padding: 14px; }
-    .file, .trace-row, .score {
-      display: flex; justify-content: space-between; gap: 12px; align-items: center;
-    }
-    .file { padding: 7px 10px; border-radius: 8px; color: var(--muted); font-size: 13px; }
-    .file.on { background: #171717; color: var(--ink); }
-    .file span { font-family: var(--mono); font-size: 11px; color: var(--orange); }
-    .trace { padding: 8px 0; }
-    .trace-row { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
-    .trace-row small, .score small, .file small { color: var(--muted); font-family: var(--mono); font-size: 12px; }
-    .wait { background: rgba(253, 172, 83, 0.08); }
-    .wait strong { color: var(--orange); font-weight: 500; }
-    .evals h2, .tree p { margin: 4px 10px 12px; font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
-    .score { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
-    .ok { color: var(--green); font-family: var(--mono); font-size: 12px; }
-    .hold { color: var(--orange); font-family: var(--mono); font-size: 12px; }
-    section { padding: 72px 0; }
-    .section-kicker { margin: 0 0 10px; color: var(--muted); font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
-    h3 { margin: 0 0 12px; font-size: clamp(32px, 4vw, 48px); font-weight: 500; letter-spacing: -0.04em; line-height: 1.05; }
-    .intro { margin: 0 0 28px; max-width: 64ch; color: var(--muted); }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .card, .role, .limit {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 20px;
-    }
-    .card em, .role small { font-family: var(--mono); font-style: normal; font-size: 12px; color: var(--orange); }
-    .card h4, .role h4, .limit h4 { margin: 10px 0 8px; font-size: 18px; font-weight: 500; letter-spacing: -0.02em; }
-    .card p, .role p, .limit p { margin: 0; color: var(--muted); }
-    .rail { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-    .stage { min-height: 120px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); padding: 14px; }
-    .stage b { display: block; margin-bottom: 28px; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--orange); }
+    .dots i { width: 9px; height: 9px; border-radius: 9999px; border: 1px solid var(--border-strong); display: block; }
+    .panel-grid { display: grid; grid-template-columns: 240px 1fr 280px; }
+    .panel-grid > * { min-width: 0; padding: 14px; }
+    .panel-grid > * + * { border-left: 1px solid var(--border); }
+    .panel h2 { margin: 2px 4px 10px; font-family: var(--body); font-size: 12px; letter-spacing: .1em; color: var(--muted); }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--hairline); font-size: 14px; }
+    .row:last-child { border-bottom: 0; }
+    .row small { color: var(--muted); font-size: 12px; }
+    .row.on { background: var(--chip); border-radius: var(--radius-sm); border-bottom-color: transparent; padding: 9px 10px; }
+    .row.wait { background: var(--sun); color: #1a1a1a; border-radius: var(--radius-sm); padding: 9px 10px; }
+    .row.wait small { color: #3a3a3a; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: clamp(40px, 5vw, 64px); }
+    .metric { padding: 24px 20px 22px 0; }
+    .metric + .metric { border-left: 1px solid var(--border); padding-left: 20px; }
+    .metric b { display: block; font-family: var(--headline); font-weight: 400; font-size: clamp(2.75rem, .8rem + 4vw, 5rem); line-height: .95; }
+    .metric span { display: block; margin-top: 10px; color: var(--muted); font-size: 14px; }
+
+    .eyebrow { margin: 0 0 16px; font-size: 12px; letter-spacing: .1em; color: var(--muted); }
+    .section-head { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(24px, 5vw, 80px); align-items: end; margin-bottom: clamp(32px, 4vw, 56px); }
+    .section-head h2 { font-size: clamp(1.75rem, 1rem + 2.2vw, 3.25rem); line-height: 1.08; letter-spacing: -.01em; }
+    .section-head p { margin: 0; color: var(--muted); max-width: 52ch; }
+
+    .list { border-top: 1px solid var(--border-strong); }
+    .item { display: grid; grid-template-columns: 72px minmax(0, 4fr) minmax(0, 6fr); gap: 24px; padding: 24px 0; border-bottom: 1px solid var(--hairline); align-items: baseline; }
+    .item > span { font-size: 12px; letter-spacing: .1em; color: var(--muted); }
+    .item h3 { font-size: clamp(1.25rem, .9rem + .9vw, 1.75rem); line-height: 1.2; }
+    .item p { margin: 0; color: var(--muted); }
+
+    .rail { display: grid; grid-template-columns: repeat(9, auto); align-items: stretch; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .stage { min-width: 128px; padding: 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--chip); }
+    .stage b { display: block; margin-bottom: 30px; font-weight: 400; font-size: 12px; letter-spacing: .1em; color: var(--muted); }
+    .stage h3 { font-size: 19px; line-height: 1.2; }
+    .gate { display: flex; flex-direction: column; justify-content: space-between; min-width: 104px; padding: 14px; border-radius: var(--radius-lg); background: var(--sun); color: #1a1a1a; }
+    .gate b { font-weight: 400; font-size: 12px; letter-spacing: .1em; }
+    .gate span { font-size: 13px; line-height: 1.35; }
+    .legend { margin: 18px 0 0; font-size: 14px; color: var(--muted); }
+
     .cols { display: flex; flex-wrap: wrap; gap: 8px; }
-    .cols span { border: 1px solid var(--line-2); border-radius: 999px; padding: 7px 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
-    .cols .hot { background: var(--orange); color: var(--orange-ink); border-color: transparent; }
-    .cols .stop { color: var(--red); border-color: rgba(255, 73, 49, 0.45); }
-    .roles { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 12px; }
-    .role.wide { grid-column: span 2; background: linear-gradient(180deg, rgba(253, 172, 83, 0.1), var(--panel) 42%); }
-    .limits { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 28px; align-items: start; }
-    .limits > * { min-width: 0; }
-    .limit-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .cols span { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px; letter-spacing: .05em; background: var(--chip); }
+    .cols .hot { background: var(--text); color: var(--bg); border-color: transparent; }
+    .cols .stop { color: var(--danger); }
+    .cols .stop::before { content: "×"; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-weight: 400; font-size: 12px; letter-spacing: .1em; color: var(--muted); padding: 0 16px 12px 0; border-bottom: 1px solid var(--border-strong); }
+    td { padding: 16px 16px 16px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; color: var(--muted); }
+    td:first-child { color: var(--text); font-family: var(--headline); font-size: 20px; white-space: nowrap; }
+    .lado { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); overflow: hidden; background: var(--chip); }
+    .lado > div { padding: clamp(20px, 3vw, 32px); min-width: 0; }
+    .lado > div + div { border-left: 1px solid var(--border-strong); background: var(--sun); color: #1a1a1a; }
+    .lado h3 { font-size: clamp(1.375rem, .9rem + 1.2vw, 1.875rem); margin-bottom: 16px; }
+    .lado ul { margin: 0; padding: 0; list-style: none; }
+    .lado li { padding: 12px 0; border-top: 1px solid var(--hairline); }
+    .lado > div + div li { border-top-color: #1a1a1a1f; }
+    .lado > div + div code { background: #ffffffb3; color: #1a1a1a; border-color: #1a1a1a1f; }
     pre {
-      margin: 12px 0 0; padding: 16px; border-radius: 12px;
-      background: #0c0c0c; border: 1px solid var(--line);
-      overflow: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: #f0f0f0;
+      margin: 24px 0 0; padding: 16px; border-radius: var(--radius-lg);
+      background: var(--chip); border: 1px solid var(--border-strong);
+      overflow: auto; font-family: var(--body); font-size: 13px; line-height: 1.6; color: var(--text);
     }
-    .key { color: var(--orange); }
-    footer {
-      border-top: 1px solid var(--line);
-      padding: 28px 0 40px;
-      color: var(--muted);
-      display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
-    }
-    footer a { color: var(--ink); }
-    .guia-alvo {
-      position: relative;
-      z-index: 40;
-      border-radius: 16px;
-      transform: scale(1.035);
-      transform-origin: center top;
-      box-shadow: 0 0 0 3px var(--orange), 0 24px 70px rgba(0, 0, 0, 0.55);
-      transition: transform 0.35s ease;
-    }
-    .guia-velo {
-      position: fixed;
-      inset: 0;
-      z-index: 30;
-      background: rgba(0, 0, 0, 0.72);
-    }
+    .key { color: var(--danger); }
+    .nota { margin: 16px 0 0; font-size: 14px; color: var(--muted); max-width: 70ch; }
+
+    .steps { counter-reset: passo; border-top: 1px solid var(--border-strong); }
+    .step { display: grid; grid-template-columns: 72px minmax(0, 3fr) minmax(0, 7fr); gap: 24px; padding: 22px 0; border-bottom: 1px solid var(--hairline); align-items: baseline; border-radius: var(--radius-sm); }
+    .step > span { font-family: var(--headline); font-size: clamp(1.75rem, 1rem + 1.4vw, 2.5rem); line-height: 1; }
+    .step h3 { font-size: clamp(1.25rem, .9rem + .9vw, 1.6rem); }
+    .step p { margin: 0; color: var(--muted); }
+    code { font-family: var(--body); background: var(--chip); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1px 6px; font-size: .92em; color: var(--text); overflow-wrap: anywhere; }
+    .step.opcional > span { color: var(--faint); }
+
+    footer { background: var(--footer-bg); color: var(--footer-text); padding: 48px 0 56px; }
+    .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+    .foot .brand { color: var(--footer-text); }
+    .foot a { color: var(--footer-text); text-underline-offset: 4px; }
+
+    .guia-alvo { position: relative; z-index: 40; outline: 2px solid var(--text); outline-offset: 6px; background: var(--bg); border-radius: var(--radius-lg); transition: outline-offset .25s var(--ease); }
+    .guia-velo { position: fixed; inset: 0; z-index: 30; background: var(--veil); }
     .guia-painel {
-      position: fixed;
-      z-index: 50;
-      left: 50%;
-      bottom: 20px;
-      transform: translateX(-50%);
-      width: min(560px, calc(100% - 24px));
-      background: #121212;
-      color: var(--ink);
-      border: 1px solid var(--line-2);
-      border-radius: 16px;
-      padding: 18px 18px 16px;
-      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+      position: fixed; z-index: 50; left: 50%; bottom: 20px; transform: translateX(-50%);
+      width: min(560px, calc(100% - 24px)); background: var(--chip); color: var(--text);
+      border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 20px;
     }
+    @media (prefers-color-scheme: dark) { .guia-painel { background: #111113; } .guia-alvo { background: #000; } }
     .guia-painel[hidden], #guia[hidden] { display: none; }
-    .guia-kicker { margin: 0 0 6px; color: var(--orange); font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
-    .guia-painel h2 { margin: 0 0 8px; font-size: 22px; letter-spacing: -0.03em; font-weight: 500; }
+    .guia-kicker { margin: 0 0 8px; font-size: 12px; letter-spacing: .1em; color: var(--muted); }
+    .guia-painel h2 { margin: 0 0 8px; font-size: 26px; line-height: 1.15; }
     .guia-painel p { margin: 0; color: var(--muted); }
-    .guia-acoes { display: flex; gap: 8px; margin-top: 14px; }
-    .guia-acoes button {
-      min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-2);
-      background: transparent; color: var(--ink); cursor: pointer; font: inherit;
-    }
-    .guia-acoes .solid { background: var(--orange); color: var(--orange-ink); border-color: transparent; font-weight: 600; }
-    @media (max-width: 980px) {
+    .guia-acoes { display: flex; gap: 8px; margin-top: 16px; }
+    .guia-acoes button { min-height: 40px; padding: 0 16px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; font: inherit; font-size: 14px; }
+    .guia-acoes .solid { background: var(--text); color: var(--bg); border-color: transparent; }
+
+    @media (max-width: 1080px) {
       nav { display: none; }
-      .wrap { width: min(1160px, calc(100% - 28px)); }
-      .hero { padding-top: 40px; }
-      .frame-grid, .grid, .rail, .roles, .limits, .limit-list { grid-template-columns: 1fr; }
-      .tree, .evals { border: 0; border-top: 1px solid var(--line); }
-      .role.wide { grid-column: auto; }
-      section { padding: 48px 0; }
-      .guia-alvo { transform: none; }
+      .panel-grid { grid-template-columns: 1fr; }
+      .panel-grid > * + * { border-left: 0; border-top: 1px solid var(--border); }
+      .section-head { grid-template-columns: 1fr; align-items: start; }
+    }
+    @media (max-width: 760px) {
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .metric:nth-child(3) { border-left: 0; padding-left: 0; }
+      .metric:nth-child(n + 3) { border-top: 1px solid var(--border); }
+      .item, .step { grid-template-columns: 48px minmax(0, 1fr); gap: 8px 16px; }
+      .item p, .step p { grid-column: 2; }
+      .lado { grid-template-columns: 1fr; }
+      .rail { grid-template-columns: 1fr; overflow: visible; }
+      .stage, .gate { min-width: 0; }
+      .stage b { margin-bottom: 8px; }
+      .gate { flex-direction: row; align-items: baseline; gap: 12px; justify-content: flex-start; }
+      .lado > div + div { border-left: 0; border-top: 1px solid var(--border-strong); }
+      table, tbody, tr, td { display: block; }
+      thead { display: none; }
+      tr { padding: 14px 0; border-bottom: 1px solid var(--hairline); }
+      td { border: 0; padding: 2px 0; }
+      td:first-child { white-space: normal; }
       .guia-painel { bottom: 12px; }
     }
-    @media (max-width: 420px) {
+    @media (max-width: 480px) {
       .top-inner { gap: 12px; }
-      .nav-cta a.btn.ghost { display: none; }
+      .brand span.nome { display: none; }
+      .actions .btn { width: 100%; }
     }
   </style>
 </head>
 <body>
-  <div class="banner">
-    <b>Três portões humanos.</b>
-    <span>Nenhum merge e nenhum deploy saem da fábrica.</span>
-    <a href="#limites">Ver os limites</a>
-  </div>
   <header class="top">
     <div class="wrap top-inner">
-      <a class="brand" href="/"><span class="mark" aria-hidden="true">SF</span> Super Factory</a>
-      <nav>
-        <a href="#proposta">Proposta</a>
-        <a href="#ciclo">Ciclo</a>
+      <a class="brand" href="/"><span class="mark" aria-hidden="true">SF</span><span class="nome">Super Factory</span></a>
+      <nav aria-label="Seções">
+        <a href="#ciclo">Como funciona</a>
+        <a href="#quadro">Quadro</a>
         <a href="#papeis">Papéis</a>
-        <a href="#instalar">Instalar</a>
         <a href="#limites">Limites</a>
+        <a href="#instalar">Instalar</a>
       </nav>
       <div class="nav-cta">
-        <a class="btn ghost" href="#ciclo">Ciclo</a>
         <button class="btn ghost" type="button" id="guia-abrir">Guia-me</button>
-        <a class="btn solid" href="/studio" id="factory-cta">Abrir a Factory</a>
+        <a class="btn solid" href="/studio" id="factory-cta">Abrir a Factory →</a>
       </div>
     </div>
   </header>
   <main>
-    <div class="wrap">
-      <div class="hero">
-        <p class="kicker">SDLC agentic · evidência antes de confiança</p>
-        <h1>Conduza o pedido. <em>Pare</em> no portão.</h1>
-        <p class="lead">A Factory conduz o pedido. Ele vira card, passa por triagem, especificação, plano, verificação e revisão, e para três vezes: implementação, merge e release. Agente não aprova, não faz merge e não publica.</p>
+    <div class="ground-pink">
+      <div class="wrap hero">
+        <span class="chip"><span class="dot" aria-hidden="true"></span>SDLC com agentes · evidência antes de confiança</span>
+        <h1>Conduza o pedido. <span class="marca">Pare</span> no portão.</h1>
+        <p class="intro">Cada pedido vira um card e atravessa seis estágios. Em três momentos, ele só segue quando uma pessoa libera.</p>
         <div class="actions">
-          <a class="btn solid" href="/studio">Abrir a Factory</a>
-          <a class="btn ghost" href="#instalar">Instalar</a>
-          <a class="btn ghost" href="#ciclo">Ver o ciclo</a>
+          <a class="btn solid lg" href="/studio">Abrir a Factory →</a>
+          <a class="btn ghost lg" href="#instalar">Instalar em 7 passos →</a>
         </div>
       </div>
-      <section class="frame" id="portao" aria-label="Execução do ciclo parada no portão humano">
-        <div class="frame-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> super-factory / sdlc · R-3</div>
-        <div class="frame-grid">
-          <aside class="tree">
-            <p>projeto</p>
-            <div class="file">factory.json <span>ok</span></div>
-            <div class="file">agents/</div>
-            <div class="file on">workflows/sdlc.ts <span>ativo</span></div>
-            <div class="file">quadro</div>
-            <div class="file">trilha</div>
-          </aside>
-          <div class="trace">
-            <div class="trace-row"><span>triagem</span><small>0.012s</small></div>
-            <div class="trace-row"><span>especificação</span><small>0.041s</small></div>
-            <div class="trace-row wait"><strong>portão humano</strong><small>beforeImplementation</small></div>
-            <div class="trace-row"><span>verificação</span><small>ainda não</small></div>
-            <div class="trace-row"><span>revisão</span><small>ainda não</small></div>
-            <div class="trace-row"><span>entrega</span><small>sem merge</small></div>
+      <div class="wrap">
+        <section class="panel" id="portao" aria-label="Execução do ciclo parada no portão humano" style="padding: 0">
+          <div class="panel-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>super-factory / sdlc · R-3</div>
+          <div class="panel-grid">
+            <aside>
+              <h2>Projeto</h2>
+              <div class="row">factory.json <small>ok</small></div>
+              <div class="row">agents/</div>
+              <div class="row on">workflows/sdlc.ts <small>ativo</small></div>
+              <div class="row">quadro</div>
+              <div class="row">trilha</div>
+            </aside>
+            <div>
+              <h2>Trilha</h2>
+              <div class="row"><span>Triagem</span><small>0,012 s</small></div>
+              <div class="row"><span>Especificação</span><small>0,041 s</small></div>
+              <div class="row wait"><span>Portão humano · implementação</span><small>aguardando</small></div>
+              <div class="row"><span>Verificação</span><small>ainda não</small></div>
+              <div class="row"><span>Revisão</span><small>ainda não</small></div>
+              <div class="row"><span>Entrega</span><small>sem merge</small></div>
+            </div>
+            <aside>
+              <h2>Avaliações</h2>
+              <div class="row"><span>Evidência honesta</span><small><span class="dot" aria-hidden="true"></span> 100%</small></div>
+              <div class="row"><span>Portões humanos</span><small><span class="dot" aria-hidden="true"></span> 100%</small></div>
+              <div class="row"><span>Testes do produto</span><small><span class="dot hold" aria-hidden="true"></span> NOT_RUN</small></div>
+              <div class="row"><span>Merge automático</span><small><span class="dot hold" aria-hidden="true"></span> bloqueado</small></div>
+            </aside>
           </div>
-          <aside class="evals">
-            <h2>avaliações</h2>
-            <div class="score"><span>Evidência honesta</span><b class="ok">100%</b></div>
-            <div class="score"><span>Portões humanos</span><b class="ok">100%</b></div>
-            <div class="score"><span>Testes do produto</span><b class="hold">NOT_RUN</b></div>
-            <div class="score"><span>Merge automático</span><b class="hold">bloqueado</b></div>
-          </aside>
+        </section>
+        <div class="metrics" aria-label="A Factory em números">
+          <div class="metric"><b>3</b><span>portões com nome de gente</span></div>
+          <div class="metric"><b>6</b><span>estágios com registro</span></div>
+          <div class="metric"><b>8</b><span>papéis, um só abre card</span></div>
+          <div class="metric"><b>0</b><span>merges e deploys automáticos</span></div>
         </div>
-      </section>
+      </div>
     </div>
-    <section id="proposta">
+
+    <section id="proposta" class="ground-lilac">
       <div class="wrap">
-        <p class="section-kicker">proposta</p>
-        <h3>A Factory, com o julgamento fora do agente.</h3>
-        <p class="intro">A Factory é o lugar de trabalhar. A página explica o contrato: o que ela conduz, o que ela observa e o que ela se recusa a fazer sozinha.</p>
-        <div class="grid">
-          <article class="card">
-            <em>01 · Evidência</em>
-            <h4>PASS só com o que foi observado.</h4>
-            <p>Critério vago, segredo ou force-push para o card. Teste de produto fica <strong>NOT_RUN</strong>. A fábrica não executa shell, build nem suíte.</p>
-          </article>
-          <article class="card">
-            <em>02 · Portões</em>
-            <h4>Três pausas com nome de gente.</h4>
-            <p>Antes da implementação, antes do merge e antes do release. A retomada pede aprovado, aprovador e nota. Um agente não preenche isso.</p>
-          </article>
-          <article class="card">
-            <em>03 · Acompanhamento</em>
-            <h4>GitHub e Azure DevOps no mesmo ciclo.</h4>
-            <p>Com credencial, a chamada é ao vivo. Sem credencial, a resposta diz que é simulada. O pull request, quando existe, sai como rascunho.</p>
-          </article>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Por que a Factory</p>
+            <h2>O agente conduz. A decisão fica com você.</h2>
+          </div>
+          <p>A Factory organiza o trabalho dos agentes e guarda o que cada um observou. O que muda o repositório passa por uma pessoa.</p>
+        </div>
+        <div class="list">
+          <article class="item"><span>01</span><h3>PASS só com o que foi observado.</h3><p>Critério vago, segredo ou force-push param o card. Teste de produto fica <code>NOT_RUN</code>: a Factory não roda shell, build nem suíte.</p></article>
+          <article class="item"><span>02</span><h3>Três pausas com nome de gente.</h3><p>Antes da implementação, do merge e do release. Para seguir, a pessoa informa quem aprovou e por quê. Um agente não preenche isso.</p></article>
+          <article class="item"><span>03</span><h3>GitHub e Azure DevOps no mesmo ciclo.</h3><p>Com credencial, a chamada é real. Sem credencial, a resposta diz que é simulada. O pull request, quando existe, sai como rascunho.</p></article>
         </div>
       </div>
     </section>
-    <section id="ciclo">
+
+    <section id="ciclo" class="ground-lilac" style="padding-top: 0">
       <div class="wrap">
-        <p class="section-kicker">ciclo</p>
-        <h3>Seis estágios, uma trilha.</h3>
-        <p class="intro">Cada passo deixa registro. O relatório fecha com contexto, critérios, donos, evidência, portões e o próximo passo.</p>
-        <div class="rail">
-          <div class="stage"><b>01</b>Triagem</div>
-          <div class="stage"><b>02</b>Especificação</div>
-          <div class="stage"><b>03</b>Implementação</div>
-          <div class="stage"><b>04</b>Verificação</div>
-          <div class="stage"><b>05</b>Revisão humana</div>
-          <div class="stage"><b>06</b>Entrega</div>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Como funciona</p>
+            <h2>Seis estágios. Três portões.</h2>
+          </div>
+          <p>Cada estágio deixa registro na trilha. O relatório fecha com contexto, critérios, donos, evidência, portões e o próximo passo.</p>
         </div>
+        <div class="rail" role="list">
+          <div class="stage" role="listitem"><b>01</b><h3>Triagem</h3></div>
+          <div class="stage" role="listitem"><b>02</b><h3>Especificação</h3></div>
+          <div class="gate" role="listitem"><b>Portão</b><span>Libera a implementação</span></div>
+          <div class="stage" role="listitem"><b>03</b><h3>Implementação</h3></div>
+          <div class="stage" role="listitem"><b>04</b><h3>Verificação</h3></div>
+          <div class="stage" role="listitem"><b>05</b><h3>Revisão</h3></div>
+          <div class="gate" role="listitem"><b>Portão</b><span>Libera o acompanhamento</span></div>
+          <div class="stage" role="listitem"><b>06</b><h3>Entrega</h3></div>
+          <div class="gate" role="listitem"><b>Portão</b><span>Aceita o release</span></div>
+        </div>
+        <p class="legend">Em amarelo, onde o ciclo espera uma pessoa.</p>
       </div>
     </section>
-    <section id="quadro">
+
+    <section id="quadro" class="ground-peach">
       <div class="wrap">
-        <p class="section-kicker">quadro</p>
-        <h3>O quadro decide para onde o card vai.</h3>
-        <p class="intro">Pedido claro ou bug com critério observável entra em ready. Pedido vago, segredo ou force-push fica blocked. A onda pega no máximo cinco cards prontos, com escritas disjuntas.</p>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Quadro</p>
+            <h2>O quadro decide para onde o card vai.</h2>
+          </div>
+          <p>Pedido claro ou bug com critério observável entra em <code>ready</code>. Pedido vago, segredo ou force-push vai para <code>blocked</code>. Cada onda leva no máximo 5 cards, sem dois mexendo no mesmo lugar.</p>
+        </div>
         <div class="cols" aria-label="Colunas do quadro">
           <span>backlog</span><span class="hot">ready</span><span>build</span><span>qa</span><span>review</span><span class="stop">blocked</span><span>done</span>
         </div>
       </div>
     </section>
-    <section id="papeis">
+
+    <section id="papeis" class="ground-peach" style="padding-top: 0">
       <div class="wrap">
-        <p class="section-kicker">papéis</p>
-        <h3>Oito papéis. Um só abre o card.</h3>
-        <div class="roles">
-          <article class="role wide">
-            <div class="file"><h4>Chief of Staff</h4><small>delega</small></div>
-            <p>Único papel que abre card e encaminha o ciclo. Não aprova portão. Para os três portões, o caminho é o workflow sdlc.</p>
-          </article>
-          <article class="role"><h4>Architect</h4><p>Separa donos e caminhos. Se duas fatias cobrem o mesmo lugar, o card para.</p></article>
-          <article class="role"><h4>Frontend</h4><p>A escrita, quando o ciclo chega lá, fica em src/ui/.</p></article>
-          <article class="role"><h4>Backend</h4><p>A escrita da API fica em src/api/.</p></article>
-          <article class="role"><h4>Integrations</h4><p>Lê e abre issue ou work item. Não faz merge.</p></article>
-          <article class="role"><h4>QA</h4><p>Lê evidência. Não transforma NOT_RUN em PASS.</p></article>
-          <article class="role"><h4>Security</h4><p>Somente leitura. Procura segredo, push protegido e portão furado.</p></article>
-          <article class="role"><h4>Docs</h4><p>O relatório diz o que foi observado e o que ficou de fora.</p></article>
-        </div>
-      </div>
-    </section>
-    <section id="instalar">
-      <div class="wrap">
-        <p class="section-kicker">instalar</p>
-        <h3>Um passo. Depois o próximo.</h3>
-        <p class="intro">Se uma linha vermelha aparecer, copie essa mensagem e cole no chat da Factory. A conversa fica nesse passo, explica o conserto e só então segue. Não cole chave, token ou senha.</p>
-        <div class="grid">
-          <article class="card" id="passo-1"><em>01</em><h4>Node</h4><p>Baixe a versão 22 em nodejs.org. No Terminal, node -v precisa mostrar v22.18 ou mais.</p></article>
-          <article class="card" id="passo-2"><em>02</em><h4>Terminal</h4><p>No Mac, Command + espaço e escreva Terminal. No Windows, escreva PowerShell no Iniciar.</p></article>
-          <article class="card" id="passo-3"><em>03</em><h4>Projeto</h4><p>Primeira vez, clone github.com/juliopessan/super-factory. Se a pasta já existe, não clone de novo: atualize a branch main.</p></article>
-          <article class="card" id="passo-4"><em>04</em><h4>Peças</h4><p>Dentro da pasta, npm install. Espere a linha added packages. Não use sudo.</p></article>
-          <article class="card" id="passo-5"><em>05</em><h4>Ligar</h4><p>npm run dev e deixe a janela aberta. A linha saudável mostra 4721.</p></article>
-          <article class="card" id="passo-6"><em>06</em><h4>Factory</h4><p>No navegador, localhost:4721 é a página. localhost:4721/studio é a Factory.</p></article>
-        </div>
-        <p class="intro" id="passo-7">O sétimo passo é a chave, e ele é opcional. Sem chave, a Factory funciona e avisa quando a resposta é uma amostra.</p>
-      </div>
-    </section>
-    <section id="limites">
-      <div class="wrap limits">
-        <div>
-          <p class="section-kicker">limites</p>
-          <h3>O que a fábrica deixa do lado de fora.</h3>
-          <p class="intro">O desfecho aceito-com-ressalvas significa que a pessoa aceitou o release e os testes do produto continuam fora deste ciclo.</p>
-        </div>
-        <div>
-          <div class="limit-list">
-            <article class="limit"><h4>Sem merge</h4><p>O portão libera o acompanhamento. A branch protegida não recebe push.</p></article>
-            <article class="limit"><h4>Sem deploy</h4><p>Release não publica. Produção continua com quem opera o repositório.</p></article>
-            <article class="limit"><h4>Sem force-push</h4><p>Pedido de push forçado ou commit direto em main para na triagem.</p></article>
-            <article class="limit"><h4>Sem comando</h4><p>Nada de shell. Quem roda a suíte é uma pessoa, e o resultado fica anexado depois.</p></article>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Papéis</p>
+            <h2>Oito papéis. Um só abre o card.</h2>
           </div>
-          <pre>{ <span class="key">"aprovado"</span>: true, <span class="key">"aprovador"</span>: "Joana", <span class="key">"nota"</span>: "Pode seguir, sem merge." }</pre>
+          <p>Cada papel tem um lugar para escrever ou só lê. Nenhum deles aprova portão.</p>
+        </div>
+        <table>
+          <thead><tr><th scope="col">Papel</th><th scope="col">O que faz</th><th scope="col">Onde escreve</th></tr></thead>
+          <tbody>
+            <tr><td>Chief of Staff</td><td>Abre o card e encaminha o ciclo pelo workflow <code>sdlc</code>.</td><td>Quadro</td></tr>
+            <tr><td>Architect</td><td>Separa donos e caminhos. Se duas fatias cobrem o mesmo lugar, o card para.</td><td>Plano</td></tr>
+            <tr><td>Frontend</td><td>Escreve a interface quando o ciclo chega à implementação.</td><td><code>src/ui/</code></td></tr>
+            <tr><td>Backend</td><td>Escreve a API quando o ciclo chega à implementação.</td><td><code>src/api/</code></td></tr>
+            <tr><td>Integrations</td><td>Lê e abre issue ou work item. Não faz merge.</td><td>GitHub, Azure DevOps</td></tr>
+            <tr><td>QA</td><td>Lê a evidência. Não transforma <code>NOT_RUN</code> em <code>PASS</code>.</td><td>Só lê</td></tr>
+            <tr><td>Security</td><td>Procura segredo, push protegido e portão furado.</td><td>Só lê</td></tr>
+            <tr><td>Docs</td><td>Diz no relatório o que foi observado e o que ficou de fora.</td><td>Relatório</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="limites" class="ground-mint">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Limites</p>
+            <h2>O agente prepara. Uma pessoa decide.</h2>
+          </div>
+          <p>A Factory não tenta fazer tudo. O que tem consequência fora do card continua com quem opera o repositório.</p>
+        </div>
+        <div class="lado">
+          <div>
+            <h3>A Factory faz</h3>
+            <ul>
+              <li>Triagem, especificação e plano do card</li>
+              <li>Checks internos, com evidência do que observou</li>
+              <li>Issue ou work item no provedor</li>
+              <li>Pull request em rascunho, quando a branch existe</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Fica com uma pessoa</h3>
+            <ul>
+              <li>Merge: a branch protegida não recebe push</li>
+              <li>Deploy: o release não publica nada</li>
+              <li>Force-push e commit direto em <code>main</code></li>
+              <li>Rodar a suíte do produto e anexar o resultado</li>
+            </ul>
+          </div>
+        </div>
+        <pre aria-label="Exemplo de retomada de um portão">{ <span class="key">"aprovado"</span>: true, <span class="key">"aprovador"</span>: "Joana", <span class="key">"nota"</span>: "Pode seguir, sem merge." }</pre>
+        <p class="nota">Assim uma pessoa libera um portão. O desfecho <code>aceito-com-ressalvas</code> quer dizer que o release foi aceito e os testes do produto continuam fora deste ciclo.</p>
+      </div>
+    </section>
+
+    <section id="instalar" class="ground-mint" style="padding-top: 0">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Instalar</p>
+            <h2>Um passo. Depois o próximo.</h2>
+          </div>
+          <p>Se uma linha vermelha aparecer, copie a mensagem e cole no chat da Factory. A conversa fica nesse passo, explica o conserto e só então segue. Não cole chave, token ou senha.</p>
+        </div>
+        <div class="steps">
+          <article class="step" id="passo-1"><span>1</span><h3>Node</h3><p>Baixe a versão 22 em nodejs.org. No Terminal, <code>node -v</code> precisa mostrar v22.18 ou mais.</p></article>
+          <article class="step" id="passo-2"><span>2</span><h3>Terminal</h3><p>No Mac, Command + espaço e escreva Terminal. No Windows, procure PowerShell no Iniciar.</p></article>
+          <article class="step" id="passo-3"><span>3</span><h3>Projeto</h3><p>Na primeira vez, clone <code>github.com/juliopessan/super-factory</code>. Se a pasta já existe, não clone de novo: atualize a branch <code>main</code>.</p></article>
+          <article class="step" id="passo-4"><span>4</span><h3>Peças</h3><p>Dentro da pasta, <code>npm install</code>. Espere a linha <code>added packages</code>. Não use sudo.</p></article>
+          <article class="step" id="passo-5"><span>5</span><h3>Ligar</h3><p><code>npm run dev</code> e deixe a janela aberta. A linha saudável mostra 4721.</p></article>
+          <article class="step" id="passo-6"><span>6</span><h3>Factory</h3><p>No navegador, <code>localhost:4721</code> é esta página. <code>localhost:4721/studio</code> é a Factory.</p></article>
+          <article class="step opcional" id="passo-7"><span>7</span><h3>Chave, se quiser</h3><p>É opcional. Sem chave, a Factory funciona e avisa quando a resposta é uma amostra.</p></article>
+        </div>
+        <div class="actions">
+          <a class="btn solid lg" href="/studio">Abrir a Factory →</a>
         </div>
       </div>
     </section>
   </main>
-  <div class="wrap">
-    <footer>
-      <span>SF · Super Factory</span>
+  <footer>
+    <div class="wrap foot">
+      <a class="brand" href="/"><span class="mark" aria-hidden="true">SF</span>Super Factory</a>
       <span><a href="/studio">Factory</a> · <a href="https://github.com/juliopessan/super-factory">GitHub</a></span>
-    </footer>
-  </div>
+    </div>
+  </footer>
   <div id="guia" hidden>
     <div class="guia-velo"></div>
     <div class="guia-painel" role="dialog" aria-modal="true" aria-labelledby="guia-titulo">

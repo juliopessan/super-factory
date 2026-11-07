@@ -8,7 +8,7 @@ const ICONE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill=
 const SCRIPT = `(function () {
   var nome = 'Super Factory'
   function marcar() {
-    if (document.title === 'Mastra Studio' || document.title === 'Mastra') document.title = nome
+    if (/mastra/i.test(document.title)) document.title = document.title.replace(/Mastra Studio|Mastra/g, nome)
     document.querySelectorAll('svg[viewBox="0 0 34 21"]').forEach(function (svg) {
       if (svg.dataset.sf === '1') return
       svg.dataset.sf = '1'
@@ -22,8 +22,9 @@ const SCRIPT = `(function () {
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     var node
     while ((node = walker.nextNode())) {
-      if (node.nodeValue && node.nodeValue.indexOf('Mastra') !== -1) {
-        node.nodeValue = node.nodeValue.replaceAll('Mastra Studio', nome).replaceAll('Mastra', nome)
+      if (node.nodeValue && /mastra/i.test(node.nodeValue)) {
+        var novo = node.nodeValue.replaceAll('@mastra/', '').replaceAll('Mastra Studio', nome).replaceAll('Mastra', nome)
+        if (novo !== node.nodeValue) node.nodeValue = novo
       }
     }
   }

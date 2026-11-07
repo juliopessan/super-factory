@@ -8,7 +8,7 @@ const LEITURA = ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto
 const QUADRO = [...LEITURA, 'validarManifesto']
 const TAREFAS = ['ask_user', 'task_write', 'task_update', 'task_complete', 'task_check']
 
-export function criarMesa(storage: LibSQLStore) {
+export function criarFactory(storage: LibSQLStore) {
   return new AgentController({
     id: 'factory',
     storage,
