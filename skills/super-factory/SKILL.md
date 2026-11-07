@@ -1,15 +1,15 @@
 ---
 name: super-factory
-description: Contrato da Super Factory sobre as skills do super-board. Use quando o pedido citar super-board, onboard, lint, status, run, stop, onda, quadro, QA ou review. Mapeia esses verbos para as ferramentas da fábrica e recusa shell, merge, force-push e deploy.
+description: Contrato da Super Factory sobre as skills do super-board. Use quando o pedido citar super-board, onboard, lint, status, run, stop, onda, quadro, QA ou review. Mapeia esses verbos para as ferramentas da Factory e recusa shell, merge, force-push e deploy.
 ---
 
 # Super Factory
 
-As skills em `skills/` vieram do repositório super-board, licença MIT, Copyright 2026 Eric Tech. O texto delas descreve um loop autônomo com workers, worktrees e scripts. Nesta fábrica esse loop não roda.
+As skills em `skills/` vieram do repositório super-board, licença MIT, Copyright 2026 Eric Tech. O texto delas descreve um loop autônomo com workers, worktrees e scripts. Nesta Factory esse loop não roda.
 
 ## O que vale aqui
 
-| Verbo do super-board | Nesta fábrica |
+| Verbo do super-board | Nesta Factory |
 | --- | --- |
 | status | ferramenta `statusQuadro` |
 | lint | ferramenta `lintarCriterios` |
@@ -23,7 +23,7 @@ O ciclo com pausa humana é só o workflow `sdlc`. Ele suspende em implementaç�
 
 - Script, shell, `claude -p`, `codex exec`, worktree ou dispatcher.
 - Merge, force-push, commit direto em `main` ou `master`, deploy.
-- Transformar `NOT_RUN` em PASS. Teste de produto fica `NOT_RUN` até uma pessoa rodá-lo fora da fábrica.
-- Aprovação de portão por agente, inclusive no modo Security, que é somente leitura.
+- Transformar `NOT_RUN` em PASS. Teste de produto fica `NOT_RUN` até uma pessoa rodá-lo fora da Factory.
+- Aprovação de gate por agente, inclusive no modo Security, que é somente leitura.
 
 Se uma skill vendida pedir um desses passos, registre o limite e siga o contrato desta skill.

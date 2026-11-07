@@ -35,7 +35,7 @@ const { sdlcWorkflow } = await import('../super-factory/workflows/sdlc.ts')
 const { paginaInicial } = await import('../super-factory/landing.ts')
 const pagina = paginaInicial()
 assert.match(pagina, /Super Factory/)
-assert.match(pagina, /beforeMerge|portão humano/)
+assert.match(pagina, /beforeMerge|gate humano/)
 assert.match(pagina, /href="\/studio"/)
 assert.match(pagina, /id="instalar"/)
 assert.match(pagina, /Guia-me/)
@@ -102,7 +102,7 @@ assert.match(
   (await definirPoliticaDoProjeto({
     repositorio: 'acme/widgets',
     autor: 'Joana',
-    checks: 'O cliente já roda typecheck e a suíte fora da fábrica.',
+    checks: 'O cliente já roda typecheck e a suíte fora da Factory.',
   })).resumo,
   /entrega humana/,
 )
@@ -281,9 +281,9 @@ async function conduzir(input: PedidoBruto, decisoes: Record<string, { aprovado:
   while (atual.status === 'suspended') {
     const passo = idSuspenso(atual)
     vistos.push(passo)
-    const decisao = decisoes[passo] ?? { aprovado: false, aprovador: 'Joana', nota: 'Recuso este portão.' }
+    const decisao = decisoes[passo] ?? { aprovado: false, aprovador: 'Joana', nota: 'Recuso este gate.' }
     atual = comoCiclo(await run.resume({ step: passo, resumeData: decisao }))
-    if (vistos.length > 4) throw new Error(`portões demais: ${vistos.join(',')}`)
+    if (vistos.length > 4) throw new Error(`gates demais: ${vistos.join(',')}`)
   }
   return { estado: saida(atual), vistos }
 }

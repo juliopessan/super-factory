@@ -34,13 +34,13 @@ export function redigirSegredos(texto: string): string {
 export function pedidoPerigoso(texto: string): string[] {
   const motivos: string[] = []
   if (/push\s+--force|\bgit\s+push\s+-f\b|force-push|push\s+for[cç]ado/i.test(texto)) {
-    motivos.push('A fábrica não faz force-push.')
+    motivos.push('A Factory não faz force-push.')
   }
   if (/commit\s+direto\s+(na|em)\s+(main|master)|push\s+(direto\s+)?(para|pra|na|em)\s+(a\s+)?(main|master)/i.test(texto)) {
-    motivos.push('A fábrica não grava direto na branch protegida.')
+    motivos.push('A Factory não grava direto na branch protegida.')
   }
   if (/pula(r)?\s+o\s+review|sem\s+revis[aã]o|auto-?merge|merge\s+autom[aá]tico/i.test(texto)) {
-    motivos.push('Merge exige o portão humano.')
+    motivos.push('Merge exige o gate humano.')
   }
   if (/\b(deploy|publica(r|ção)?)\s+(agora|autom[aá]tico|em produ[cç][aã]o)/i.test(texto)) {
     motivos.push('Release não faz deploy.')

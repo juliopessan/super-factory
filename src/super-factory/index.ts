@@ -16,7 +16,7 @@ import { servidorMcp } from './mcp.ts'
 import { evidenciaScorer, portoesScorer, relatorioScorer } from './scorers/factory.ts'
 import {
   abrirCard,
-  avaliarPortaoMerge,
+  avaliarGateMerge,
   criarIssueGithub,
   criarWorkItemAzure,
   lerLedger,
@@ -53,7 +53,7 @@ export const mastra = new Mastra({
     lintarCriterios,
     abrirCard,
     planejarOnda,
-    avaliarPortaoMerge,
+    avaliarGateMerge,
     lerLedger,
     listarGithub,
     criarIssueGithub,

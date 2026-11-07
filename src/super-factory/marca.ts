@@ -36,7 +36,7 @@ const SCRIPT = `(function () {
   }
   // Textos de espera do Studio viram verbos da Factory, com um ícone girando.
   var ESPERAS = /^(Thinking|Running|Running step|Generating|Working)(…|\\.\\.\\.)$/
-  var VERBOS = ['Triando…', 'Especificando…', 'Separando donos…', 'Conferindo evidência…', 'Procurando segredo…', 'Lendo a trilha…', 'Redigindo o relatório…', 'Esperando o portão…']
+  var VERBOS = ['Triando…', 'Especificando…', 'Separando donos…', 'Conferindo evidência…', 'Procurando segredo…', 'Lendo a trilha…', 'Redigindo o relatório…', 'Esperando o gate…']
   var vivos = new Map()
   var vez = 0
   function girar(node) {

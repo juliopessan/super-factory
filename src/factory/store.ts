@@ -65,7 +65,7 @@ export function lerEstado(): FabricaEstado {
   if (!fs.existsSync(arquivo)) return semente()
   const bruto = JSON.parse(fs.readFileSync(arquivo, 'utf8')) as Partial<FabricaEstado>
   if (!bruto || !Array.isArray(bruto.cards) || !Array.isArray(bruto.ledger) || typeof bruto.seq !== 'number') {
-    throw new Error('Estado da fábrica ilegível.')
+    throw new Error('Estado da Factory ilegível.')
   }
   return {
     seq: bruto.seq,

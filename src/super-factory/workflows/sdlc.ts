@@ -60,7 +60,7 @@ const gateImplementacao = passoPortao(
 const planejarPasso = passo('planejar', 'Separa os donos e os caminhos. As escritas não se sobrepõem.', planejar)
 const verificarPasso = passo(
   'verificar',
-  'Registra os checks internos. Testes do produto ficam NOT_RUN: a fábrica não executa comando.',
+  'Registra os checks internos. Testes do produto ficam NOT_RUN: a Factory não executa comando.',
   verificar,
 )
 const revisarPasso = passo('revisar', 'Segurança e revisão. Achado bloqueante impede o merge.', revisar)
@@ -83,7 +83,7 @@ const fecharPasso = createStep({
 
 export const sdlcWorkflow = createWorkflow({
   id: 'sdlc',
-  description: 'Conduz um card da triagem ao release, com três portões humanos. Não faz merge, push protegido nem deploy.',
+  description: 'Conduz um card da triagem ao release, com três gates humanos. Não faz merge, push protegido nem deploy.',
   inputSchema: pedidoSchema,
   outputSchema: estadoSchema,
 })

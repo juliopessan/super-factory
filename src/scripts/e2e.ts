@@ -118,7 +118,7 @@ async function ciclo(entrada: Record<string, string>, decisoes: boolean[]) {
 
 async function testarWorkflow(): Promise<void> {
   const feliz = await ciclo(pedido, [true, true, true])
-  conferir('ciclo: suspende nos três portões', feliz.portoes.join() === 'gate-implementacao,gate-merge,gate-release', feliz.portoes.join())
+  conferir('ciclo: suspende nos três gates', feliz.portoes.join() === 'gate-implementacao,gate-merge,gate-release', feliz.portoes.join())
   conferir('ciclo: termina em success', feliz.r.corpo?.status === 'success', feliz.r.corpo?.status)
   conferir('ciclo: desfecho aceito-com-ressalvas', feliz.estado.desfecho === 'aceito-com-ressalvas', `${feliz.estado.desfecho} ${feliz.estado.motivo ?? ''}`)
   conferir('ciclo: três aprovações humanas', feliz.estado.aprovacoes?.length === 3 && feliz.estado.aprovacoes.every((a: any) => a.origem === 'human'))

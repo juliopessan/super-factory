@@ -1,4 +1,4 @@
-const RODAPE = '_Factory local, sem provedor de modelo. Portão, merge e deploy não saem daqui._'
+const RODAPE = '_Factory local, sem provedor de modelo. Gate, merge e deploy não saem daqui._'
 
 export type PlanoFactory =
   | { kind: 'text'; text: string }
@@ -19,7 +19,7 @@ type Mensagem = {
 const PAPEIS = ['chief-of-staff', 'architect', 'frontend', 'backend', 'integrations', 'qa', 'security', 'docs'] as const
 type Papel = (typeof PAPEIS)[number]
 
-const LEITURA = ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'avaliarPortaoMerge', 'listarGithub', 'listarAzure', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao']
+const LEITURA = ['statusQuadro', 'validarManifesto', 'lerLedger', 'lintarCriterios', 'planejarOnda', 'avaliarGateMerge', 'listarGithub', 'listarAzure', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao']
 
 const PERMITIDO: Record<Papel, string[]> = {
   'chief-of-staff': [...LEITURA, 'abrirCard', 'criarIssueGithub', 'criarWorkItemAzure'],
@@ -27,8 +27,8 @@ const PERMITIDO: Record<Papel, string[]> = {
   frontend: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
   backend: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
   integrations: ['statusQuadro', 'lerLedger', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
-  qa: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'avaliarPortaoMerge', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
-  security: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'validarManifesto', 'avaliarPortaoMerge', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
+  qa: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'avaliarGateMerge', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
+  security: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'validarManifesto', 'avaliarGateMerge', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
   docs: ['statusQuadro', 'lerLedger', 'lintarCriterios', 'lerBaseProjeto', 'lerPoliticaProjeto', 'conduzirInstalacao'],
 }
 
@@ -96,11 +96,11 @@ function formatar(resultado: unknown): string {
 
 function ajuda(papel: Papel): string {
   if (papel === 'security') {
-    return ['Segurança é somente leitura.', 'Posso olhar o quadro, o manifesto, a trilha e se um merge tem evidência.', 'Não abro card, issue nem work item, e não aprovo portão.', '', RODAPE].join('\n')
+    return ['Segurança é somente leitura.', 'Posso olhar o quadro, o manifesto, a trilha e se um merge tem evidência.', 'Não abro card, issue nem work item, e não aprovo gate.', '', RODAPE].join('\n')
   }
   if (papel === 'chief-of-staff') {
     return [
-      'Para um ciclo com portões, rode o workflow sdlc.',
+      'Para um ciclo com gates, rode o workflow sdlc.',
       'O formulário pede título, descrição, um critério por linha, provedor e repositório.',
       'Quando o passo suspender, retome com aprovado, aprovador e nota. Eu não aprovo.',
       '',
@@ -108,9 +108,9 @@ function ajuda(papel: Papel): string {
     ].join('\n')
   }
   if (papel === 'integrations') {
-    return ['Eu leio e abro issue ou work item. Pull request rascunho só sai do workflow, depois do portão de merge.', '', RODAPE].join('\n')
+    return ['Eu leio e abro issue ou work item. Pull request rascunho só sai do workflow, depois do gate de merge.', '', RODAPE].join('\n')
   }
-  return [`Papel ${papel}. O ciclo governado é o workflow sdlc. Eu não aprovo portão nem faço merge.`, '', RODAPE].join('\n')
+  return [`Papel ${papel}. O ciclo governado é o workflow sdlc. Eu não aprovo gate nem faço merge.`, '', RODAPE].join('\n')
 }
 
 function escolher(papel: Papel, texto: string): PlanoFactory {
@@ -142,8 +142,8 @@ function escolher(papel: Papel, texto: string): PlanoFactory {
     ferramenta = 'planejarOnda'
     input = { limite: 3 }
   } else if (/\bmerge\b/i.test(texto)) {
-    if (!runId) return { kind: 'text', text: `Diga o ciclo, por exemplo R-3, que eu leio o portão. Eu não aprovo.\n\n${RODAPE}` }
-    ferramenta = 'avaliarPortaoMerge'
+    if (!runId) return { kind: 'text', text: `Diga o ciclo, por exemplo R-3, que eu leio o gate. Eu não aprovo.\n\n${RODAPE}` }
+    ferramenta = 'avaliarGateMerge'
     input = { runId }
   } else if (/\b(crit[eé]rios|aceite)\b/i.test(texto)) {
     ferramenta = 'lintarCriterios'

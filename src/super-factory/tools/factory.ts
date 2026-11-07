@@ -17,7 +17,7 @@ function resumirQuadro(): string {
 
 export const statusQuadro = createTool({
   id: 'status-quadro',
-  description: 'Mostra o quadro da fábrica: backlog, ready, build, qa, review, blocked e done.',
+  description: 'Mostra o quadro da Factory: backlog, ready, build, qa, review, blocked e done.',
   inputSchema: z.object({}),
   outputSchema: z.object({
     colunas: z.array(
@@ -36,7 +36,7 @@ export const statusQuadro = createTool({
 
 export const validarManifesto = createTool({
   id: 'validar-manifesto',
-  description: 'Confere se os portões humanos, a segurança somente leitura e a proibição de deploy automático seguem de pé.',
+  description: 'Confere se os gates humanos, a segurança somente leitura e a proibição de deploy automático seguem de pé.',
   inputSchema: z.object({}),
   outputSchema: z.object({
     ok: z.boolean(),
@@ -82,7 +82,7 @@ export const lintarCriterios = createTool({
 
 export const abrirCard = createTool({
   id: 'abrir-card',
-  description: 'Abre um card no quadro. Não aprova portão, não faz merge e não executa o ciclo. O ciclo governado é o workflow sdlc.',
+  description: 'Abre um card no quadro. Não aprova gate, não faz merge e não executa o ciclo. O ciclo governado é o workflow sdlc.',
   inputSchema: pedidoSchema,
   outputSchema: z.object({
     runId: z.string(),
@@ -96,7 +96,7 @@ export const abrirCard = createTool({
     const estado = iniciar(pedido)
     const resumo = estado.parado
       ? `Card ${estado.card.id} bloqueado na triagem. ${estado.motivo}`
-      : `Card ${estado.card.id} em ready. Para os portões humanos, rode o workflow sdlc com o mesmo pedido.`
+      : `Card ${estado.card.id} em ready. Para os gates humanos, rode o workflow sdlc com o mesmo pedido.`
     return {
       runId: estado.runId,
       cardId: estado.card.id,
@@ -110,7 +110,7 @@ export const abrirCard = createTool({
 
 export const planejarOnda = createTool({
   id: 'planejar-onda',
-  description: 'Lista até cinco cards em ready. Não move card e não pula portão.',
+  description: 'Lista até cinco cards em ready. Não move card e não pula gate.',
   inputSchema: z.object({
     limite: z.number().int().min(1).max(5).optional().describe('Quantos cards, no máximo cinco.'),
   }),
@@ -129,8 +129,8 @@ export const planejarOnda = createTool({
   },
 })
 
-export const avaliarPortaoMerge = createTool({
-  id: 'avaliar-portao-merge',
+export const avaliarGateMerge = createTool({
+  id: 'avaliar-gate-merge',
   description: 'Lê se um ciclo já tem as aprovações humanas e a evidência para o merge. Não aprova.',
   inputSchema: z.object({
     runId: z.string().min(2).describe('Identificador do ciclo, no formato R-3.'),

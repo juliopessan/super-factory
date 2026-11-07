@@ -117,7 +117,7 @@ export const pedidoSchema = z.object({
     .min(1)
     .max(120)
     .optional()
-    .describe('Branch protegida de destino. Vazio significa main. A fábrica não faz push nela.'),
+    .describe('Branch protegida de destino. Vazio significa main. A Factory não faz push nela.'),
   branchHead: z
     .string()
     .max(120)
@@ -126,7 +126,7 @@ export const pedidoSchema = z.object({
 })
 
 export const retomadaSchema = z.object({
-  aprovado: z.boolean().describe('A pessoa aprova ou recusa este portão.'),
+  aprovado: z.boolean().describe('A pessoa aprova ou recusa este gate.'),
   aprovador: z.string().min(2).max(80).describe('Nome de quem decide. Um agente não preenche isto.'),
   nota: z.string().min(3).max(500).describe('Por que aprovou ou recusou.'),
 })

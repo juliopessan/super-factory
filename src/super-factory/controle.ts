@@ -19,17 +19,17 @@ export function criarFactory(storage: LibSQLStore) {
     disableBuiltinTools: ['submit_plan', 'subagent'],
     instructions: [
       'A Factory troca o papel, não o contrato.',
-      'Portão, merge e deploy continuam fora daqui. O ciclo com pausa humana é o workflow sdlc.',
+      'Gate, merge e deploy continuam fora daqui. O ciclo com pausa humana é o workflow sdlc.',
       'submit_plan não existe. Uma tarefa concluída nesta Factory não é uma aprovação.',
     ].join('\n'),
     modes: [
       {
         id: 'chief-of-staff',
         name: 'Chief of Staff',
-        description: 'Abre card e encaminha. Não aprova portão.',
+        description: 'Abre card e encaminha. Não aprova gate.',
         agent: chiefOfStaff,
         metadata: { default: true },
-        availableTools: [...TAREFAS, ...QUADRO, 'abrirCard', 'planejarOnda', 'avaliarPortaoMerge', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure', 'registrarRegraProjeto', 'definirPoliticaProjeto', 'relatarMerge'],
+        availableTools: [...TAREFAS, ...QUADRO, 'abrirCard', 'planejarOnda', 'avaliarGateMerge', 'listarGithub', 'listarAzure', 'criarIssueGithub', 'criarWorkItemAzure', 'registrarRegraProjeto', 'definirPoliticaProjeto', 'relatarMerge'],
       },
       {
         id: 'architect',
@@ -64,14 +64,14 @@ export function criarFactory(storage: LibSQLStore) {
         name: 'QA',
         description: 'Lê evidência. Não transforma NOT_RUN em PASS.',
         agent: qa,
-        availableTools: [...LEITURA, 'avaliarPortaoMerge', 'relatarMerge'],
+        availableTools: [...LEITURA, 'avaliarGateMerge', 'relatarMerge'],
       },
       {
         id: 'security',
         name: 'Security',
         description: 'Somente leitura.',
         agent: security,
-        availableTools: [...QUADRO, 'avaliarPortaoMerge'],
+        availableTools: [...QUADRO, 'avaliarGateMerge'],
       },
       {
         id: 'docs',
