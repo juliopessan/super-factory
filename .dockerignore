@@ -6,3 +6,5 @@ node_modules
 factory.db*
 data
 docs/img
+motion
+docs/motion

@@ -1,0 +1,21 @@
+{
+  "name": "super-factory-motion",
+  "private": true,
+  "type": "module",
+  "description": "Vídeo hero da Super Factory (Remotion). Fica fora da aplicação: dependências próprias.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Hero out/super-factory-hero.mp4 --codec=h264 --crf=18",
+    "poster": "remotion still src/index.ts Hero out/super-factory-hero.jpg --frame=420"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.538",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "remotion": "4.0.538"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.12",
+    "typescript": "5.9.2"
+  }
+}
