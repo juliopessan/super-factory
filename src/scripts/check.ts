@@ -544,6 +544,172 @@ const pedidoIssue = await agente.generate('abre uma issue no github repo: acme/w
 assert.equal(pedidoIssue.finishReason, 'suspended', 'a issue espera aprovação humana')
 assert.equal((pedidoIssue as { suspendPayload?: { toolName?: string } }).suspendPayload?.toolName, 'criarIssueGithub')
 
+// --- Script injetado no Studio: precisa ser JavaScript válido depois de passar pelo template do TypeScript
+{
+  const { marcaSuperFactory } = await import('../super-factory/marca.ts')
+  const contexto = {
+    req: { path: '/studio', method: 'GET', raw: new Request('http://localhost/studio') },
+    res: new Response('<html><head><title>Mastra Studio</title></head><body></body></html>', { headers: { 'content-type': 'text/html' } }),
+  }
+  await marcaSuperFactory(contexto, async () => {})
+  const html = await contexto.res.text()
+  const injetado = /<script>([\s\S]*?)<\/script><\/body>/.exec(html)?.[1] ?? ''
+  assert.ok(injetado.includes('popupDeChaves'), 'o script do Studio traz o botão de chaves')
+  assert.doesNotThrow(() => new Function(injetado), 'o script injetado no Studio tem sintaxe válida')
+  assert.match(html, /<title>Super Factory<\/title>/)
+}
+
+// --- Chaves pelo painel: cofre criptografado, rota protegida, valor aplicado na hora
+{
+  const { randomBytes } = await import('node:crypto')
+  process.env.SUPER_FACTORY_KEYS_PATH = path.join(diretorio, 'cofre', 'chaves.enc.json')
+  delete process.env.SUPER_FACTORY_MASTER_KEY
+  process.env.GITHUB_TOKEN = 'valor-do-env-original-1234'
+  const chaves = await import('../factory/chaves.ts')
+  const { tratarChaves, quemE, paginaConfiguracoes } = await import('../super-factory/configuracoes.ts')
+  const { modeloConfigurado } = await import('../super-factory/model.ts')
+  const SEGREDO = 'sk-ant-' + 'k'.repeat(40)
+
+  // criptografia
+  const chave = randomBytes(32)
+  const conteudo = { ANTHROPIC_API_KEY: { valor: SEGREDO, em: '2026-01-01T00:00:00.000Z', por: 'ana' } }
+  const arquivo = chaves.cifrar(conteudo, chave)
+  assert.equal(JSON.stringify(arquivo).includes(SEGREDO), false, 'o arquivo não traz o segredo em texto')
+  assert.deepEqual(chaves.decifrar(arquivo, chave), conteudo)
+  assert.throws(() => chaves.decifrar(arquivo, randomBytes(32)), 'chave mestra errada não abre')
+  const adulterado = { ...arquivo, dados: Buffer.from(Buffer.from(arquivo.dados, 'base64').map((byte, i) => (i === 0 ? byte ^ 1 : byte))).toString('base64') }
+  assert.throws(() => chaves.decifrar(adulterado, chave), 'arquivo adulterado é recusado')
+
+  // validação e lista fechada
+  assert.throws(() => chaves.validarValor('PATH', 'x'.repeat(20)), /não existe/)
+  assert.throws(() => chaves.validarValor('NODE_OPTIONS', 'x'.repeat(20)), /não existe/)
+  assert.throws(() => chaves.validarValor('GITHUB_TOKEN', 'curto'))
+  assert.throws(() => chaves.validarValor('GITHUB_TOKEN', 'abc def ghi jkl mno'))
+  assert.throws(() => chaves.validarValor('GITHUB_TOKEN', 'linha1\nlinha2xxxxxxxx'))
+  assert.equal(chaves.validarValor('AZURE_DEVOPS_ORG', ' https://dev.azure.com/minhaorg/projeto '), 'minhaorg')
+  assert.equal(chaves.validarValor('GITHUB_TOKEN', `  ${SEGREDO}  `), SEGREDO)
+
+  const base = 'http://factory.test'
+  const pedir = (corpo: unknown, cabecalhos: Record<string, string> = {}) =>
+    new Request(`${base}/configuracoes/chaves`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: base, host: 'factory.test', 'x-sf-csrf': '1', ...cabecalhos },
+      body: JSON.stringify(corpo),
+    })
+  const lerEstado = async () => (await (await tratarChaves(new Request(`${base}/configuracoes/chaves`))).json()) as { itens: Array<{ nome: string; configurada: boolean; origem: string | null; valor: string | null }>; cofre: { chaveDe: string; corrompido: boolean } }
+  const respostaDe = (status: number, corpo: unknown = {}) => async () => new Response(JSON.stringify(corpo), { status })
+  const valida = respostaDe(200, { login: 'ana' })
+  const recusa = respostaDe(401)
+
+  // proteção da rota
+  assert.equal((await tratarChaves(pedir({ acao: 'salvar', nome: 'ANTHROPIC_API_KEY', valor: SEGREDO }, { origin: 'https://outro-site.com' }), { fetch: valida as typeof fetch })).status, 403, 'outra origem é recusada')
+  const semOrigem = new Request(`${base}/configuracoes/chaves`, { method: 'POST', headers: { 'content-type': 'application/json', host: 'factory.test', 'x-sf-csrf': '1' }, body: '{}' })
+  assert.equal((await tratarChaves(semOrigem)).status, 403, 'sem Origin é recusado')
+  const semCabecalho = new Request(`${base}/configuracoes/chaves`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base, host: 'factory.test' }, body: '{}' })
+  assert.equal((await tratarChaves(semCabecalho)).status, 403, 'sem o cabeçalho próprio é recusado')
+  assert.equal((await tratarChaves(pedir({ acao: 'salvar', nome: 'PATH', valor: 'x'.repeat(20) }))).status, 400, 'nome fora da lista')
+  assert.equal((await tratarChaves(pedir({ acao: 'remover', nome: 'PATH' }))).status, 400)
+
+  // estado: o segredo do .env não aparece, só o fato de estar configurado
+  let estado = await lerEstado()
+  const doEnv = estado.itens.find((item) => item.nome === 'GITHUB_TOKEN')
+  assert.equal(doEnv?.configurada, true)
+  assert.equal(doEnv?.origem, 'ambiente')
+  assert.equal(doEnv?.valor, null)
+  assert.equal(estado.itens.find((item) => item.nome === 'ANTHROPIC_API_KEY')?.configurada, false)
+  assert.equal(JSON.stringify(estado).includes('valor-do-env-original'), false)
+
+  // chave recusada pelo provedor: nada é salvo, nada muda
+  assert.equal(modeloConfigurado() !== 'anthropic/claude-sonnet-5-5', true)
+  let r = (await (await tratarChaves(pedir({ acao: 'salvar', nome: 'ANTHROPIC_API_KEY', valor: SEGREDO }), { fetch: recusa as typeof fetch })).json()) as { salvo: boolean; teste: { estado: string; mensagem: string } }
+  assert.equal(r.salvo, false)
+  assert.equal(r.teste.estado, 'invalida')
+  assert.equal(r.teste.mensagem.includes(SEGREDO), false)
+  assert.equal(process.env.ANTHROPIC_API_KEY, undefined)
+
+  // chave aceita: grava criptografada, vale na hora, a resposta não traz o segredo
+  const bruto = await (await tratarChaves(pedir({ acao: 'salvar', nome: 'ANTHROPIC_API_KEY', valor: SEGREDO }, { authorization: `Basic ${Buffer.from('ana:senha-da-ana-123').toString('base64')}` }), { fetch: valida as typeof fetch })).text()
+  assert.equal(bruto.includes(SEGREDO), false, 'a resposta nunca devolve o segredo')
+  assert.equal(JSON.parse(bruto).salvo, true)
+  assert.equal(process.env.ANTHROPIC_API_KEY, SEGREDO, 'vale na hora, sem reiniciar')
+  assert.equal(modeloConfigurado(), 'anthropic/claude-sonnet-5-5', 'o modelo passa a usar a chave sem reiniciar')
+  const arquivoNoDisco = fs.readFileSync(chaves.caminhoDoCofre(), 'utf8')
+  assert.equal(arquivoNoDisco.includes(SEGREDO), false, 'em disco, só criptografado')
+  assert.equal(fs.statSync(chaves.caminhoDoCofre()).mode & 0o777, 0o600, 'arquivo só do dono')
+  estado = await lerEstado()
+  const salvo = estado.itens.find((item) => item.nome === 'ANTHROPIC_API_KEY') as { origem: string; valor: string | null; por?: string }
+  assert.equal(salvo.origem, 'painel')
+  assert.equal(salvo.valor, null)
+  assert.equal(salvo.por, 'ana', 'registra quem salvou, sem a senha')
+  assert.equal(JSON.stringify(estado).includes(SEGREDO), false)
+
+  // reinício: o cofre volta para o ambiente
+  delete process.env.ANTHROPIC_API_KEY
+  chaves.carregarChavesSalvas()
+  assert.equal(process.env.ANTHROPIC_API_KEY, SEGREDO)
+
+  // sem resposta do provedor: só salva com o consentimento de quem usa
+  const caiu = (async () => { throw new Error('rede') }) as unknown as typeof fetch
+  r = (await (await tratarChaves(pedir({ acao: 'salvar', nome: 'GOOGLE_API_KEY', valor: 'g'.repeat(30) }), { fetch: caiu })).json()) as typeof r
+  assert.equal(r.salvo, false)
+  assert.equal(r.teste.estado, 'sem-resposta')
+  r = (await (await tratarChaves(pedir({ acao: 'salvar', nome: 'GOOGLE_API_KEY', valor: 'g'.repeat(30), semTeste: true }), { fetch: caiu })).json()) as typeof r
+  assert.equal(r.salvo, true)
+  const recusada = (await (await tratarChaves(pedir({ acao: 'salvar', nome: 'GOOGLE_API_KEY', valor: 'g'.repeat(30), semTeste: true }), { fetch: recusa as typeof fetch })).json()) as typeof r
+  assert.equal(recusada.salvo, false, 'sem teste só vale quando o provedor não respondeu, nunca quando recusou')
+
+  // trocar uma chave que também está no .env e depois remover volta ao valor do .env
+  await tratarChaves(pedir({ acao: 'salvar', nome: 'GITHUB_TOKEN', valor: 'o'.repeat(30) }), { fetch: valida as typeof fetch })
+  assert.equal(process.env.GITHUB_TOKEN, 'o'.repeat(30))
+  await tratarChaves(pedir({ acao: 'remover', nome: 'GITHUB_TOKEN' }))
+  assert.equal(process.env.GITHUB_TOKEN, 'valor-do-env-original-1234', 'remover do painel devolve o valor do .env')
+
+  // PAT do Azure precisa da organização
+  r = (await (await tratarChaves(pedir({ acao: 'salvar', nome: 'AZURE_DEVOPS_PAT', valor: 'p'.repeat(52) }), { fetch: valida as typeof fetch })).json()) as typeof r
+  assert.equal(r.salvo, false)
+  assert.equal(r.teste.estado, 'incompleta')
+  await tratarChaves(pedir({ acao: 'salvar', nome: 'AZURE_DEVOPS_ORG', valor: 'minhaorg' }), { fetch: valida as typeof fetch })
+  const chamadas: string[] = []
+  const espiao = (async (url: string) => { chamadas.push(String(url)); return new Response('{}', { status: 200 }) }) as unknown as typeof fetch
+  r = (await (await tratarChaves(pedir({ acao: 'salvar', nome: 'AZURE_DEVOPS_PAT', valor: 'p'.repeat(52) }), { fetch: espiao })).json()) as typeof r
+  assert.equal(r.salvo, true)
+  assert.match(chamadas[0] ?? '', /^https:\/\/dev\.azure\.com\/minhaorg\/_apis\/projects/)
+  assert.equal((await chaves.testarChave('AZURE_DEVOPS_PAT', 'p'.repeat(52), { fetch: respostaDe(203) as typeof fetch })).estado, 'invalida', 'o Azure responde 203 a quem não tem acesso')
+
+  // chave mestra do ambiente: o cofre é migrado e continua abrindo
+  process.env.SUPER_FACTORY_MASTER_KEY = randomBytes(32).toString('base64')
+  const migrado = chaves.lerCofre()
+  assert.equal(migrado.corrompido, false)
+  assert.equal(migrado.chaveDe, 'ambiente')
+  assert.equal(migrado.conteudo.ANTHROPIC_API_KEY?.valor, SEGREDO)
+  delete process.env.SUPER_FACTORY_MASTER_KEY
+  assert.equal(chaves.lerCofre().corrompido, true, 'sem a chave mestra de antes, o cofre não abre e nada é sobrescrito')
+  assert.throws(() => chaves.salvarChave('GITHUB_TOKEN', 'g'.repeat(30), 'ana'), /não abriu/)
+
+  // página
+  const pagina = paginaConfiguracoes({ embed: true, tema: 'dark' })
+  const html = await pagina.text()
+  assert.match(pagina.headers.get('content-security-policy') ?? '', /script-src 'nonce-[^']+'/)
+  assert.equal(pagina.headers.get('x-frame-options'), 'SAMEORIGIN')
+  assert.match(html, /Chaves e acessos/)
+  assert.match(html, /id="fechar"/)
+  assert.equal(html.includes(SEGREDO), false)
+  assert.equal(quemE(new Request(base, { headers: { authorization: `Basic ${Buffer.from('ana:senha-secreta').toString('base64')}` } })), 'ana')
+
+  // limite de pedidos
+  let barrado = false
+  for (let i = 0; i < 60 && !barrado; i++) barrado = (await tratarChaves(pedir({ acao: 'testar', nome: 'GITHUB_TOKEN' }), { fetch: valida as typeof fetch })).status === 429
+  assert.equal(barrado, true, 'o excesso de pedidos é freado')
+
+  // limpeza: devolve o ambiente ao que era
+  delete process.env.SUPER_FACTORY_MASTER_KEY
+  fs.rmSync(path.join(diretorio, 'cofre'), { recursive: true, force: true })
+  chaves.aplicarNoAmbiente({})
+  delete process.env.GITHUB_TOKEN
+  assert.equal(process.env.ANTHROPIC_API_KEY, undefined)
+  assert.equal(process.env.GOOGLE_API_KEY, undefined)
+}
+
 // --- Repositório: aceita o endereço copiado do navegador ou do git
 {
   const { normalizarRepositorio, dividirRepositorio, dividirAzure } = await import('../factory/guards.ts')

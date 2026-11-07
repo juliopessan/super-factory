@@ -8,6 +8,11 @@ COMPOSE="${COMPOSE:-/docker/super-factory/docker-compose.yml}"
 cd "$PASTA"
 DONO="$(stat -c %U "$PASTA")"
 
+# Chave mestra do cofre de chaves do painel: gera uma vez, mantém depois.
+if [ -f .env ] && ! grep -qE '^SUPER_FACTORY_MASTER_KEY=.+' .env; then
+  printf '\nSUPER_FACTORY_MASTER_KEY=%s\n' "$(openssl rand -base64 32)" >> .env
+fi
+
 if [ -f "$COMPOSE" ]; then
   sudo -u "$DONO" git pull --ff-only
   docker compose -f "$COMPOSE" up -d --build

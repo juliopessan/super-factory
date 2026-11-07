@@ -49,7 +49,7 @@ async function subirServidor(): Promise<ChildProcess | null> {
     console.error('A porta 4721 já está em uso. Pare o npm run dev ou rode com E2E_REUSE=1.')
     process.exit(2)
   }
-  const env: NodeJS.ProcessEnv = { ...process.env, FACTORY_STATE_PATH: path.join(saida, 'state.json') }
+  const env: NodeJS.ProcessEnv = { ...process.env, FACTORY_STATE_PATH: path.join(saida, 'state.json'), SUPER_FACTORY_KEYS_PATH: path.join(saida, 'cofre', 'chaves.enc.json') }
   for (const nome of [
     'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY',
     'SUPER_FACTORY_MODEL', 'FACTORY_MODEL', 'GITHUB_TOKEN', 'GH_TOKEN',
@@ -154,6 +154,12 @@ async function testarWorkflow(): Promise<void> {
   const auto = await api(`/api/workflows/autonomo/start-async?runId=${criadoAuto.runId}`, { inputData: { ...pedido, repositorio: 'https://github.com/acme/pedidos.git' } })
   conferir('autônomo: aceita o endereço do GitHub e, sem chave, pede a ANTHROPIC_API_KEY', /ANTHROPIC_API_KEY/.test(auto.corpo?.result?.motivo ?? ''), auto.corpo?.result?.motivo)
 
+  const status = await fetch(BASE + '/configuracoes/chaves')
+  const itens = ((await status.json()) as { itens?: Array<{ nome: string; valor: string | null }> }).itens ?? []
+  conferir('chaves: o painel lista as seis chaves e não devolve nenhum segredo', status.status === 200 && itens.length === 6 && itens.every((item) => item.nome === 'AZURE_DEVOPS_ORG' || item.valor === null))
+  const semOrigem = await fetch(BASE + '/configuracoes/chaves', { method: 'POST', headers: { 'content-type': 'application/json', 'x-sf-csrf': '1' }, body: JSON.stringify({ acao: 'remover', nome: 'GITHUB_TOKEN' }) })
+  conferir('chaves: pedido sem Origin é recusado', semOrigem.status === 403)
+
   const curto = await ciclo({ ...pedido, titulo: 'x' }, [])
   conferir('schema: título curto é recusado', curto.r.status >= 400 || curto.r.corpo?.status === 'failed', String(curto.r.status))
 }
@@ -219,6 +225,15 @@ async function testarNavegador(): Promise<void> {
     conferir('studio: é a interface (menu Agents e Workflows), não a página do servidor', /Agents/.test(marcaStudio) && /Workflows/.test(marcaStudio) && !/(Super Factory|Mastra) Server/.test(marcaStudio))
     conferir('studio: sem a marca Mastra visível', !/mastra/i.test(marcaStudio), (marcaStudio.match(/.{0,40}mastra.{0,40}/i) || [''])[0])
     conferir('studio: menu chama o grupo de Factory, não Primitives', !/\bPrimitives\b/.test(marcaStudio) && /\bFactory\b/.test(marcaStudio))
+    await pagina.waitForTimeout(500)
+    conferir('chaves: o botão aparece no Studio', await pagina.locator('#sf-chaves-botao').isVisible())
+    await pagina.click('#sf-chaves-botao')
+    const popup = pagina.frameLocator('#sf-chaves-fundo iframe')
+    await popup.locator('form.chave').first().waitFor()
+    conferir('chaves: o popup abre com as seis chaves e campos de senha', (await popup.locator('form.chave').count()) === 6 && (await popup.locator('input[type=password]').count()) === 5)
+    await pagina.keyboard.press('Escape')
+    await pagina.locator('#sf-chaves-fundo').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {})
+    conferir('chaves: Esc fecha o popup', (await pagina.locator('#sf-chaves-fundo').count()) === 0)
     await pagina.screenshot({ path: path.join(saida, 'studio.png') })
     conferir('navegador: sem erro de JavaScript', erros.length === 0, erros.slice(0, 3).join(' | '))
   } finally {

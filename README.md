@@ -226,6 +226,18 @@ sudo bash /opt/super-factory/deploy/atualizar.sh
 
 **Acesso à VPS.** Prefira chave SSH a senha de root: crie a chave no seu computador com `ssh-keygen -t ed25519`, cadastre a chave pública no painel da hospedagem e desligue `PasswordAuthentication` no `/etc/ssh/sshd_config`.
 
+## Chaves pelo painel
+
+Para o time não precisar de SSH nem de editor de texto, o Studio tem o botão **Chaves e acessos** (canto inferior direito). Ele abre um popup para colar `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, `AZURE_DEVOPS_ORG`, `AZURE_DEVOPS_PAT` e, se quiser, `OPENAI_API_KEY` e `GOOGLE_API_KEY`. A mesma tela abre direto em `/configuracoes`.
+
+- **Testa antes de salvar.** A Factory confere a chave no provedor (Anthropic, OpenAI, Google, GitHub, Azure DevOps). Uma chave recusada não é salva. Se o provedor não responder, dá para salvar mesmo assim.
+- **O valor nunca volta para a tela.** O painel mostra só "configurada", de onde veio (painel ou `.env`), quando e por quem.
+- **Criptografada em disco** (AES-256-GCM, arquivo só do dono), com a chave mestra `SUPER_FACTORY_MASTER_KEY` do `.env`; o instalador da VPS gera uma. Sem ela, a Factory cria um arquivo de chave ao lado do cofre e o painel avisa.
+- **Vale na hora**, sem reiniciar. O que o painel salva tem prioridade sobre o `.env`; remover do painel devolve o valor do `.env`.
+- **Rota protegida.** Fica atrás do login da Factory, confere a origem do pedido, limita tentativas, aceita só os nomes da lista e não registra o valor em log nem em trace.
+
+Quem entra na Factory com o login pode trocar estas chaves: use contas e tokens com o mínimo de permissão.
+
 ## Por dentro
 
 ### Onde está o código
