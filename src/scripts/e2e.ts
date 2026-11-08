@@ -525,7 +525,7 @@ async function testarNavegador(): Promise<void> {
     await mn.locator('#sf-menu').waitFor({ state: 'visible', timeout: 8000 })
     const tiposQa = await mn.locator('#sf-menu [role=option] .tipo').allInnerTexts()
     const nomesQa = await mn.locator('#sf-menu [role=option] .nome').allInnerTexts()
-    conferir('menu: nos outros agentes não há modelo que o agente não consegue executar (só abrir workflow e skills)', !nomesQa.includes('/quadro') && !nomesQa.includes('/branches') && tiposQa.includes('workflow'), nomesQa.join(','))
+    conferir('menu: nos outros agentes não há modelo que o agente não consegue executar (só abrir workflow e skills)', !nomesQa.includes('/quadro') && !nomesQa.includes('/branches') && tiposQa.map((t: string) => t.toLowerCase()).includes('workflow'), nomesQa.join(','))
     await mn.close()
 
     // Conversa com o agente: sair para outra tela e voltar reabre a mesma conversa, não uma nova
