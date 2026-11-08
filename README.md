@@ -276,7 +276,7 @@ Tudo antes do merge os agentes fazem sozinhos, sem pedir permissão a cada passo
 
 ## Sugestões com Tab
 
-Para quem não é técnico e não sabe o que escrever, os campos do Studio mostram uma **sugestão em cinza** quando estão vazios, no estilo do Claude Code. Aperte **Tab** para preencher e **Esc** para ignorar. No celular, toque na dica que aparece sobre o campo.
+Para quem não é técnico e não sabe o que escrever, os campos do Studio mostram uma **sugestão em cinza** quando estão vazios, no estilo do Claude Code. Aperte **Tab** para preencher e **Esc** para ignorar. Com teclado não há dica na tela: o texto em cinza basta. No celular, que não tem Tab, aparece um botão sobre o campo e tocar nele preenche.
 
 - **Formulário dos workflows:** título, descrição e critérios vêm de exemplos prontos, escritos para passar na triagem da Factory. O repositório, o branch de trabalho e o aprovador repetem o que a própria pessoa usou da última vez. O branch base sugere `main`.
 - **Chat de cada agente:** a sugestão é a próxima pergunta útil para aquele papel, e muda a cada mensagem enviada.

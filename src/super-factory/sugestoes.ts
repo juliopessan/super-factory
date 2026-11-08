@@ -143,8 +143,11 @@ const CORPO = String.raw`
     chip.style.left = Math.max(8, Math.min(window.innerWidth - l - 8, r.right - l)) + 'px'
     chip.style.top = (r.top - altura - 8 >= 8 ? r.top - altura - 8 : Math.min(window.innerHeight - altura - 8, r.bottom + 8)) + 'px'
   }
+  // Com teclado, o texto em cinza já basta e Tab/Esc funcionam sem dica na tela. O botão só aparece no toque
+  // (ponteiro "coarse"), onde não existe Tab: ali, tocar nele preenche.
+  function semTeclado() { try { return window.matchMedia('(pointer: coarse)').matches } catch (e) { return false } }
   function mostrar(el) {
-    if (!el || el.getAttribute('data-sf-sug') !== '1' || el.value !== '') return esconder()
+    if (!el || el.getAttribute('data-sf-sug') !== '1' || el.value !== '' || !semTeclado()) return esconder()
     if (!chip) criarChip()
     alvo = el
     chip.hidden = false
