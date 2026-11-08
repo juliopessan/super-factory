@@ -49,7 +49,7 @@ async function subirServidor(): Promise<ChildProcess | null> {
     console.error('A porta 4721 já está em uso. Pare o npm run dev ou rode com E2E_REUSE=1.')
     process.exit(2)
   }
-  const env: NodeJS.ProcessEnv = { ...process.env, FACTORY_STATE_PATH: path.join(saida, 'state.json'), SUPER_FACTORY_KEYS_PATH: path.join(saida, 'cofre', 'chaves.enc.json'), SUPER_FACTORY_MCPS_PATH: path.join(saida, 'cofre', 'mcps.json'), SUPER_FACTORY_MCP_COMANDO: '1', SUPER_FACTORY_ENSAIO_MS: '60' }
+  const env: NodeJS.ProcessEnv = { ...process.env, FACTORY_STATE_PATH: path.join(saida, 'state.json'), SUPER_FACTORY_KEYS_PATH: path.join(saida, 'cofre', 'chaves.enc.json'), SUPER_FACTORY_MCPS_PATH: path.join(saida, 'cofre', 'mcps.json'), SUPER_FACTORY_MCP_COMANDO: '1', SUPER_FACTORY_DB: `file:${path.join(saida, 'factory.db')}`, SUPER_FACTORY_ENSAIO_MS: '60' }
   for (const nome of [
     'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY',
     'SUPER_FACTORY_MODEL', 'FACTORY_MODEL', 'GITHUB_TOKEN', 'GH_TOKEN',
@@ -474,6 +474,36 @@ async function testarNavegador(): Promise<void> {
     await sug.keyboard.press('Tab')
     conferir('sugestões: Tab preenche a mensagem do chat', (await sug.locator('form textarea').first().inputValue()) === 'Como está o quadro agora?')
     await sug.close()
+    // Waitlist pública e login (com SUPER_FACTORY_AUTH desligado, o padrão do e2e: nada muda e a página de admin nem existe)
+    const wl = await navegador.newPage({ viewport: { width: 1200, height: 1400 } })
+    await wl.goto(BASE + '/waitlist')
+    await wl.locator('#form').waitFor()
+    conferir('waitlist: a página abre sem login e tem o formulário com qualificação', (await wl.locator('#form [name=equipe] option').count()) > 3 && (await wl.locator('input[name=ferramentas]').count()) >= 6)
+    await wl.click('#enviar')
+    conferir('waitlist: formulário vazio é recusado com mensagem', /Informe/.test(await wl.locator('#msg').innerText()))
+    await wl.locator('.opcoes label', { hasText: 'Empresa' }).click()
+    await wl.fill('#nome', 'Teste E2E')
+    await wl.fill('#email', 'e2e@teste.com.br')
+    await wl.fill('#empresa', 'Acme')
+    await wl.selectOption('#equipe', '2-10')
+    await wl.fill('#usuarios', '5')
+    await wl.selectOption('#uso', 'plataforma-devops')
+    await wl.locator('.opcoes label', { hasText: 'GitHub' }).click()
+    await wl.fill('#casoDeUso', 'Automatizar o backlog em pull requests com testes e revisão.')
+    await wl.locator('label.consent').click()
+    await wl.click('#enviar')
+    await wl.locator('#sucesso').waitFor({ timeout: 8000 })
+    conferir('waitlist: o envio é aceito e mostra a confirmação', /Recebemos/i.test(await wl.locator('#sucesso').innerText()))
+    const reenvio = await wl.evaluate(() => fetch('/waitlist/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-SF-CSRF': '1' }, body: JSON.stringify({ tipo: 'pessoa', nome: 'Teste E2E', email: 'e2e@teste.com.br', equipe: '1', usuarios: 1, uso: 'estudo-prova-de-conceito', ferramentas: ['Claude'], casoDeUso: 'Reenvio do mesmo e-mail para atualizar as respostas.', consentimento: true }) }).then((r) => r.status))
+    conferir('waitlist: reenviar o mesmo e-mail responde igual (não revela quem já está na lista)', reenvio === 200)
+    const semCsrf = await fetch(BASE + '/waitlist/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE }, body: '{}' })
+    conferir('waitlist: envio sem o cabeçalho de CSRF é recusado', semCsrf.status === 403)
+    const login = await (await fetch(BASE + '/login')).text()
+    conferir('login: com o login desligado a página diz isso e não oferece o botão', /não está ligado/.test(login) && !/id="entrar"/.test(login))
+    conferir('login: sem login ligado a página de admin não existe (nenhum dado exposto)', (await fetch(BASE + '/admin/waitlist/dados')).status === 404)
+    conferir('landing: tem o caminho para a lista de espera', /href="\/waitlist"/.test(await (await fetch(BASE + '/')).text()))
+    await wl.close()
+
     // Menu / e @ no chat
     const mn = await navegador.newPage({ viewport: { width: 1440, height: 900 } })
     await mn.addInitScript(() => localStorage.setItem('sf-sugestoes', JSON.stringify({ repositorio: 'acme/pedidos', amostra: 0 })))

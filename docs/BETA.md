@@ -39,7 +39,7 @@ Dica: se o modelo de chat estiver lento, comece o ensaio antes de falar e volte 
 - **GitHub Project**: ler e organizar foi validado na VPS (3 de 3 ações). Project de **usuário** exige token clássico com `repo` e `project`.
 - **Voltar ao agente**: a conversa reabre sozinha, mas a resposta em andamento só aparece quando termina (limite do Studio).
 - **O desenho do time é fixo no código**: agente novo precisa ser incluído em `src/super-factory/time-animado.ts`.
-- **Sem login próprio**: o Studio não pede senha. Confirme como o time vai entrar (VPN ou autenticação no Traefik). Quem entra pode trocar as chaves.
+- **Login**: por padrão a Factory continua como estava (o login básico do Traefik, se o instalador o colocou). O login com GitHub e a lista de espera já existem, mas só ficam ativos quando você roda o `deploy/ativar-login.sh`. Veja a seção 7. Quem entra pode trocar as chaves.
 - **Um modelo para todos os agentes**: o provedor é escolhido no chat. Custos de modelo sobem com o paralelismo (cada card chama o modelo).
 
 ## 4. Chaves de segurança (sem deploy de código)
@@ -73,3 +73,12 @@ Os dados ficam em `/data` (volume): estado, cofre de chaves, MCPs e observabilid
 - **Traces e Logs** do Studio mostram o que cada agente fez e quanto levou.
 - A trilha do card (ledger) registra o que foi observado e o que foi só relatado.
 - Peça ao time que anote: tarefa tentada, o que esperava, o que aconteceu, e se precisou do ensaio.
+
+## 7. Ligar o login e a lista de espera (faça com calma, não minutos antes da demo)
+
+1. Crie o OAuth App no GitHub (callback `https://SEU-DOMINIO/auth/retorno`) e preencha o `.env` (README, seção *Login e lista de espera*).
+2. `sudo bash /opt/super-factory/deploy/atualizar.sh`, depois `sudo bash /opt/super-factory/deploy/ativar-login.sh`. O script só segue com o `.env` completo, testa que o Studio ficou protegido e volta sozinho se não ficou.
+3. Em **janela anônima**: abra o endereço, confira que cai em `/login`, entre com o seu GitHub (admin), abra `/admin/waitlist`, e cadastre-se na `/waitlist` com outro e-mail para ver o fluxo.
+4. Convide o time: peça que preencham `/waitlist` (com o usuário do GitHub) e aprove em `/admin/waitlist`.
+
+Se algo falhar: `sudo bash /opt/super-factory/deploy/ativar-login.sh --desfazer` volta ao login básico do Traefik.

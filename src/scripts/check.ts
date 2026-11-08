@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import nodeCrypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -1613,6 +1614,258 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.ok(modelos.includes('iniciarOnda'), 'os modelos pedem a ferramenta que existe')
   assert.doesNotMatch(modelos + menu.SCRIPT_MENU.slice(menu.SCRIPT_MENU.indexOf('var ATALHOS'), menu.SCRIPT_MENU.indexOf('var CHAVE')), /merge|deploy|aprov/i, 'nenhum modelo ou atalho fala de merge, deploy ou aprovação')
   assert.match(menu.SCRIPT_MENU, /nome: c\.id, descricao: c\.titulo[^\n]*texto: c\.id/, 'no @ entra só o identificador do card, nunca o título')
+}
+
+// --- Waitlist e login: validação, banco, sessão, porteiro e o fluxo OAuth inteiro com um GitHub falso
+{
+  const wl = await import('../factory/waitlist.ts')
+  const banco = await import('../factory/banco.ts')
+  const auth = await import('../super-factory/auth.ts')
+  const acesso = await import('../super-factory/acesso.ts')
+  const idt = await import('../super-factory/identidade.ts')
+  const prot = await import('../super-factory/protecao.ts')
+  const dirTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-wl-'))
+  process.env.SUPER_FACTORY_BANCO_NOVO = '1'
+  const db = await banco.abrirBanco(`file:${path.join(dirTmp, 'wl.db')}`)
+  const base = { tipo: 'empresa', nome: 'Ana Souza', email: ' Ana@Empresa.COM.br ', empresa: 'Acme', cargo: 'CTO', site: 'acme.com.br', equipe: '11-50', usuarios: '12', uso: 'time-de-desenvolvimento', ferramentas: ['GitHub', 'Docker', 'GitHub'], casoDeUso: 'Transformar o backlog em pull requests com testes e organizar o board.', github: '@Ana-Dev', origem: 'indicacao', consentimento: true }
+
+  // validação
+  const ok = wl.validarInscricao(base)
+  assert.equal(ok.email, 'ana@empresa.com.br', 'e-mail normalizado')
+  assert.equal(ok.github, 'ana-dev', 'github sem @ e em minúsculas')
+  assert.equal(ok.site, 'https://acme.com.br')
+  assert.deepEqual(ok.ferramentas, ['GitHub', 'Docker'], 'sem repetição')
+  const recusa = (mudanca: Record<string, unknown>, campo: string) => assert.throws(() => wl.validarInscricao({ ...base, ...mudanca }), (e: unknown) => e instanceof wl.ErroDeInscricao && e.campo === campo, `recusa ${campo}`)
+  recusa({ email: 'nao-e-email' }, 'email')
+  recusa({ nome: 'A' }, 'nome')
+  recusa({ empresa: '' }, 'empresa')
+  recusa({ tipo: 'outro' }, 'tipo')
+  recusa({ equipe: '999' }, 'equipe')
+  recusa({ usuarios: '0' }, 'usuarios')
+  recusa({ usuarios: '99999' }, 'usuarios')
+  recusa({ ferramentas: [] }, 'ferramentas')
+  recusa({ ferramentas: ['Hackzin'] }, 'ferramentas')
+  recusa({ casoDeUso: 'curto' }, 'casoDeUso')
+  recusa({ github: 'a b/c' }, 'github')
+  recusa({ site: 'http://' }, 'site')
+  recusa({ consentimento: false }, 'consentimento')
+  assert.equal(wl.validarInscricao({ ...base, tipo: 'pessoa', empresa: '' }).empresa, null, 'pessoa não precisa de empresa')
+
+  // banco: novo, reenvio atualiza sem mudar o status, e-mail único
+  assert.equal(await wl.registrar(db, ok, 'abc'), 'novo')
+  assert.equal(await wl.registrar(db, { ...ok, cargo: 'CEO' }, 'abc'), 'atualizado')
+  assert.equal((await wl.listar(db)).length, 1, 'um só cadastro por e-mail')
+  assert.equal((await wl.listar(db))[0]?.cargo, 'CEO')
+  assert.equal((await wl.listar(db))[0]?.status, 'pendente')
+  assert.equal(await wl.estaAprovado(db, 'ana-dev', ['ana@empresa.com.br']), false, 'pendente não entra')
+  const id = (await wl.listar(db))[0]?.id as number
+  assert.equal(await wl.decidir(db, id, 'aprovado', 'admin'), true)
+  await wl.registrar(db, { ...ok, nome: 'Ana S.' }, 'abc')
+  assert.equal((await wl.listar(db))[0]?.status, 'aprovado', 'reenviar não muda a decisão')
+  assert.equal(await wl.estaAprovado(db, 'ana-dev', []), true, 'aprovado pelo usuário do GitHub')
+  assert.equal(await wl.estaAprovado(db, 'outro', ['ANA@empresa.com.br']), true, 'aprovado pelo e-mail')
+  assert.equal(await wl.estaAprovado(db, 'outro', ['x@y.com']), false)
+  assert.equal(await wl.decidir(db, id, 'recusado', 'admin'), true)
+  assert.equal(await wl.estaAprovado(db, 'ana-dev', []), false, 'recusar tira o acesso')
+  assert.equal((await wl.contagens(db)).recusado, 1)
+  assert.match(wl.paraCsv([{ ...(await wl.listar(db))[0]!, nome: '=HYPERLINK("x")' }]), /"'=HYPERLINK\(""x""\)"/, 'CSV não vira fórmula')
+  assert.equal(wl.celulaCsv('a"b'), '"a""b"')
+
+  // configuração: ligada só com tudo; incompleta FECHA
+  const ambiente = { SUPER_FACTORY_AUTH: 'github', GITHUB_OAUTH_CLIENT_ID: 'cid', GITHUB_OAUTH_CLIENT_SECRET: 'csec', SUPER_FACTORY_PUBLIC_URL: 'https://factory.exemplo.com', SUPER_FACTORY_ADMINS: 'Dono', SUPER_FACTORY_SESSION_SECRET: 'x'.repeat(40) }
+  assert.equal(auth.lerConfig({}).modo, 'desligado')
+  assert.equal(auth.lerConfig({ SUPER_FACTORY_AUTH: 'off' }).modo, 'desligado')
+  const incompleta = auth.lerConfig({ SUPER_FACTORY_AUTH: 'github' })
+  assert.equal(incompleta.modo, 'invalido')
+  assert.equal(auth.lerConfig({ ...ambiente, SUPER_FACTORY_PUBLIC_URL: 'http://factory.exemplo.com' }).modo, 'invalido', 'http fora de localhost é recusado')
+  assert.equal(auth.lerConfig({ ...ambiente, SUPER_FACTORY_ADMINS: '' }).modo, 'invalido', 'sem admin não liga')
+  assert.equal(auth.lerConfig({ ...ambiente, SUPER_FACTORY_SESSION_SECRET: 'curto' }).modo, 'invalido')
+  assert.equal(auth.lerConfig({ ...ambiente, SUPER_FACTORY_SESSION_SECRET: '', SUPER_FACTORY_MASTER_KEY: 'k'.repeat(32) }).modo, 'github', 'a chave mestra serve de segredo')
+  assert.equal(auth.lerConfig({ ...ambiente, SUPER_FACTORY_PUBLIC_URL: 'http://localhost:4721' }).modo, 'github', 'localhost pode ser http')
+  const cfg = auth.lerConfig(ambiente)
+  if (cfg.modo !== 'github') throw new Error('config esperada')
+  assert.deepEqual(cfg.admins, ['dono'])
+  assert.equal(cfg.seguro, true)
+
+  // assinatura
+  const seg = cfg.segredo
+  const sessaoAssinada = auth.assinar({ u: 'x', exp: Math.floor(Date.now() / 1000) + 60 }, seg)
+  assert.equal(auth.verificar(sessaoAssinada, seg)?.u, 'x')
+  assert.equal(auth.verificar(sessaoAssinada.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')), seg), null, 'assinatura adulterada')
+  assert.equal(auth.verificar(sessaoAssinada, Buffer.from('outro-segredo-outro-segredo-outro-1')), null, 'outro segredo')
+  assert.equal(auth.verificar(auth.assinar({ u: 'x', exp: 1 }, seg), seg), null, 'expirada')
+  assert.equal(auth.verificar('lixo', seg), null)
+  assert.equal(auth.verificar(null, seg), null)
+
+  // próximo: nada de redirecionar para fora
+  for (const ruim of ['//evil.com', 'https://evil.com', '/\\evil.com', '/a\r\nb', '/auth/github', '/login?x=1', '', null]) assert.equal(auth.proximoSeguro(ruim as string | null), '/studio', `next recusado: ${String(ruim)}`)
+  assert.equal(auth.proximoSeguro('/studio/agents?x=1'), '/studio/agents?x=1')
+
+  // IP e limite
+  assert.equal(prot.ipDe(new Request('http://x/', { headers: { 'x-forwarded-for': '6.6.6.6, 1.2.3.4' } })), '1.2.3.4', 'vale o último IP (o do proxy)')
+  const lim = prot.criarLimitePorChave(2, 1000)
+  assert.deepEqual([lim('a', 0), lim('a', 1), lim('a', 2), lim('b', 2), lim('a', 2000)], [true, true, false, true, true])
+
+  // páginas e rotas públicas
+  assert.ok(acesso.ehPublico('/') && acesso.ehPublico('/waitlist') && acesso.ehPublico('/login') && acesso.ehPublico('/auth/github'))
+  assert.ok(!acesso.ehPublico('/studio') && !acesso.ehPublico('/api/agents') && !acesso.ehPublico('/configuracoes/chaves') && !acesso.ehPublico('/factory/menu') && !acesso.ehPublico('/admin/waitlist'))
+
+  // porteiro, em cada situação
+  const publico = (c: string) => acesso.ehPublico(c)
+  const pedido = (caminho: string, extra: Record<string, string> = {}, metodo = 'GET') => new Request(`https://factory.exemplo.com${caminho}`, { method: metodo, headers: { accept: 'text/html', ...extra } })
+  const cookieDe = (r: Response) => (r.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).join('; ')
+  const desligado = await auth.porteiro(pedido('/studio'), { modo: 'desligado' }, publico, acesso.PAGINAS)
+  assert.equal(desligado.tipo, 'liberado', 'sem login ligado, nada muda')
+  const semSessao = await auth.porteiro(pedido('/studio/agents?x=1'), cfg, publico, acesso.PAGINAS)
+  assert.equal(semSessao.tipo === 'resposta' && semSessao.resposta.status, 302)
+  assert.match(semSessao.tipo === 'resposta' ? (semSessao.resposta.headers.get('location') ?? '') : '', /^\/login\?next=%2Fstudio%2Fagents%3Fx%3D1$/)
+  const api401 = await auth.porteiro(pedido('/api/agents', { accept: 'application/json' }), cfg, publico, acesso.PAGINAS)
+  assert.equal(api401.tipo === 'resposta' && api401.resposta.status, 401, 'API sem sessão: 401')
+  const postSem = await auth.porteiro(pedido('/configuracoes/chaves', {}, 'POST'), cfg, publico, acesso.PAGINAS)
+  assert.equal(postSem.tipo === 'resposta' && postSem.resposta.status, 401, 'POST sem sessão não redireciona')
+  assert.equal((await auth.porteiro(pedido('/'), cfg, publico, acesso.PAGINAS)).tipo, 'liberado', 'landing é pública')
+  assert.equal((await auth.porteiro(pedido('/waitlist'), cfg, publico, acesso.PAGINAS)).tipo, 'liberado', 'waitlist é pública')
+  const fechado = await auth.porteiro(pedido('/studio'), incompleta, publico, acesso.PAGINAS)
+  assert.equal(fechado.tipo === 'resposta' && fechado.resposta.status, 503, 'login ligado e incompleto: fecha')
+  assert.equal((await auth.porteiro(pedido('/waitlist'), incompleta, publico, acesso.PAGINAS)).tipo, 'liberado', 'mas as páginas públicas seguem abertas')
+  const comToken = auth.lerConfig({ ...ambiente, SUPER_FACTORY_API_TOKEN: 't'.repeat(40) })
+  if (comToken.modo !== 'github') throw new Error('x')
+  assert.equal((await auth.porteiro(pedido('/api/agents', { authorization: `Bearer ${'t'.repeat(40)}` }), comToken, publico, acesso.PAGINAS)).tipo, 'liberado', 'token de serviço vale em /api')
+  assert.equal((await auth.porteiro(pedido('/api/agents', { authorization: `Bearer ${'z'.repeat(40)}` }), comToken, publico, acesso.PAGINAS)).tipo, 'resposta', 'token errado não vale')
+  assert.equal((await auth.porteiro(pedido('/studio', { authorization: `Bearer ${'t'.repeat(40)}` }), comToken, publico, acesso.PAGINAS)).tipo, 'resposta', 'o token só vale em /api')
+
+  // fluxo OAuth completo com um GitHub falso
+  let ultimoPedidoDeToken: Record<string, string> = {}
+  const emailsDoGithub: Record<string, Array<{ email: string; verified: boolean; primary: boolean }>> = {
+    'ana-dev': [{ email: 'ana@empresa.com.br', verified: true, primary: true }],
+    dono: [{ email: 'dono@x.com', verified: true, primary: true }],
+    penetra: [{ email: 'penetra@x.com', verified: true, primary: true }],
+    'so-por-email': [{ email: 'ana@empresa.com.br', verified: true, primary: true }],
+    'email-falso': [{ email: 'ana@empresa.com.br', verified: false, primary: true }],
+  }
+  const githubFalso = (async (url: string, init?: RequestInit) => {
+    const u = String(url)
+    const j = (corpo: unknown, status = 200) => new Response(JSON.stringify(corpo), { status })
+    if (u.endsWith('/login/oauth/access_token')) {
+      ultimoPedidoDeToken = JSON.parse(String(init?.body)) as Record<string, string>
+      return j({ access_token: `tok-${ultimoPedidoDeToken.code}` })
+    }
+    const quem = /tok-(.+)$/.exec(String((init?.headers as Record<string, string>)?.Authorization ?? ''))?.[1] ?? ''
+    if (u.endsWith('/user')) return quem ? j({ login: quem }) : j({}, 401)
+    if (u.endsWith('/user/emails')) return j(emailsDoGithub[quem] ?? [])
+    return j({}, 404)
+  }) as unknown as typeof fetch
+  const deps = { fetch: githubFalso, db: async () => db }
+  const entrar = async (usuario: string, proximo = '/studio/agents') => {
+    const ini = auth.iniciarLogin(new Request(`https://factory.exemplo.com/auth/github?next=${encodeURIComponent(proximo)}`), cfg)
+    assert.equal(ini.status, 302)
+    const alvo = new URL(ini.headers.get('location') ?? '')
+    assert.equal(alvo.searchParams.get('code_challenge_method'), 'S256', 'PKCE')
+    assert.equal(alvo.searchParams.get('redirect_uri'), 'https://factory.exemplo.com/auth/retorno')
+    assert.equal(alvo.searchParams.get('allow_signup'), 'false')
+    const cookieOauth = cookieDe(ini)
+    assert.match(ini.headers.getSetCookie?.()[0] ?? '', /HttpOnly; SameSite=Lax; Max-Age=600; Secure/)
+    assert.match(cookieOauth, /^__Host-sf_oauth=/)
+    const retorno = new Request(`https://factory.exemplo.com/auth/retorno?code=${usuario}&state=${alvo.searchParams.get('state')}`, { headers: { cookie: cookieOauth, accept: 'text/html' } })
+    return { resposta: await auth.retornoLogin(retorno, cfg, acesso.PAGINAS, deps), desafio: alvo.searchParams.get('code_challenge') ?? '' }
+  }
+  await wl.decidir(db, id, 'aprovado', 'admin')
+  auth.limparCache()
+  // aprovado pelo usuário
+  const a = await entrar('ana-dev')
+  assert.equal(a.resposta.status, 302)
+  assert.equal(a.resposta.headers.get('location'), '/studio/agents')
+  const sessaoAna = cookieDe(a.resposta)
+  assert.match(sessaoAna, /__Host-sf_sessao=/)
+  assert.ok(a.resposta.headers.getSetCookie().some((c) => /__Host-sf_sessao=.*HttpOnly.*SameSite=Lax.*Secure/.test(c)))
+  assert.equal(nodeCrypto.createHash('sha256').update(ultimoPedidoDeToken.code_verifier ?? '').digest('base64url'), a.desafio, 'o verificador PKCE bate com o desafio')
+  assert.ok(!JSON.stringify([...a.resposta.headers]).includes('tok-'), 'o token do GitHub nunca vai para o navegador')
+  const comSessao = await auth.porteiro(pedido('/studio', { cookie: sessaoAna }), cfg, publico, acesso.PAGINAS, deps)
+  assert.equal(comSessao.tipo, 'liberado')
+  assert.equal(comSessao.tipo === 'liberado' && comSessao.usuario?.login, 'ana-dev')
+  assert.equal(comSessao.tipo === 'liberado' && comSessao.usuario?.admin, false)
+  const reqAudit = pedido('/configuracoes/chaves', { cookie: sessaoAna })
+  await auth.porteiro(reqAudit, cfg, publico, acesso.PAGINAS, deps)
+  assert.equal(idt.usuarioRegistrado(reqAudit), 'ana-dev', 'a trilha do cofre sabe quem foi')
+  assert.equal(prot.quemE(reqAudit), 'ana-dev')
+  // aprovado só pelo e-mail verificado
+  const porEmail = await entrar('so-por-email')
+  assert.equal(porEmail.resposta.status, 302, 'e-mail verificado aprovado também entra')
+  // e-mail NÃO verificado não vale
+  const falso = await entrar('email-falso')
+  assert.equal(falso.resposta.status, 403, 'e-mail não verificado não libera')
+  // quem não está na lista
+  const penetra = await entrar('penetra')
+  assert.equal(penetra.resposta.status, 403)
+  assert.ok(!penetra.resposta.headers.getSetCookie().some((c) => /sf_sessao=[^;]/.test(c)), 'sem sessão para quem não foi aprovado')
+  assert.match(await penetra.resposta.text(), /ainda não foi liberado/)
+  // admin entra sem estar na waitlist
+  const dono = await entrar('dono', '/admin/waitlist')
+  assert.equal(dono.resposta.status, 302)
+  const sessaoDono = cookieDe(dono.resposta)
+  const adm = await auth.porteiro(pedido('/admin/waitlist', { cookie: sessaoDono }), cfg, publico, acesso.PAGINAS, deps)
+  assert.equal(adm.tipo === 'liberado' && adm.usuario?.admin, true)
+
+  // recusar tira o acesso (depois do cache de 30 s)
+  await wl.decidir(db, id, 'recusado', 'dono')
+  auth.limparCache()
+  const aposRecusa = await auth.porteiro(pedido('/studio', { cookie: sessaoAna }), cfg, publico, acesso.PAGINAS, deps)
+  assert.equal(aposRecusa.tipo, 'resposta', 'sessão de quem foi recusado deixa de valer')
+  await wl.decidir(db, id, 'aprovado', 'dono')
+  auth.limparCache()
+
+  // estado inválido, cookie ausente, replay e sessão forjada
+  const iniX = auth.iniciarLogin(new Request('https://factory.exemplo.com/auth/github'), cfg)
+  const semCookie = await auth.retornoLogin(new Request('https://factory.exemplo.com/auth/retorno?code=ana-dev&state=x'), cfg, acesso.PAGINAS, deps)
+  assert.equal(semCookie.status, 401, 'sem o cookie de estado, recusa')
+  const estadoErrado = await auth.retornoLogin(new Request('https://factory.exemplo.com/auth/retorno?code=ana-dev&state=errado', { headers: { cookie: cookieDe(iniX) } }), cfg, acesso.PAGINAS, deps)
+  assert.equal(estadoErrado.status, 401, 'state diferente: recusa (CSRF de login)')
+  const forjada = auth.assinar({ u: 'ana-dev', exp: Math.floor(Date.now() / 1000) + 600 }, Buffer.from('outro-segredo-outro-segredo-outro-1'))
+  assert.equal((await auth.porteiro(pedido('/studio', { cookie: `__Host-sf_sessao=${forjada}` }), cfg, publico, acesso.PAGINAS, deps)).tipo, 'resposta', 'sessão com outro segredo não vale')
+  const semPrefixo = await auth.porteiro(pedido('/studio', { cookie: `sf_sessao=${sessaoAna.split('=').slice(1).join('=')}` }), cfg, publico, acesso.PAGINAS, deps)
+  assert.equal(semPrefixo.tipo, 'resposta', 'o cookie tem de ter o nome (__Host-) certo')
+  const sairResp = auth.sair(cfg)
+  assert.match(sairResp.headers.getSetCookie()[0] ?? '', /Max-Age=0/)
+
+  // rotas: envio da waitlist (origem, CSRF, isca, limite) e painel de admin
+  const post = (corpo: unknown, extra: Record<string, string> = {}) => new Request('https://factory.exemplo.com/waitlist/enviar', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://factory.exemplo.com', host: 'factory.exemplo.com', 'x-sf-csrf': '1', 'x-forwarded-for': `9.9.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`, ...extra }, body: JSON.stringify(corpo) })
+  const novo = { ...base, email: 'nova@empresa.com' }
+  assert.equal((await acesso.tratarAcesso(post(novo), cfg, null, { db: async () => db }))?.status, 200)
+  assert.equal((await wl.listar(db)).some((l) => l.email === 'nova@empresa.com'), true, 'gravou no banco')
+  assert.equal((await acesso.tratarAcesso(post(novo, { origin: 'https://evil.com' }), cfg, null, { db: async () => db }))?.status, 403, 'outra origem')
+  assert.equal((await acesso.tratarAcesso(post(novo, { 'x-sf-csrf': '' }), cfg, null, { db: async () => db }))?.status, 403, 'sem o cabeçalho de CSRF')
+  assert.equal((await acesso.tratarAcesso(post({ ...novo, email: 'ruim' }), cfg, null, { db: async () => db }))?.status, 400)
+  const antes = (await wl.listar(db)).length
+  assert.equal((await acesso.tratarAcesso(post({ ...novo, email: 'robo@x.com', website: 'http://spam' }), cfg, null, { db: async () => db }))?.status, 200, 'isca responde como sucesso')
+  assert.equal((await wl.listar(db)).length, antes, 'mas não grava')
+  const mesmoIp = { 'x-forwarded-for': '7.7.7.7' }
+  const codigos: number[] = []
+  for (let i = 0; i < 7; i++) codigos.push((await acesso.tratarAcesso(post({ ...novo, email: `lote${i}@x.com` }, mesmoIp), cfg, null, { db: async () => db }))?.status ?? 0)
+  assert.deepEqual(codigos.slice(5), [429, 429], 'o mesmo IP tem limite por hora')
+  const pagina = await acesso.tratarAcesso(new Request('https://factory.exemplo.com/waitlist'), cfg, null)
+  assert.equal(pagina?.status, 200)
+  assert.match(pagina?.headers.get('content-security-policy') ?? '', /script-src 'nonce-/)
+  assert.ok(!(await pagina?.text() ?? '').includes('innerHTML'))
+  // admin: só admin, só com login ligado
+  const admReq = (c: string, m = 'GET') => new Request(`https://factory.exemplo.com${c}`, { method: m })
+  assert.equal((await acesso.tratarAcesso(admReq('/admin/waitlist/dados'), cfg, { login: 'ana-dev', admin: false }, { db: async () => db }))?.status, 403, 'usuário comum não vê a waitlist')
+  assert.equal((await acesso.tratarAcesso(admReq('/admin/waitlist/dados'), cfg, null, { db: async () => db }))?.status, 403)
+  assert.equal((await acesso.tratarAcesso(admReq('/admin/waitlist/dados'), { modo: 'desligado' }, null, { db: async () => db }))?.status, 404, 'sem login ligado a página não existe')
+  const dados = await acesso.tratarAcesso(admReq('/admin/waitlist/dados?status=aprovado'), cfg, { login: 'dono', admin: true }, { db: async () => db })
+  assert.equal(dados?.status, 200)
+  assert.ok(((await dados?.json()) as { itens: Array<{ status: string }> }).itens.every((i) => i.status === 'aprovado'))
+  const csv = await acesso.tratarAcesso(admReq('/admin/waitlist/exportar.csv'), cfg, { login: 'dono', admin: true }, { db: async () => db })
+  assert.match(csv?.headers.get('content-type') ?? '', /text\/csv/)
+  const decPost = (corpo: unknown, extra: Record<string, string> = {}) => new Request('https://factory.exemplo.com/admin/waitlist/decidir', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://factory.exemplo.com', host: 'factory.exemplo.com', 'x-sf-csrf': '1', ...extra }, body: JSON.stringify(corpo) })
+  assert.equal((await acesso.tratarAcesso(decPost({ id, status: 'aprovado' }, { origin: 'https://evil.com' }), cfg, { login: 'dono', admin: true }, { db: async () => db }))?.status, 403, 'decidir exige a mesma origem')
+  assert.equal((await acesso.tratarAcesso(decPost({ id, status: 'virou-admin' }), cfg, { login: 'dono', admin: true }, { db: async () => db }))?.status, 400)
+  assert.equal((await acesso.tratarAcesso(decPost({ id: 99999, status: 'aprovado' }), cfg, { login: 'dono', admin: true }, { db: async () => db }))?.status, 404)
+  assert.equal((await acesso.tratarAcesso(decPost({ id, status: 'recusado' }), cfg, { login: 'dono', admin: true }, { db: async () => db }))?.status, 200)
+  assert.equal((await wl.listar(db)).find((l) => l.id === id)?.decididoPor, 'dono', 'a decisão registra quem decidiu')
+
+  await banco.fecharBanco()
+  delete process.env.SUPER_FACTORY_BANCO_NOVO
+  fs.rmSync(dirTmp, { recursive: true, force: true })
 }
 
 // --- Repositório: aceita o endereço copiado do navegador ou do git

@@ -8,6 +8,8 @@ import { paginaConfiguracoes, tratarChaves } from './configuracoes.ts'
 import { tratarMcps } from './configuracoes-mcps.ts'
 import { paginaInicial } from './landing.ts'
 import { SCRIPT_SUGESTOES } from './sugestoes.ts'
+import { tratarAcesso, ehPublico, PAGINAS } from './acesso.ts'
+import { lerConfig, porteiro } from './auth.ts'
 import { SCRIPT_MENU, tratarMenu } from './menu.ts'
 import { SCRIPT_TIME } from './time-animado.ts'
 
@@ -368,6 +370,17 @@ const SCRIPT = `(function () {
     quadro.setAttribute('allowtransparency', 'true')
     secao.appendChild(quadro)
     conteudo.appendChild(secao)
+    // Com o login da Factory ligado: quem está conectado, o painel da waitlist (admin) e o botão de sair.
+    fetch('/auth/eu', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null }).then(function (j) {
+      if (!j || !j.ativo) return
+      var cab = secao.querySelector('header')
+      if (!cab) return
+      var p = document.createElement('p'); p.className = 'text-caption text-muted-foreground'; p.id = 'sf-sessao'
+      p.appendChild(document.createTextNode('Conectado como @' + j.login + (j.admin ? ' (admin) · ' : ' · ')))
+      if (j.admin) { var w = document.createElement('a'); w.href = '/admin/waitlist'; w.textContent = 'Waitlist'; w.style.textDecoration = 'underline'; p.appendChild(w); p.appendChild(document.createTextNode(' · ')) }
+      var a = document.createElement('a'); a.href = '/auth/sair'; a.textContent = 'Sair'; a.style.textDecoration = 'underline'; p.appendChild(a)
+      cab.appendChild(p)
+    }).catch(function () {})
   }
   function aplicarTemaNaSecao() {
     var quadro = document.querySelector('#sf-chaves-secao iframe')
@@ -496,8 +509,21 @@ function menuLigado(): boolean {
   return process.env.SUPER_FACTORY_MENU?.trim() !== '0'
 }
 
+// Aviso no início: login ligado com configuração incompleta fecha tudo que não é público.
+{
+  const inicial = lerConfig()
+  if (inicial.modo === 'github') console.log(`[auth] login com GitHub ligado (${inicial.admins.length} admin). Público: landing, /login e /waitlist.`)
+  else if (inicial.modo === 'invalido') console.warn(`[auth] SUPER_FACTORY_AUTH=github, mas falta: ${inicial.faltando.join(', ')}. Tudo fora das páginas públicas fica fechado.`)
+}
+
 export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next: () => Promise<void>) {
   const caminho = c.req.path
+  // O porteiro vem antes de qualquer leitura de corpo: quem não entrou não gasta nada do servidor.
+  const cfg = lerConfig()
+  const decisao = await porteiro(c.req.raw, cfg, (p) => ehPublico(p, Object.keys(ARQUIVOS_PUBLICOS)), PAGINAS)
+  if (decisao.tipo === 'resposta') return decisao.resposta
+  const acesso = await tratarAcesso(c.req.raw, cfg, decisao.usuario)
+  if (acesso) return acesso
   await limparEntrada(c.req)
   if (caminho === '/motion.js') return motionJs()
   if (caminho in ARQUIVOS_PUBLICOS) return arquivoPublico(caminho, c.req.raw.headers.get('range'))

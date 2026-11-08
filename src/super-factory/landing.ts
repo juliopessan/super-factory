@@ -352,6 +352,7 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
       <div class="nav-cta">
         <div class="idiomas" role="group" aria-label="Idioma"><a href="/" hreflang="pt-BR" aria-label="Português (Brasil)" aria-current="page"><svg viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="3" fill="#009b3a"/><path d="M14 3 25 10 14 17 3 10z" fill="#fedf00"/><circle cx="14" cy="10" r="4.2" fill="#002776"/><path d="M10 9.4c2.6-.6 5.4-.3 8 .9" stroke="#fff" stroke-width=".8" fill="none"/></svg></a><a href="/en" hreflang="en-US" aria-label="English (US)"><svg viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="3" fill="#fff"/><path d="M0 1.5h28M0 4.6h28M0 7.7h28M0 10.8h28M0 13.9h28M0 17h28" stroke="#b22234" stroke-width="1.55"/><rect width="12" height="10.8" rx="2" fill="#3c3b6e"/><g fill="#fff"><circle cx="2.5" cy="2.4" r=".6"/><circle cx="5.5" cy="2.4" r=".6"/><circle cx="8.5" cy="2.4" r=".6"/><circle cx="4" cy="4.8" r=".6"/><circle cx="7" cy="4.8" r=".6"/><circle cx="2.5" cy="7.2" r=".6"/><circle cx="5.5" cy="7.2" r=".6"/><circle cx="8.5" cy="7.2" r=".6"/></g></svg></a></div>
         <a class="link" href="https://github.com/juliopessan/super-factory">GitHub</a>
+        <a class="link" href="/waitlist">Lista de espera</a>
         <button class="link" type="button" id="guia-abrir">Guia-me</button>
         <a class="pilula" href="/studio" id="factory-cta">Abrir a Factory</a>
       </div>
@@ -421,6 +422,7 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
       <div class="acoes">
         <a class="primario" href="/studio">Abrir a Factory <span class="gira" aria-hidden="true">✻</span></a>
         <a class="seta" href="#instalar">Instalar ↗</a>
+        <a class="seta" href="/waitlist">Lista de espera ↗</a>
       </div>
     </div>
 
