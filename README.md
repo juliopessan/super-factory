@@ -246,6 +246,15 @@ Para o time não precisar de SSH nem de editor de texto, o Studio tem o botão *
 
 Quem entra na Factory com o login pode trocar estas chaves: use contas e tokens com o mínimo de permissão.
 
+## Sugestões com Tab
+
+Para quem não é técnico e não sabe o que escrever, os campos do Studio mostram uma **sugestão em cinza** quando estão vazios, no estilo do Claude Code. Aperte **Tab** para preencher e **Esc** para ignorar. No celular, toque na dica que aparece sobre o campo.
+
+- **Formulário dos workflows:** título, descrição e critérios vêm de exemplos prontos, escritos para passar na triagem da Factory. O repositório, o branch de trabalho e o aprovador repetem o que a própria pessoa usou da última vez. O branch base sugere `main`.
+- **Chat de cada agente:** a sugestão é a próxima pergunta útil para aquele papel, e muda a cada mensagem enviada.
+- **Nada é inventado:** repositório e aprovador só sugerem o que você já digitou. A nota de aprovação de um gate **nunca** é sugerida, para ninguém aprovar sem ler.
+- **O histórico fica no navegador** (`localStorage`), não vai para o servidor.
+
 ## Ferramentas (MCP) que o time instala
 
 O Studio traz uma segunda aba no painel **Chaves e acessos**: **Ferramentas (MCP)**. Cada pessoa conecta aos agentes da Factory as ferramentas que ajudam no processo, sem SSH e sem mexer em arquivo.
