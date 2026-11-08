@@ -58,6 +58,8 @@ export type ItemDoCatalogo = {
   fonte: string
   url?: string
   comando?: string
+  /** Pacotes npm que a Factory reconhece ao colar uma configuração: viram este item do catálogo, com versão fixa. */
+  pacotes?: string[]
   /** {param} é trocado pelo valor do parâmetro de mesmo nome. */
   args?: string[]
   parametros: Array<{ nome: string; rotulo: string; ajuda: string; tipo?: 'email' }>
@@ -99,7 +101,7 @@ export function idDoNome(nome: string): string {
   return base
 }
 
-function limparNome(nome: unknown): string {
+export function limparNome(nome: unknown): string {
   if (typeof nome !== 'string') throw new Error('Informe o nome do MCP.')
   const limpo = nome.trim().replace(/\s+/g, ' ')
   if (limpo.length < 3 || limpo.length > 40) throw new Error('O nome do MCP tem de 3 a 40 caracteres.')
@@ -257,6 +259,7 @@ export const CATALOGO: ItemDoCatalogo[] = [
     tipo: 'remoto',
     fonte: 'context7.com',
     url: 'https://mcp.context7.com/mcp',
+    pacotes: ['@upstash/context7-mcp'],
     parametros: [],
     segredos: [{ nome: 'CONTEXT7_API_KEY', rotulo: 'Chave do Context7', ajuda: 'Opcional. Gere em context7.com.', onde: 'cabecalho', cabecalho: 'CONTEXT7_API_KEY', opcional: true }],
   },
@@ -300,6 +303,7 @@ export const CATALOGO: ItemDoCatalogo[] = [
     tipo: 'comando',
     fonte: 'npm: @modelcontextprotocol/server-sequential-thinking 2.1.1',
     comando: 'npx',
+    pacotes: ['@modelcontextprotocol/server-sequential-thinking'],
     args: ['-y', '@modelcontextprotocol/server-sequential-thinking@2.1.1'],
     parametros: [],
     segredos: [],

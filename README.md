@@ -262,6 +262,10 @@ O Chief of Staff **executa** o que não exige mudar código, em vez de só relat
 - **Metrics e Logs** usam um arquivo **DuckDB** (`SUPER_FACTORY_OBS_DB`; no container, `/data/observabilidade.duckdb`, no mesmo volume). O banco principal (agentes, memória, workflows) continua no LibSQL. Se o DuckDB não abrir, a Factory sobe sem métricas e avisa no log. Os traces antigos ficavam no LibSQL e não aparecem mais no Studio; os novos passam a valer daqui para a frente.
 - **Datasets** abre com o conjunto **Critérios de aceite (triagem)**: casos do lint com o veredito esperado. É criado uma vez e não é sobrescrito se você editar. **Experiments** e **Review Queue** começam vazios de propósito: Experiments nasce quando você roda um conjunto contra um agente ou workflow (gasta chamadas de modelo, por isso nada roda sozinho), e a Review Queue recebe o que for marcado para revisão.
 
+## Conversa com o agente
+
+O Studio abre uma conversa nova toda vez que você volta para o agente, e a anterior fica na lista de threads. A Factory lembra a última conversa de cada agente (neste navegador) e a reabre quando você volta pelo menu ou pela lista. O trabalho do agente continua no servidor enquanto você está em outra tela: ao voltar, a conversa mostra a pergunta, o botão de parar indica que ainda está rodando e a resposta aparece quando termina. **New Thread** continua começando uma conversa nova.
+
 ## Paralelismo
 
 - **Vários cards ao mesmo tempo:** o workflow **onda** (ou a ferramenta `iniciarOnda` do Chief of Staff) roda de 1 a 5 cards independentes juntos, cada um com sandbox, branch e pull request próprios. `SUPER_FACTORY_PARALELISMO` (padrão 3) limita quantos rodam simultâneos, porque cada card abre um container e chama o modelo. Um card que para não derruba os outros. Em ensaio, 3 cards levam o tempo de 1.
@@ -301,6 +305,24 @@ O que protege o processo:
 - **Um MCP quebrado não derruba nada.** Cada um tem a própria conexão; o que falha fica de fora, com o motivo na tela.
 
 Vale para os agentes do Studio. O modo autônomo continua só com o sandbox: o agente construtor não usa MCP.
+
+### Colar a configuração do Cursor, do Claude Desktop ou do VS Code
+
+No botão **+** (Tools ou MCP Servers), a seção **Colar configuração** aceita o trecho do `mcp.json`:
+
+```json
+{ "mcpServers": { "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp"] } } }
+```
+
+Clique em **Analisar** para ver o que será instalado e em **Instalar** para confirmar. A Factory não confia no que foi colado:
+
+- **Reconhecido** (hoje: Context7 e Raciocínio em etapas) vira o item do catálogo, na versão revisada e com o endereço oficial. O `npx` colado não roda.
+- **URL** (`url` e `headers`) passa pela checagem de rede: só https e só endereço público.
+- **Comando** fora do catálogo só com `SUPER_FACTORY_MCP_COMANDO=1`, como antes. Sem versão fixa (`@1.2.3`), a tela avisa.
+- Valores de `env` e de `headers` vão para o cofre criptografado e nunca voltam à tela nem ao arquivo de definição.
+- `autoApprove` não existe aqui: ferramenta que altera algo continua pedindo a sua aprovação. Merge e deploy seguem bloqueados.
+- Até 5 servidores por colagem; aceita `mcpServers`, `servers`, o servidor solto e vírgula sobrando.
+
 
 ## Por dentro
 

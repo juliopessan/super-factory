@@ -17,6 +17,7 @@ import {
   type NovoMcp,
   type Resolvedor,
 } from '../factory/mcps.ts'
+import { analisarColagem, paraONavegador } from '../factory/mcps-colar.ts'
 import { gerenteMcp, type GerenteMcp, type Situacao } from './mcp-usuario.ts'
 import { criarLimite, lerPedido, quemE, resposta } from './protecao.ts'
 
@@ -108,7 +109,7 @@ export async function tratarMcps(req: Request, deps: Dependencias = {}): Promise
   const gerente = deps.gerente ?? gerenteMcp
   if (req.method === 'GET') return resposta(estadoDosMcps(gerente))
   if (req.method !== 'POST') return resposta({ erro: 'Método não permitido.' }, 405)
-  const pedido = await lerPedido(req, { limite: deps.limite ?? dentroDoLimite, bytes: 16_000 })
+  const pedido = await lerPedido(req, { limite: deps.limite ?? dentroDoLimite, bytes: 24_000 })
   if ('recusa' in pedido) return pedido.recusa
   let corpo: Record<string, unknown>
   try {
@@ -122,6 +123,32 @@ export async function tratarMcps(req: Request, deps: Dependencias = {}): Promise
   const semTeste = corpo.semTeste === true
   try {
     switch (corpo.acao) {
+      case 'colar-analisar': {
+        const { itens, avisos } = await analisarColagem(corpo.texto, por, deps.resolver)
+        return resposta({ itens: paraONavegador(itens), avisos })
+      }
+      case 'colar': {
+        // Reinterpreta o texto aqui: o que o navegador mostrou na pré-visualização não é o que decide a instalação.
+        const { itens } = await analisarColagem(corpo.texto, por, deps.resolver)
+        const resultados: Array<{ nome: string; instalado: boolean; erro?: string; ferramentas?: string[]; tipoDoErro?: string }> = []
+        for (const item of itens) {
+          if (!item.novo || item.erro) {
+            resultados.push({ nome: item.nome, instalado: false, erro: item.erro ?? 'Não consegui interpretar.' })
+            continue
+          }
+          try {
+            const feito = await instalar(item.novo, semTeste, por, gerente)
+            resultados.push(
+              feito.instalado
+                ? { nome: item.nome, instalado: true, ferramentas: ferramentasDe(feito.teste) }
+                : { nome: item.nome, instalado: false, erro: feito.teste.erro ?? 'Não consegui conectar.', tipoDoErro: feito.teste.tipoDoErro },
+            )
+          } catch (erro) {
+            resultados.push({ nome: item.nome, instalado: false, erro: erro instanceof Error ? erro.message : 'Falhou.' })
+          }
+        }
+        return resposta({ resultados, estado: estadoDosMcps(gerente) })
+      }
       case 'instalar-catalogo': {
         const resultado = await instalar(montarDoCatalogo(corpo.catalogoId, corpo.parametros, corpo.segredos, por), semTeste, por, gerente)
         return resposta({ ...resultado, estado: estadoDosMcps(gerente) })

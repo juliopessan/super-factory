@@ -277,6 +277,51 @@ const SCRIPT = `(function () {
   }
   function temaDoStudio() { return document.documentElement.classList.contains('dark') ? 'dark' : 'light' }
 
+  // Conversa com o agente: o Studio abre uma conversa nova toda vez que a pessoa volta para o agente, e o que ela
+  // começou fica escondido na lista de threads. A Factory lembra a última conversa de cada agente e a reabre.
+  // O trabalho do agente segue no servidor enquanto a pessoa está em outra tela; a conversa só precisa ser reaberta.
+  var conversaNovaPedida = ''
+  var conversaReaberta = ''
+  function partesDaConversa() {
+    var p = rotaDoStudio().split('/')
+    if (p.length === 6 && p[1] === 'studio' && p[2] === 'agents' && p[4] === 'threads' && p[3] && p[5]) return { agente: p[3], id: p[5] }
+    return null
+  }
+  function conversaDoAgente() {
+    var c = partesDaConversa()
+    if (!c || c.id !== 'new') conversaReaberta = ''
+    if (!c) return
+    var chave = 'sf-conversa-' + c.agente
+    if (c.id !== 'new') {
+      try { localStorage.setItem(chave, c.id) } catch (e) {}
+      if (conversaNovaPedida === c.agente) conversaNovaPedida = ''
+      return
+    }
+    if (conversaNovaPedida === c.agente) return
+    var guardada = null
+    try { guardada = localStorage.getItem(chave) } catch (e) {}
+    if (!guardada || conversaReaberta === c.agente + '/' + guardada) return
+    conversaReaberta = c.agente + '/' + guardada
+    // Só reabre se a conversa ainda existe (a pessoa pode ter apagado).
+    fetch('/api/memory/threads/' + encodeURIComponent(guardada) + '?agentId=' + encodeURIComponent(c.agente)).then(function (r) {
+      if (!r.ok) { try { localStorage.removeItem(chave) } catch (e) {} ; return }
+      var agora = partesDaConversa()
+      if (!agora || agora.id !== 'new' || agora.agente !== c.agente || conversaNovaPedida === c.agente) return
+      history.replaceState(history.state, '', '/studio/agents/' + c.agente + '/threads/' + guardada)
+      window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }))
+    }).catch(function () {})
+  }
+  // "New Thread" clicado por uma pessoa é um pedido de conversa nova: a Factory não reabre a anterior.
+  document.addEventListener('click', function (e) {
+    if (!e.isTrusted || !e.target || !e.target.closest) return
+    var novo = e.target.closest('a[href$="/threads/new"]')
+    if (!novo) return
+    var m = (novo.getAttribute('href') || '').split('/')
+    // O card do agente na lista também aponta para /threads/new: só vale como pedido quem já está num chat do mesmo agente.
+    var aqui = partesDaConversa()
+    if (aqui && m.length >= 5 && m[3] === aqui.agente) conversaNovaPedida = m[3]
+  }, true)
+
   // Tools e MCP Servers: botão "+" ao lado do filtro abre a instalação de ferramentas (MCP).
   function botaoMais() {
     var rota = rotaDoStudio()
@@ -332,7 +377,7 @@ const SCRIPT = `(function () {
     var h = Number(e.data.h)
     if (quadro && h > 0 && h < 6000) quadro.style.height = Math.ceil(h) + 'px'
   })
-  function enfeites() { botaoMais(); secaoDeChaves() }
+  function enfeites() { botaoMais(); secaoDeChaves(); conversaDoAgente() }
   function ligar() {
     estilo()
     enfeites()
