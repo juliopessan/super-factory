@@ -240,19 +240,20 @@ const SCRIPT = `(function () {
     } catch (x) {}
   }, true)
 
-  // Botão "Chaves e acessos": abre /configuracoes num popup dentro do Studio.
-  function popupDeChaves() {
+  // Popup de configuração dentro do Studio: abre /configuracoes (aba Chaves ou Ferramentas MCP).
+  function popupDeChaves(aba) {
     if (document.getElementById('sf-chaves-fundo')) return
     var tema = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    var titulo = aba === 'mcps' ? 'Ferramentas (MCP)' : 'Chaves e acessos'
     var fundo = document.createElement('div')
     fundo.id = 'sf-chaves-fundo'
     fundo.setAttribute('role', 'dialog')
     fundo.setAttribute('aria-modal', 'true')
-    fundo.setAttribute('aria-label', 'Chaves e acessos')
+    fundo.setAttribute('aria-label', titulo)
     fundo.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px'
     var caixa = document.createElement('iframe')
-    caixa.src = '/configuracoes?embed=1&tema=' + tema
-    caixa.title = 'Chaves e acessos'
+    caixa.src = '/configuracoes?embed=1&tema=' + tema + (aba === 'mcps' ? '#mcps' : '')
+    caixa.title = titulo
     caixa.style.cssText = 'width:min(680px,100%);height:min(780px,100%);border:1px solid rgba(255,255,255,.18);border-radius:20px;background:' + (tema === 'dark' ? '#050505' : '#f4f4f2')
     fundo.appendChild(caixa)
     var anterior = document.activeElement
@@ -270,23 +271,73 @@ const SCRIPT = `(function () {
     document.body.appendChild(fundo)
     caixa.addEventListener('load', function () { caixa.focus() })
   }
-  function botaoDeChaves() {
-    var noStudio = location.pathname === '/studio' || location.pathname.indexOf('/studio/') === 0
-    if (document.getElementById('sf-chaves-botao') || !noStudio) return
-    var b = document.createElement('button')
-    b.id = 'sf-chaves-botao'
-    b.type = 'button'
-    b.textContent = '✻ Chaves e acessos'
-    b.setAttribute('aria-haspopup', 'dialog')
-    b.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147482000;padding:9px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:#141414;color:#ededed;font:500 13px ui-sans-serif,system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.35)'
-    b.addEventListener('click', popupDeChaves)
-    document.body.appendChild(b)
+  function rotaDoStudio() {
+    var rota = location.pathname
+    return rota.length > 1 && rota.charAt(rota.length - 1) === '/' ? rota.slice(0, -1) : rota
   }
+  function temaDoStudio() { return document.documentElement.classList.contains('dark') ? 'dark' : 'light' }
+
+  // Tools e MCP Servers: botão "+" ao lado do filtro abre a instalação de ferramentas (MCP).
+  function botaoMais() {
+    var rota = rotaDoStudio()
+    var certo = rota === '/studio/tools' || rota === '/studio/mcps'
+    var atual = document.getElementById('sf-mais-mcp')
+    if (!certo) { if (atual) atual.remove(); return }
+    var filtro = document.querySelector('input[placeholder="Filter by name"]')
+    var linha = filtro && filtro.closest('.flex-wrap')
+    if (!linha) return
+    var rotulo = rota === '/studio/tools' ? 'Adicionar ferramentas (MCP)' : 'Adicionar servidor MCP'
+    if (atual && atual.parentElement === linha) { if (atual.getAttribute('aria-label') !== rotulo) { atual.setAttribute('aria-label', rotulo); atual.title = rotulo } return }
+    if (atual) atual.remove()
+    var b = document.createElement('button')
+    b.id = 'sf-mais-mcp'
+    b.type = 'button'
+    b.setAttribute('aria-label', rotulo)
+    b.setAttribute('aria-haspopup', 'dialog')
+    b.title = rotulo
+    b.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>'
+    b.style.cssText = 'display:inline-grid;place-items:center;width:32px;height:32px;flex:none;border-radius:999px;border:1px solid var(--border,rgba(128,128,128,.3));background:var(--card,transparent);color:var(--foreground,currentColor);cursor:pointer'
+    b.addEventListener('click', function () { popupDeChaves('mcps') })
+    linha.appendChild(b)
+  }
+
+  // Settings: "Chaves e acessos" vira uma seção da própria página, no mesmo formato das outras.
+  function secaoDeChaves() {
+    var atual = document.getElementById('sf-chaves-secao')
+    if (rotaDoStudio() !== '/studio/settings') { if (atual) atual.remove(); return }
+    var conteudo = document.querySelector('[data-slot="settings-layout-content"] .flex-col.gap-8')
+    if (!conteudo) return
+    if (atual && atual.parentElement === conteudo) { aplicarTemaNaSecao(); return }
+    if (atual) atual.remove()
+    var secao = document.createElement('section')
+    secao.id = 'sf-chaves-secao'
+    secao.setAttribute('aria-labelledby', 'sf-chaves-titulo')
+    secao.className = 'flex min-w-0 scroll-mt-4 flex-col gap-2'
+    secao.innerHTML = '<header class="flex flex-col gap-1"><h2 id="sf-chaves-titulo" class="text-subheading text-foreground">Chaves e acessos</h2><p class="text-caption text-muted-foreground">Criptografadas no servidor. Nunca aparecem de novo e valem na hora, sem reiniciar.</p></header>'
+    var quadro = document.createElement('iframe')
+    quadro.title = 'Chaves e acessos'
+    quadro.src = '/configuracoes?embed=secao&tema=' + temaDoStudio()
+    quadro.style.cssText = 'width:100%;height:640px;border:0;background:transparent;color-scheme:normal'
+    quadro.setAttribute('allowtransparency', 'true')
+    secao.appendChild(quadro)
+    conteudo.appendChild(secao)
+  }
+  function aplicarTemaNaSecao() {
+    var quadro = document.querySelector('#sf-chaves-secao iframe')
+    try { if (quadro && quadro.contentDocument) quadro.contentDocument.documentElement.setAttribute('data-tema', temaDoStudio()) } catch (e) {}
+  }
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin || !e.data || e.data.sf !== 'altura') return
+    var quadro = document.querySelector('#sf-chaves-secao iframe')
+    var h = Number(e.data.h)
+    if (quadro && h > 0 && h < 6000) quadro.style.height = Math.ceil(h) + 'px'
+  })
+  function enfeites() { botaoMais(); secaoDeChaves() }
   function ligar() {
     estilo()
-    botaoDeChaves()
+    enfeites()
     visaoDosAgentes()
-    new MutationObserver(function () { marcar(); botaoDeChaves(); painelDeFases(); visaoDosAgentes() }).observe(document.documentElement, { subtree: true, childList: true, characterData: true })
+    new MutationObserver(function () { marcar(); enfeites(); painelDeFases(); visaoDosAgentes(); aplicarTemaNaSecao() }).observe(document.documentElement, { subtree: true, childList: true, characterData: true })
     marcar()
   }
   if (document.body) ligar()
@@ -401,7 +452,7 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   if (caminho === '/configuracoes' || caminho === '/configuracoes/') {
     const consulta = new URL(c.req.raw.url).searchParams
     const tema = consulta.get('tema')
-    return paginaConfiguracoes({ embed: consulta.get('embed') === '1', tema: tema === 'dark' || tema === 'light' ? tema : null })
+    return paginaConfiguracoes({ embed: consulta.get('embed') === '1', secao: consulta.get('embed') === 'secao', tema: tema === 'dark' || tema === 'light' ? tema : null })
   }
   if (caminho === '/configuracoes/chaves') return tratarChaves(c.req.raw)
   if (caminho === '/configuracoes/mcps') return tratarMcps(c.req.raw)

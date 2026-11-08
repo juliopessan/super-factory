@@ -1407,6 +1407,15 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.match(card.motivo ?? '', /Repete o título/)
 }
 
+// --- Dataset inicial do Studio: o veredito esperado de cada caso é o do lint de verdade
+{
+  const { lintarCriterios } = await import('../factory/board.ts')
+  const { CASOS_DE_CRITERIOS } = await import('../super-factory/conjuntos.ts')
+  assert.ok(CASOS_DE_CRITERIOS.length >= 6, 'o conjunto tem casos suficientes')
+  for (const caso of CASOS_DE_CRITERIOS) assert.equal(lintarCriterios(caso.criterios).ok, caso.ok, `caso "${caso.nome}" bate com o lint`)
+  assert.ok(CASOS_DE_CRITERIOS.some((c) => c.ok) && CASOS_DE_CRITERIOS.some((c) => !c.ok), 'tem casos que passam e que falham')
+}
+
 // --- Repositório: aceita o endereço copiado do navegador ou do git
 {
   const { normalizarRepositorio, dividirRepositorio, dividirAzure } = await import('../factory/guards.ts')

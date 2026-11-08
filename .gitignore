@@ -9,3 +9,5 @@ dist/
 agent-tools/
 data/
 .DS_Store
+*.duckdb
+*.duckdb.wal

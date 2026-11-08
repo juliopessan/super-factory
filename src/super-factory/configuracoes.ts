@@ -52,11 +52,11 @@ export async function tratarChaves(req: Request, deps: { fetch?: typeof fetch } 
   }
 }
 
-export function paginaConfiguracoes(opcoes: { embed: boolean; tema: 'dark' | 'light' | null }): Response {
+export function paginaConfiguracoes(opcoes: { embed: boolean; secao?: boolean; tema: 'dark' | 'light' | null }): Response {
   const nonce = crypto.randomBytes(16).toString('base64')
   const tema = opcoes.tema ? ` data-tema="${opcoes.tema}"` : ''
   const html = `<!doctype html>
-<html lang="pt-BR"${tema}>
+<html lang="pt-BR"${tema}${opcoes.secao ? ' data-secao="1"' : ''}>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -96,6 +96,11 @@ export function paginaConfiguracoes(opcoes: { embed: boolean; tema: 'dark' | 'li
   .msg.ok { color: var(--ok); } .msg.erro { color: var(--erro); } .msg.neutra { color: var(--muted); }
   .rodape { margin-top: 28px; display: flex; gap: 12px; align-items: center; justify-content: space-between; font-size: 13px; }
   a { color: var(--text); }
+  /* Seção dentro do Settings do Studio: só a lista de chaves, sem título, abas nem rodapé, sobre o fundo da página. */
+  html[data-secao] body { background: transparent; }
+  html[data-secao] main { max-width: none; padding: 0 0 4px; }
+  html[data-secao] h1, html[data-secao] .abas, html[data-secao] .rodape, html[data-secao] #painel-mcps, html[data-secao] #painel-chaves > p:first-child { display: none; }
+  html[data-secao] .aviso:first-of-type { margin-top: 0; }
 ${ESTILO_MCPS}
 </style>
 </head>
@@ -127,6 +132,15 @@ ${ESTILO_MCPS}
   var lista = document.getElementById('lista')
   var avisos = document.getElementById('avisos')
   var fechar = document.getElementById('fechar')
+  if (document.documentElement.hasAttribute('data-secao')) {
+    var ultima = 0
+    var avisarAltura = function () {
+      var h = document.body.scrollHeight
+      if (h !== ultima) { ultima = h; parent.postMessage({ sf: 'altura', h: h + 8 }, location.origin) }
+    }
+    new ResizeObserver(avisarAltura).observe(document.body)
+    avisarAltura()
+  }
   if (fechar) {
     fechar.addEventListener('click', function () { parent.postMessage({ sf: 'fechar-chaves' }, location.origin) })
     // Com o foco dentro do popup, o Esc chega aqui e não no Studio.
