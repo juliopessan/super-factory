@@ -262,7 +262,9 @@ export async function retornoLogin(req: Request, cfg: Extract<ConfigAuth, { modo
   const url = new URL(req.url)
   const nomeOauth = nomeDoCookie('sf_oauth', cfg)
   const limpar = cookie(nomeOauth, '', { seguro: cfg.seguro, maxAge: 0 })
-  const falhou = (aviso: string) => {
+  // O motivo vai para o log do servidor (sem segredo e sem token) para quem administra diagnosticar; a tela só mostra o aviso.
+  const falhou = (aviso: string, motivo: string) => {
+    console.warn(`[auth] login recusado: ${motivo}`)
     const r = paginas.login({ proximo: '/studio', aviso })
     r.headers.append('Set-Cookie', limpar)
     return r
@@ -270,11 +272,13 @@ export async function retornoLogin(req: Request, cfg: Extract<ConfigAuth, { modo
   const carga = verificar(lerCookie(req, nomeOauth), cfg.segredo, (deps.agora ?? Date.now)())
   const estado = url.searchParams.get('state') ?? ''
   const codigo = url.searchParams.get('code') ?? ''
-  if (url.searchParams.get('error')) return falhou('O GitHub não concluiu o login. Tente de novo.')
-  if (!carga || typeof carga.s !== 'string' || typeof carga.v !== 'string' || !codigo || codigo.length > 200) return falhou('O login expirou. Tente de novo.')
+  if (url.searchParams.get('error')) return falhou('O GitHub não concluiu o login. Tente de novo.', `o GitHub devolveu error=${(url.searchParams.get('error') ?? '').slice(0, 40)}`)
+  if (!carga || typeof carga.s !== 'string' || typeof carga.v !== 'string' || !codigo || codigo.length > 200) {
+    return falhou('O login expirou. Tente de novo.', !lerCookie(req, nomeOauth) ? 'sem o cookie de estado (cookie bloqueado, domínio diferente do SUPER_FACTORY_PUBLIC_URL ou login aberto em outra aba)' : !codigo ? 'sem o código do GitHub' : 'cookie de estado inválido ou expirado')
+  }
   const a = Buffer.from(estado)
   const b = Buffer.from(carga.s)
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return falhou('O login expirou. Tente de novo.')
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return falhou('O login expirou. Tente de novo.', 'state diferente do cookie')
   const buscar = deps.fetch ?? fetch
   try {
     const troca = await pedirJson(
@@ -287,11 +291,14 @@ export async function retornoLogin(req: Request, cfg: Extract<ConfigAuth, { modo
       buscar,
     )
     const token = (troca.corpo as { access_token?: unknown } | null)?.access_token
-    if (typeof token !== 'string' || !token) return falhou('O GitHub recusou o login. Tente de novo.')
+    if (typeof token !== 'string' || !token) {
+      const erroGithub = (troca.corpo as { error?: unknown } | null)?.error
+      return falhou('O GitHub recusou o login. Tente de novo.', `troca do código por token falhou (HTTP ${troca.status}, error=${typeof erroGithub === 'string' ? erroGithub.slice(0, 60) : 'nenhum'}). Confira GITHUB_OAUTH_CLIENT_ID/SECRET e a callback ${cfg.urlPublica}/auth/retorno`)
+    }
     const cab = { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'User-Agent': 'super-factory', 'X-GitHub-Api-Version': '2022-11-28' }
     const eu = await pedirJson(`${cfg.urls.api}/user`, { headers: cab }, buscar)
     const login = (eu.corpo as { login?: unknown } | null)?.login
-    if (eu.status !== 200 || typeof login !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(login)) return falhou('Não consegui ler o seu usuário no GitHub.')
+    if (eu.status !== 200 || typeof login !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(login)) return falhou('Não consegui ler o seu usuário no GitHub.', `GET /user respondeu HTTP ${eu.status}`)
     let emails: string[] = []
     let principal = ''
     const lista = await pedirJson(`${cfg.urls.api}/user/emails`, { headers: cab }, buscar)
@@ -312,6 +319,7 @@ export async function retornoLogin(req: Request, cfg: Extract<ConfigAuth, { modo
       }
       if (!emailAprovado && !(await estaAprovado(db, login, []))) {
         limparCache()
+        console.warn(`[auth] ${login} entrou no GitHub, mas não está aprovado na waitlist nem em SUPER_FACTORY_ADMINS (e-mails verificados: ${emails.length})`)
         const r = paginas.negado({ login })
         r.headers.append('Set-Cookie', limpar)
         return r
@@ -324,8 +332,8 @@ export async function retornoLogin(req: Request, cfg: Extract<ConfigAuth, { modo
     headers.append('Set-Cookie', limpar)
     console.log(`[auth] ${login} entrou`)
     return new Response(null, { status: 302, headers })
-  } catch {
-    return falhou('Não consegui falar com o GitHub agora. Tente de novo.')
+  } catch (erro) {
+    return falhou('Não consegui falar com o GitHub agora. Tente de novo.', `erro de rede ou banco: ${erro instanceof Error ? erro.message.slice(0, 120) : 'desconhecido'}`)
   }
 }
 
