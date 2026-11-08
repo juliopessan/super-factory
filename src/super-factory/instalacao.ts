@@ -165,7 +165,7 @@ export function conduzirInstalacao(entrada: { passo?: number; relato?: string } 
       passo: total,
       total,
       titulo: 'Instalação pronta',
-      instrucao: 'A Super Factory está no ar. A página é http://localhost:4721 e a Factory é http://localhost:4721/studio. Um pedido entra pelo workflow sdlc e para nos três gates. Eu não aprovo, não faço merge e não publico.',
+      instrucao: 'A Super Factory está no ar. A página é http://localhost:4721 e a Factory é http://localhost:4721/studio. Um pedido entra pelo workflow autonomo ou pelo sdlc, e a única decisão humana é o merge. Eu não aprovo, não faço merge e não publico.',
       pronto: true,
     }
   }

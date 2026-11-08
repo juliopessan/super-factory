@@ -10,7 +10,7 @@
 
 A Super Factory lê a demanda num work item do Azure DevOps ou numa issue do GitHub, implementa num container Docker descartável, roda os testes do seu repositório e abre o pull request pronto para revisão. Uma pessoa revisa e faz o merge. A Factory não faz merge, não faz push em `main` ou `master` e não coloca nada em produção.
 
-Para quem prefere parar antes, o workflow `sdlc` segue disponível, com três gates humanos: implementação, merge e release.
+Para quem prefere aprovar a entrega antes de abrir o pull request, o workflow `sdlc` segue disponível, com um só gate humano: o do merge.
 
 [Comece em 7 passos](#7-passos-para-ver-com-os-próprios-olhos) · [Modo autônomo](#modo-autônomo-do-pedido-ao-pull-request) · [Siga um pedido](#um-pedido-do-começo-ao-fim) · [O que ela recusa](#o-que-a-factory-se-recusa-a-fazer)
 
@@ -33,13 +33,13 @@ Na maioria dos fluxos, a resposta é ninguém. Um teste que nunca rodou vira "pa
 
 A Super Factory parte de uma regra simples: **evidência antes de confiança.**
 
-Os agentes fazem o trabalho que dá para observar: triagem, especificação, plano, checks internos, issue e pull request em rascunho. Mas o ciclo para em três gates, e cada um só abre com o nome de uma pessoa, a decisão dela e uma nota:
+Os agentes fazem o trabalho que dá para observar: triagem, especificação, plano, checks internos, issue e pull request em rascunho. Mas há uma decisão que é sempre de uma pessoa: o merge. O gate só abre com o nome dela, a decisão e uma nota:
 
 ```json
 { "aprovado": true, "aprovador": "Joana", "nota": "Pode seguir, sem merge." }
 ```
 
-Nenhum agente preenche isso. Nenhum papel aprova gate. O que muda o repositório passa por gente.
+Nenhum agente preenche isso. Nenhum papel aprova gate. O que entra no repositório passa por uma pessoa, no merge. Tudo antes dele os agentes fazem sozinhos, sem pedir permissão a cada passo.
 
 ## Um pedido, do começo ao fim
 
@@ -94,7 +94,7 @@ Cada onda leva no máximo 5 cards prontos, sem dois mexendo no mesmo lugar.
 
 ## Modo autônomo: do pedido ao pull request
 
-O workflow `sdlc` para em três gates. O workflow `autonomo` segue sozinho até o pull request, e uma pessoa decide só no merge:
+Os dois workflows têm uma só decisão humana, o merge. O `sdlc` para uma vez, antes de abrir o pull request. O `autonomo` segue sozinho até o pull request, e a pessoa decide ao revisar:
 
 1. **Triagem.** A mesma regra do `sdlc`: pedido vago, segredo ou force-push param o card antes de qualquer código.
 2. **Sandbox.** A Factory abre um container Docker descartável para o card e clona o repositório do GitHub ou do Azure DevOps na branch base. A branch de trabalho é `factory/<card>-<título>`, nunca `main` nem `master`.
@@ -246,6 +246,21 @@ Para o time não precisar de SSH nem de editor de texto, o Studio tem o botão *
 
 Quem entra na Factory com o login pode trocar estas chaves: use contas e tokens com o mínimo de permissão.
 
+## Ler uma branch e organizar o GitHub Project
+
+O Chief of Staff **executa** o que não exige mudar código, em vez de só relatar que não consegue. Peça no chat, por exemplo: "analise a branch `trabalho-backlog` do repositório X e organize tudo no Project `https://github.com/users/dono/projects/3`".
+
+- **Ler o repositório:** `listarBranchesGithub`, `listarArquivosGithub` e `lerArquivoGithub`. Só leitura, sem token em repositório público, com `GITHUB_TOKEN` no privado. Segredos dentro dos arquivos são redigidos, e o conteúdo vem marcado como dado de terceiros: uma instrução escrita num arquivo nunca vira ordem para o agente.
+- **Ler o Project:** `lerProjetoGithub` devolve as colunas do campo de status e os itens de cada uma, com o id de cada item.
+- **Organizar o Project:** `organizarProjetoGithub` move itens entre colunas, adiciona issues, pull requests e rascunhos, e ordena, em lotes de até 40 ações. Não exclui nada, e uma ação que falha não derruba as outras.
+- **Token do Project:** Project de **usuário** só aceita token **clássico** com os escopos `repo` e `project`; token fine-grained cobre apenas Project de organização. Cole em **Chaves e acessos → GitHub: token do Project**. O painel testa o token e avisa se faltar o escopo. Sem essa chave, vale o `GITHUB_TOKEN`.
+- Os papéis Architect, QA, Docs e Security só **leem** (repositório e Project). Quem escreve no Project é o Chief of Staff e o Integrations.
+- A conversa com o agente tem até 16 passos por vez para o Chief of Staff, o bastante para organizar um quadro inteiro.
+
+## Uma decisão humana: o merge
+
+Tudo antes do merge os agentes fazem sozinhos, sem pedir permissão a cada passo: ler, planejar, abrir issue, organizar o Project, implementar e testar no container. O que continua de uma pessoa é o merge. Merge, deploy e force-push seguem fora do alcance dos agentes, e nenhum papel aprova o gate.
+
 ## Sugestões com Tab
 
 Para quem não é técnico e não sabe o que escrever, os campos do Studio mostram uma **sugestão em cinza** quando estão vazios, no estilo do Claude Code. Aperte **Tab** para preencher e **Esc** para ignorar. No celular, toque na dica que aparece sobre o campo.
@@ -284,7 +299,7 @@ Vale para os agentes do Studio. O modo autônomo continua só com o sandbox: o a
 | `src/factory/` | Quadro, gates, trilha, guardas de segredo, GitHub e Azure DevOps |
 | `src/scripts/check.ts` | Checagem do ciclo, sem shell e sem suíte de produto |
 | `src/scripts/e2e.ts` | Teste de ponta a ponta, pela API e no navegador |
-| `factory.json` | Manifesto: estágios, três gates, oito papéis, evidência |
+| `factory.json` | Manifesto: estágios, o gate do merge, oito papéis, evidência |
 
 ### Comandos
 
@@ -292,7 +307,7 @@ Vale para os agentes do Studio. O modo autônomo continua só com o sandbox: o a
 | --- | --- |
 | `npm run dev` | Sobe a Factory em `localhost:4721` |
 | `npm run check` | Typecheck e checagem do ciclo |
-| `npm run e2e` | Sobe a Factory sem chave e sem token, conduz o `sdlc` pelos três gates, testa recusas, triagem e redação de segredo, e abre a landing e o Studio no navegador, inclusive em larguras de celular |
+| `npm run e2e` | Sobe a Factory sem chave e sem token, conduz o `sdlc` pelo gate do merge, testa recusas, triagem e redação de segredo, e abre a landing e o Studio no navegador, inclusive em larguras de celular |
 | `npm run limpar-segredos` | Troca segredos já gravados no `factory.db` por marcadores e roda `VACUUM` |
 | `npm run build` · `npm start` | Gera o servidor e sobe essa versão |
 
@@ -341,6 +356,6 @@ As skills ficam em `skills/`, em leitura. A skill `super-factory` é o contrato 
 ## Créditos e escolhas
 
 - O quadro e a triagem (claro, nebuloso, bug) seguem o modelo operacional do super-board, licença MIT, Copyright 2026 Eric Tech, copiada em `skills/UPSTREAM-LICENSE`.
-- O manifesto em `factory.json` reescreve o núcleo (estágios, três gates humanos, oito papéis, evidência e escritas disjuntas) em vez de copiar os textos da Agent Factory.
+- O manifesto em `factory.json` reescreve o núcleo (estágios, o gate humano do merge, oito papéis, evidência e escritas disjuntas) em vez de copiar os textos da Agent Factory.
 - A Factory é construída sobre o [Mastra](https://mastra.ai). O nome aparece nos pacotes `@mastra/*` e no comando `mastra dev`; na tela, a marca é Super Factory.
 - Gerar código no repositório, executar a suíte, fazer merge, force-push ou deploy ficam de fora de propósito.

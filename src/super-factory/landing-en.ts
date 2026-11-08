@@ -101,7 +101,7 @@ export const PARES_EN: Array<[string, string]> = [
 
   // ciclo
   ['<h2>Ciclo</h2>', '<h2>Cycle</h2>'],
-  ['<p>O workflow autonomo conduz o card da triagem ao pull request e guarda cada passo. O sdlc continua para quem quer três gates.</p>', '<p>The autonomous workflow takes the card from triage to pull request and records every step. The sdlc workflow remains for teams that want three gates.</p>'],
+  ['<p>O workflow autonomo conduz o card da triagem ao pull request e guarda cada passo. O sdlc continua para quem prefere aprovar a entrega antes de abrir o pull request.</p>', '<p>The autonomous workflow takes the card from triage to pull request and records every step. The sdlc workflow remains for teams that prefer to approve the delivery before the pull request opens.</p>'],
   ['<h3>Um container por card</h3>', '<h3>One container per card</h3>'],
   ['<p class="desc">Tudo roda num Docker descartável. Nada toca a sua máquina nem produção.</p>', '<p class="desc">Everything runs in a disposable Docker container. Nothing touches your machine or production.</p>'],
   ['<p>destruído no fim do card</p>', '<p>destroyed when the card ends</p>'],

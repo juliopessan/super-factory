@@ -26,6 +26,7 @@ export const DEFINICOES: Definicao[] = [
   { nome: 'OPENAI_API_KEY', rotulo: 'OpenAI', grupo: 'modelo', secreto: true, ajuda: 'Opcional. Libera os modelos da OpenAI no chat do Studio.' },
   { nome: 'GOOGLE_API_KEY', rotulo: 'Google (Gemini)', grupo: 'modelo', secreto: true, ajuda: 'Opcional. Libera os modelos do Gemini no chat do Studio.' },
   { nome: 'GITHUB_TOKEN', rotulo: 'GitHub: token', grupo: 'repositorio', secreto: true, autonomo: true, ajuda: 'Token fine-grained só nos repositórios da Factory: Contents, Pull requests e Issues com Read and write.' },
+  { nome: 'GITHUB_PROJECT_TOKEN', rotulo: 'GitHub: token do Project', grupo: 'repositorio', secreto: true, ajuda: 'Opcional. Para ler e organizar o GitHub Project. Project de usuário exige token clássico com os escopos repo e project; sem esta chave, vale o token do GitHub acima.' },
   { nome: 'AZURE_DEVOPS_ORG', rotulo: 'Azure DevOps: organização', grupo: 'repositorio', secreto: false, autonomo: true, ajuda: 'Só o nome da organização, o trecho depois de dev.azure.com/.' },
   { nome: 'AZURE_DEVOPS_PAT', rotulo: 'Azure DevOps: PAT', grupo: 'repositorio', secreto: true, autonomo: true, ajuda: 'PAT com validade curta, escopos Code (Read & write) e Work Items (Read & write).' },
 ]
@@ -229,9 +230,9 @@ export async function testarChave(
   deps: { fetch?: typeof fetch; org?: string } = {},
 ): Promise<ResultadoDoTeste> {
   const buscar = deps.fetch ?? fetch
-  const pedir = async (url: string, headers: Record<string, string>, quem: string) => {
+  const pedir = async (url: string, headers: Record<string, string>, quem: string, init: { method?: string; body?: string } = {}) => {
     try {
-      return { resposta: await buscar(url, { headers, signal: AbortSignal.timeout(PRAZO_MS) }), quem }
+      return { resposta: await buscar(url, { headers, signal: AbortSignal.timeout(PRAZO_MS), ...init }), quem }
     } catch {
       return { resposta: null, quem }
     }
@@ -261,6 +262,23 @@ export async function testarChave(
           return typeof corpo.login === 'string' ? `O GitHub reconheceu o token (conta ${corpo.login.slice(0, 40)}).` : 'O GitHub reconheceu o token.'
         },
       )
+    case 'GITHUB_PROJECT_TOKEN': {
+      const resultado = await julgar(
+        await pedir('https://api.github.com/graphql', { Authorization: `Bearer ${valor}`, 'Content-Type': 'application/json', 'User-Agent': 'super-factory' }, 'o GitHub', { method: 'POST', body: JSON.stringify({ query: '{ viewer { login } }' }) }),
+        async (r) => {
+          const corpo = (await r.json().catch(() => ({}))) as { data?: { viewer?: { login?: unknown } } }
+          const conta = typeof corpo.data?.viewer?.login === 'string' ? ` (conta ${corpo.data.viewer.login.slice(0, 40)})` : ''
+          // Token clássico lista os escopos num cabeçalho. Sem "project" ele lê o repositório mas não o Project.
+          const escopos = r.headers.get('x-oauth-scopes')
+          if (escopos !== null && !/(^|,\s*)(read:)?project(\s*,|$)/.test(escopos)) return `SEM_ESCOPO${conta}`
+          return `O GitHub reconheceu o token${conta}. Falta conferir o acesso ao Project na primeira leitura.`
+        },
+      )
+      if (resultado.ok && resultado.mensagem.startsWith('SEM_ESCOPO')) {
+        return { ok: false, estado: 'invalida', mensagem: 'O token não tem o escopo "project". Gere um token clássico com os escopos repo e project.' }
+      }
+      return resultado
+    }
     case 'AZURE_DEVOPS_ORG':
       return { ok: true, estado: 'valida', mensagem: 'Nome aceito. Ele é conferido junto com o PAT.' }
     case 'AZURE_DEVOPS_PAT': {

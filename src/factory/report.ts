@@ -13,7 +13,7 @@ export function relatorioDe(estado: Estado): string {
   const checks = estado.checks.length
     ? estado.checks.map((check) => `- ${check.resultado} ${check.nome}: ${check.evidencia}`).join('\n')
     : '- NONE: ainda não há check observado'
-  const portoes = (['beforeImplementation', 'beforeMerge', 'beforeRelease'] as const)
+  const portoes = (['beforeMerge'] as const)
     .map((portao) => {
       const aprovacao = estado.aprovacoes.find((item) => item.portao === portao)
       if (!aprovacao) return `- ${portao}: pendente`

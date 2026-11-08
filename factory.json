@@ -9,18 +9,9 @@
     "delivery"
   ],
   "gates": {
-    "beforeImplementation": {
-      "human": true,
-      "agentMayApprove": false
-    },
     "beforeMerge": {
       "human": true,
       "requiresEvidence": true,
-      "agentMayApprove": false
-    },
-    "beforeRelease": {
-      "human": true,
-      "deploys": false,
       "agentMayApprove": false
     }
   },

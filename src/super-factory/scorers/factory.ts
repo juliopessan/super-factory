@@ -37,28 +37,23 @@ function humano(estado: Estado, portao: Estado['aprovacoes'][number]['portao']):
 
 export const portoesScorer = createScorer({
   id: 'gates-humanos',
-  description: 'Confere se implementação, merge e release só avançam com aprovação humana.',
+  description: 'Confere se o ciclo só avança até a entrega com a aprovação humana do merge, e que nenhum gate foi marcado por um agente.',
 })
   .preprocess(({ run }) => estadoDe(run.output))
   .generateScore(({ results }) => {
     const estado = results.preprocessStepResult as Estado | null
     if (!estado) return 0
     if (estado.aprovacoes.some((item) => item.origem !== 'human')) return 0
-    if (estado.desfecho === 'aceito-com-ressalvas') {
-      return humano(estado, 'beforeImplementation') && humano(estado, 'beforeMerge') && humano(estado, 'beforeRelease') ? 1 : 0
-    }
-    if (estado.desfecho === 'retido') {
-      return humano(estado, 'beforeImplementation') && humano(estado, 'beforeMerge') ? 1 : 0
-    }
+    if (estado.desfecho === 'aceito-com-ressalvas' || estado.desfecho === 'retido') return humano(estado, 'beforeMerge') ? 1 : 0
     if (estado.desfecho === 'bloqueado') {
-      const passouDaImplementacao = estado.fatias.length > 0 || estado.estagio === 'delivery'
-      if (passouDaImplementacao && !humano(estado, 'beforeImplementation')) return 0
+      // Bloquear não exige pessoa. Já entregar sem a aprovação do merge, sim.
+      if (estado.estagio === 'delivery' && !humano(estado, 'beforeMerge')) return 0
       return 1
     }
     return 0
   })
   .generateReason(({ score }) =>
-    score === 1 ? 'Nenhum gate foi marcado por um agente.' : 'O desfecho avançou sem a aprovação humana correspondente.',
+    score === 1 ? 'Nenhum gate foi marcado por um agente.' : 'O desfecho avançou sem a aprovação humana do merge.',
   )
 
 export const relatorioScorer = createScorer({
