@@ -253,9 +253,14 @@ O Chief of Staff **executa** o que não exige mudar código, em vez de só relat
 - **Ler o repositório:** `listarBranchesGithub`, `listarArquivosGithub` e `lerArquivoGithub`. Só leitura, sem token em repositório público, com `GITHUB_TOKEN` no privado. Segredos dentro dos arquivos são redigidos, e o conteúdo vem marcado como dado de terceiros: uma instrução escrita num arquivo nunca vira ordem para o agente.
 - **Ler o Project:** `lerProjetoGithub` devolve as colunas do campo de status e os itens de cada uma, com o id de cada item.
 - **Organizar o Project:** `organizarProjetoGithub` move itens entre colunas, adiciona issues, pull requests e rascunhos, e ordena, em lotes de até 40 ações. Não exclui nada, e uma ação que falha não derruba as outras.
-- **Token do Project:** Project de **usuário** só aceita token **clássico** com os escopos `repo` e `project`; token fine-grained cobre apenas Project de organização. Cole em **Chaves e acessos → GitHub: token do Project**. O painel testa o token e avisa se faltar o escopo. Sem essa chave, vale o `GITHUB_TOKEN`.
+- **Token do Project:** Project de **usuário** só aceita token **clássico** com os escopos `repo` e `project`; token fine-grained cobre apenas Project de organização. Cole em **Settings → Chaves e acessos → GitHub: token do Project**. O painel testa o token e avisa se faltar o escopo. Sem essa chave, vale o `GITHUB_TOKEN`.
 - Os papéis Architect, QA, Docs e Security só **leem** (repositório e Project). Quem escreve no Project é o Chief of Staff e o Integrations.
 - A conversa com o agente tem até 16 passos por vez para o Chief of Staff, o bastante para organizar um quadro inteiro.
+
+## Métricas, logs e datasets no Studio
+
+- **Metrics e Logs** usam um arquivo **DuckDB** (`SUPER_FACTORY_OBS_DB`; no container, `/data/observabilidade.duckdb`, no mesmo volume). O banco principal (agentes, memória, workflows) continua no LibSQL. Se o DuckDB não abrir, a Factory sobe sem métricas e avisa no log. Os traces antigos ficavam no LibSQL e não aparecem mais no Studio; os novos passam a valer daqui para a frente.
+- **Datasets** abre com o conjunto **Critérios de aceite (triagem)**: casos do lint com o veredito esperado. É criado uma vez e não é sobrescrito se você editar. **Experiments** e **Review Queue** começam vazios de propósito: Experiments nasce quando você roda um conjunto contra um agente ou workflow (gasta chamadas de modelo, por isso nada roda sozinho), e a Review Queue recebe o que for marcado para revisão.
 
 ## Uma decisão humana: o merge
 
@@ -272,7 +277,7 @@ Para quem não é técnico e não sabe o que escrever, os campos do Studio mostr
 
 ## Ferramentas (MCP) que o time instala
 
-O Studio traz uma segunda aba no painel **Chaves e acessos**: **Ferramentas (MCP)**. Cada pessoa conecta aos agentes da Factory as ferramentas que ajudam no processo, sem SSH e sem mexer em arquivo.
+As chaves ficam em **Settings → Chaves e acessos**. As ferramentas (MCP) abrem pelo botão **+** das páginas **Tools** e **MCP Servers** do Studio. Cada pessoa conecta aos agentes da Factory as ferramentas que ajudam no processo, sem SSH e sem mexer em arquivo.
 
 - **Catálogo curado, versões fixas:** Microsoft Learn (documentação do Azure, sem chave), Context7 (documentação de bibliotecas), GitHub (leitura de repositórios, issues e PRs), Azure DevOps (work items, repositórios, builds) e Raciocínio em etapas.
 - **Servidor remoto:** qualquer MCP publicado em https. A URL precisa ser pública; endereço da rede interna, IP e nome interno são recusados. O token vai criptografado, nunca na URL.

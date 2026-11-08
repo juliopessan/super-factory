@@ -9,6 +9,7 @@ ENV NODE_ENV=production \
     SUPER_FACTORY_HOST=0.0.0.0 \
     FACTORY_STATE_PATH=/data/state.json \
     SUPER_FACTORY_DB=file:/data/factory.db \
+    SUPER_FACTORY_OBS_DB=/data/observabilidade.duckdb \
     SUPER_FACTORY_KEYS_PATH=/data/chaves.enc.json \
     SUPER_FACTORY_MCPS_PATH=/data/mcps.json
 VOLUME ["/data"]

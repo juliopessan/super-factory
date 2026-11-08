@@ -93,7 +93,7 @@ const preparar = createStep({
     const contexto = contextoInicial(ensaio ? { ...pedido, titulo: `[ENSAIO] ${pedido.titulo}`.slice(0, 120) } : pedido)
     const temModelo = ensaio || process.env.ANTHROPIC_API_KEY || process.env.SUPER_FACTORY_BUILDER_MODEL
     if (!temModelo) {
-      const estado = persistir(parar(contexto.estado, 'O modo autônomo precisa de ANTHROPIC_API_KEY para o agente construtor escrever código. Cole a chave em Chaves e acessos, no Studio, ou marque ensaio para conhecer o fluxo.'))
+      const estado = persistir(parar(contexto.estado, 'O modo autônomo precisa de ANTHROPIC_API_KEY para o agente construtor escrever código. Cole a chave em Settings → Chaves e acessos, no Studio, ou marque ensaio para conhecer o fluxo.'))
       throw new Error(`Parou em Receber o pedido: ${estado.motivo}`)
     }
     return { ...contexto, ensaio }
