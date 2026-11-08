@@ -262,6 +262,17 @@ O Chief of Staff **executa** o que não exige mudar código, em vez de só relat
 - **Metrics e Logs** usam um arquivo **DuckDB** (`SUPER_FACTORY_OBS_DB`; no container, `/data/observabilidade.duckdb`, no mesmo volume). O banco principal (agentes, memória, workflows) continua no LibSQL. Se o DuckDB não abrir, a Factory sobe sem métricas e avisa no log. Os traces antigos ficavam no LibSQL e não aparecem mais no Studio; os novos passam a valer daqui para a frente.
 - **Datasets** abre com o conjunto **Critérios de aceite (triagem)**: casos do lint com o veredito esperado. É criado uma vez e não é sobrescrito se você editar. **Experiments** e **Review Queue** começam vazios de propósito: Experiments nasce quando você roda um conjunto contra um agente ou workflow (gasta chamadas de modelo, por isso nada roda sozinho), e a Review Queue recebe o que for marcado para revisão.
 
+## Menu `/` e `@` no chat
+
+No chat de qualquer agente, digite **`/`** no começo da mensagem para ver workflows, atalhos e skills, ou **`@`** em qualquer ponto para referenciar um card, um pull request ou o repositório usado por último. Setas navegam, **Enter** ou **Tab** escolhem, **Esc** fecha.
+
+- **`/` só preenche a mensagem** com um modelo. Quem executa é o agente, com as mesmas ferramentas e travas de sempre; merge e deploy não aparecem no menu. No Chief, `/autonomo` e `/onda` viram pedidos para `iniciarOnda`; nos outros agentes, os workflows abrem a tela do workflow no Studio.
+- **`@` coloca só o identificador** (`C-12`), nunca o título do card, que é texto de terceiros.
+- O menu lê as skills e os cards do servidor (`/factory/menu`, só leitura): skill nova aparece sozinha.
+- `SUPER_FACTORY_MENU=0` desliga o menu sem mexer no resto.
+
+Para o beta interno, veja [docs/BETA.md](docs/BETA.md): checklist de pré-voo, roteiro de demo, limites conhecidos e como voltar atrás.
+
 ## Time de agentes animado
 
 Na tela **Agents** do Studio, o espaço abaixo dos cards mostra **Como o time trabalha**: o Chief of Staff no topo delegando para o time (Architect, Frontend, Backend, Construtor, QA, Security, Docs, Integrations) e, embaixo, o **merge**, o único nó humano. Um pulso percorre o ciclo a cada 12 s e cada agente acende na sua vez; o merge pulsa em âmbar esperando uma pessoa. Passe o mouse para ver o papel e clique para abrir o chat do agente. Aparece nas visões em cards e em lista, acompanha o tema claro/escuro e fica parado com `prefers-reduced-motion`. O desenho é fixo no código (`src/super-factory/time-animado.ts`): ao criar um agente novo, inclua-o lá.
