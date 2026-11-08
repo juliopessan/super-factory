@@ -210,6 +210,7 @@ export const PARES_EN: Array<[string, string]> = [
   ["titulo: 'Oito papéis', texto: 'Só o Chief of Staff abre card. Security é somente leitura. Nenhum papel aprova gate.'", "titulo: 'Eight roles', texto: 'Only the Chief of Staff opens cards. Security is read-only. No role approves a gate.'"],
   ["titulo: 'O que fica com você', texto: 'Merge, deploy, force-push e as chaves do repositório. A Factory faz o trabalho; você decide o que entra.'", "titulo: 'What stays with you', texto: 'Merge, deploy, force-push and the repository keys. The Factory does the work; you decide what ships.'"],
   ["titulo: 'Agora a Factory', texto: 'Abra a Factory e escreva o passo em que você está, ou cole o erro. A conversa não volta ao começo.'", "titulo: 'Now the Factory', texto: 'Open the Factory and type the step you are on, or paste the error. The conversation does not start over.'"],
+  ["Do card ao pull request, com o merge nas mãos de uma pessoa.", "From card to pull request, with the merge in one person's hands."],
 ]
 
 /** Aplica a tradução ao HTML em português. */

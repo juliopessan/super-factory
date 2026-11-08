@@ -180,6 +180,9 @@ async function testarNavegador(): Promise<void> {
     const resposta = await pagina.goto(BASE + '/')
     await pagina.waitForLoadState('networkidle')
     conferir('landing: responde 200', resposta?.status() === 200)
+    const video = await fetch(BASE + '/motion/super-factory-hero.mp4', { headers: { range: 'bytes=0-1023' } })
+    conferir('landing: o vídeo de apresentação responde em faixas (206), para o Safari tocar', video.status === 206 && (video.headers.get('content-type') ?? '') === 'video/mp4')
+    conferir('landing: o bloco do vídeo começa escondido e aparece depois de 3 s', (await (await fetch(BASE + '/')).text()).includes('video-quadro'))
     const texto = (await pagina.textContent('body')) ?? ''
     conferir('landing: fala em Factory', /Factory/.test(texto))
     conferir('landing: sem a palavra mesa', !/\bmesa\b/i.test(texto))
