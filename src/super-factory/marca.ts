@@ -7,6 +7,7 @@ import { marcarSegredos } from '../factory/guards.ts'
 import { paginaConfiguracoes, tratarChaves } from './configuracoes.ts'
 import { tratarMcps } from './configuracoes-mcps.ts'
 import { paginaInicial } from './landing.ts'
+import { SCRIPT_SUGESTOES } from './sugestoes.ts'
 
 // Marca: tile claro (text-main-white) com a sigla no preto da página (surface-bg), em Greed.
 const MARCA_FUNDO = '#f0f0f0'
@@ -402,7 +403,7 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   const marcado = html
     .replaceAll('<title>Mastra Studio</title>', '<title>Super Factory</title>')
     .replaceAll('href="./mastra-dark-tile.svg"', 'href="./sf.svg"')
-    .replace('</body>', `<script>${SCRIPT}</script></body>`)
+    .replace('</body>', `<script>${SCRIPT}</script><script>${SCRIPT_SUGESTOES}</script></body>`)
   const headers = new Headers(c.res.headers)
   headers.delete('content-length')
   c.res = new Response(marcado, { status: c.res.status, headers })

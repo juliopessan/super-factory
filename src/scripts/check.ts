@@ -553,10 +553,37 @@ assert.equal((pedidoIssue as { suspendPayload?: { toolName?: string } }).suspend
   }
   await marcaSuperFactory(contexto, async () => {})
   const html = await contexto.res.text()
-  const injetado = /<script>([\s\S]*?)<\/script><\/body>/.exec(html)?.[1] ?? ''
-  assert.ok(injetado.includes('popupDeChaves'), 'o script do Studio traz o botão de chaves')
-  assert.doesNotThrow(() => new Function(injetado), 'o script injetado no Studio tem sintaxe válida')
+  const injetados = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? '')
+  assert.equal(injetados.length, 2, 'o Studio recebe dois scripts: a marca e as sugestões')
+  for (const [i, codigo] of injetados.entries()) assert.doesNotThrow(() => new Function(codigo), `o script ${i + 1} injetado no Studio tem sintaxe válida`)
+  assert.ok(injetados.some((codigo) => codigo.includes('popupDeChaves')), 'o script do Studio traz o botão de chaves')
+  assert.ok(injetados.some((codigo) => codigo.includes('sf-sugestoes') && codigo.includes('Tab')), 'o script de sugestões com Tab está no Studio')
   assert.match(html, /<title>Super Factory<\/title>/)
+}
+
+// --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
+{
+  const { AMOSTRAS, CONVERSAS, PADROES, SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
+  const { iniciar } = await import('../factory/pipeline.ts')
+  const { lintarCriterios, lerCriterios } = await import('../factory/board.ts')
+  assert.ok(AMOSTRAS.length >= 3)
+  for (const amostra of AMOSTRAS) {
+    const criterios = lerCriterios(amostra.criterios)
+    assert.equal(lintarCriterios(criterios, { titulo: amostra.titulo, descricao: amostra.descricao }).ok, true, `critérios do exemplo "${amostra.titulo}" são observáveis`)
+    const card = iniciar({ ...amostra, provedor: 'github', repositorio: 'acme/pedidos', branchBase: 'main', branchHead: '' })
+    assert.equal(card.parado, false, `o exemplo "${amostra.titulo}" passa na triagem: ${card.motivo ?? ''}`)
+    assert.equal(card.card.rota === 'foggy', false)
+  }
+  assert.equal(new Set(AMOSTRAS.map((a) => a.titulo)).size, AMOSTRAS.length)
+  const { architect, backend, chiefOfStaff, docs, frontend, integrations, qa, security } = await import('../super-factory/agents/factory.ts')
+  for (const agente of [chiefOfStaff, architect, frontend, backend, integrations, qa, security, docs]) {
+    assert.ok((CONVERSAS[agente.id]?.length ?? 0) >= 3, `o agente ${agente.id} tem pelo menos 3 sugestões de conversa`)
+  }
+  assert.ok((CONVERSAS['*']?.length ?? 0) >= 1, 'agente sem lista própria cai na sugestão geral')
+  assert.deepEqual(Object.keys(PADROES), ['branchBase'], 'só o branch base tem valor padrão: repositório e aprovador vêm do histórico')
+  assert.equal(/\bnota\b/.test(SCRIPT_SUGESTOES.split('CAMPOS_DE_HISTORICO = ')[1]?.split(']')[0] ?? ''), false, 'a nota de aprovação nunca é sugerida')
+  assert.equal(SCRIPT_SUGESTOES.includes("name === 'nota'"), false)
+  assert.equal(SCRIPT_SUGESTOES.includes('</script'), false, 'o script não fecha a tag que o contém')
 }
 
 // --- Chaves pelo painel: cofre criptografado, rota protegida, valor aplicado na hora
