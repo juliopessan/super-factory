@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
   FASES_AUTONOMO,
   contextoInicial,
+  marcarEnsaio,
   type ContextoAutonomo,
   type DepsAutonomo,
   type FaseAutonomo,
@@ -64,6 +65,7 @@ function passo(fase: FaseAutonomo, ultima: boolean) {
       } catch (erro) {
         saida = { ...contexto, estado: parar(contexto.estado, erro instanceof Error ? erro.message : `A fase ${fase.titulo} falhou.`) }
       }
+      if (ensaio && ultima && !saida.estado.parado) saida = { ...saida, estado: marcarEnsaio(saida.estado) }
       if (saida.estado.parado || ultima) await encerrarSessao(runId)
       persistir(saida.estado)
       // Parou: o nó fica vermelho no canvas com o motivo, e as fases seguintes não começam.
@@ -77,7 +79,7 @@ const entradaSchema = pedidoSchema.extend({
   ensaio: z
     .boolean()
     .optional()
-    .describe('Ensaio: percorre as mesmas fases com um sandbox de mentira, sem tocar repositório nem rede e sem precisar de chave. Bom para conhecer o fluxo.'),
+    .describe('Ensaio: percorre as mesmas fases com um sandbox de mentira, sem tocar repositório nem rede e sem precisar de chave. Nada é feito de verdade: o card ganha o prefixo [ENSAIO] e nenhum pull request existe. Deixe desmarcado para executar a tarefa.'),
 })
 
 const preparar = createStep({
@@ -87,7 +89,8 @@ const preparar = createStep({
   outputSchema: contextoSchema,
   execute: async ({ inputData }) => {
     const { ensaio = false, ...pedido } = inputData
-    const contexto = contextoInicial(pedido)
+    // O card do ensaio entra no quadro de verdade; o prefixo evita confundir com trabalho real.
+    const contexto = contextoInicial(ensaio ? { ...pedido, titulo: `[ENSAIO] ${pedido.titulo}`.slice(0, 120) } : pedido)
     const temModelo = ensaio || process.env.ANTHROPIC_API_KEY || process.env.SUPER_FACTORY_BUILDER_MODEL
     if (!temModelo) {
       const estado = persistir(parar(contexto.estado, 'O modo autônomo precisa de ANTHROPIC_API_KEY para o agente construtor escrever código. Cole a chave em Chaves e acessos, no Studio, ou marque ensaio para conhecer o fluxo.'))

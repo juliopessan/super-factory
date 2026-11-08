@@ -1086,6 +1086,39 @@ assert.equal((pedidoIssue as { suspendPayload?: { toolName?: string } }).suspend
   delete process.env.SUPER_FACTORY_MCPS_PATH
 }
 
+// --- Landing: o menu segue a ordem das seções e todo script embutido é JavaScript válido
+{
+  const { paginaInicial } = await import('../super-factory/landing.ts')
+  for (const idioma of ['pt', 'en'] as const) {
+    const html = paginaInicial(idioma)
+    const menu = [...html.matchAll(/<nav aria-label="[^"]*">([\s\S]*?)<\/nav>/g)].flatMap((m) => [...(m[1] ?? '').matchAll(/href="#([a-z]+)"/g)].map((x) => x[1]))
+    const secoes = [...html.matchAll(/<section id="([a-z]+)">/g)].map((m) => m[1])
+    assert.deepEqual(menu, secoes, `${idioma}: o menu tem todas as seções, na ordem da página`)
+    assert.equal(new Set(secoes).size, secoes.length)
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? '')
+    assert.ok(scripts.length >= 6, 'a landing traz os scripts esperados')
+    for (const [i, codigo] of scripts.entries()) assert.doesNotThrow(() => new Function(codigo), `${idioma}: o script ${i + 1} da landing tem sintaxe válida`)
+    assert.ok(html.includes('sfHeroSeek') && html.includes('campo-pontos'), 'o motion do hero está na página')
+    assert.ok(html.includes('scroll-margin-top'), 'o ponto de chegada desconta o cabeçalho fixo')
+  }
+}
+
+// --- Critério que só repete o pedido não é critério de aceite
+{
+  const { lintarCriterios } = await import('../factory/board.ts')
+  const igual = 'Temos um bord novo que precisamos analisar a branch de backlog e organizar tudo no board'
+  assert.equal(lintarCriterios([igual]).ok, true, 'sem o contexto a regra antiga deixa passar (casa com "precisa")')
+  const barrado = lintarCriterios([igual], { titulo: igual, descricao: igual })
+  assert.equal(barrado.ok, false)
+  assert.match(barrado.issues[0] ?? '', /Repete o título/)
+  assert.equal(lintarCriterios(['  TEMOS um bord novo QUE precisamos analisar a branch de backlog e organizar tudo no board '], { titulo: igual }).ok, false, 'ignora caixa, acento e espaços')
+  assert.equal(lintarCriterios(['O endpoint devolve 400 quando o fim do intervalo é anterior ao início.'], { titulo: 'Filtro de datas com hora', descricao: 'O filtro quebra com data só com o dia.' }).ok, true, 'critério de verdade segue passando')
+  const { iniciar } = await import('../factory/pipeline.ts')
+  const card = iniciar({ titulo: igual, descricao: igual, criterios: igual, provedor: 'github', repositorio: 'acme/pedidos', branchBase: 'dev', branchHead: 'trabalho-backlog' })
+  assert.equal(card.parado, true, 'a triagem para o card que repete o próprio título')
+  assert.match(card.motivo ?? '', /Repete o título/)
+}
+
 // --- Repositório: aceita o endereço copiado do navegador ou do git
 {
   const { normalizarRepositorio, dividirRepositorio, dividirAzure } = await import('../factory/guards.ts')

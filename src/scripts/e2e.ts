@@ -156,6 +156,8 @@ async function testarWorkflow(): Promise<void> {
   const { corpo: criadoEnsaio } = await api('/api/workflows/autonomo/create-run', {})
   const ensaio = await api(`/api/workflows/autonomo/start-async?runId=${criadoEnsaio.runId}`, { inputData: { ...pedido, ensaio: true } })
   const passos = Object.keys(ensaio.corpo?.steps ?? {})
+  const entregaEnsaio = (ensaio.corpo?.result?.entrega ?? {}) as { modo?: string; pullRequestId?: unknown; pullRequestUrl?: unknown; nota?: string }
+  conferir('autônomo (ensaio): não finge entrega (título [ENSAIO], modo fixture, sem número de PR)', String(ensaio.corpo?.result?.card?.titulo).startsWith('[ENSAIO] ') && entregaEnsaio.modo === 'fixture' && entregaEnsaio.pullRequestId === null && entregaEnsaio.pullRequestUrl === null && /ENSAIO/.test(entregaEnsaio.nota ?? ''), JSON.stringify(entregaEnsaio))
   conferir('autônomo (ensaio): percorre as seis fases e termina aguardando revisão humana', ensaio.corpo?.status === 'success' && ensaio.corpo?.result?.card?.coluna === 'review' && ['triar', 'abrir-sandbox', 'clonar-e-preparar', 'construir-e-testar', 'revisar-e-enviar', 'abrir-pull-request'].every((id) => passos.includes(id)), `${ensaio.corpo?.status} ${passos.join(',')}`)
 
   const status = await fetch(BASE + '/configuracoes/chaves')
@@ -228,6 +230,68 @@ async function testarNavegador(): Promise<void> {
       cliques++
     }
     conferir('guia: Guia-me percorre os passos e conclui', cliques > 1 && !(await painel.isVisible()), `${cliques} passos`)
+
+    // Navegação: o menu segue a ordem da página, e cada clique desce em ordem e deixa o título à vista
+    await pagina.goto(BASE + '/')
+    await pagina.waitForLoadState('networkidle')
+    const menu = await pagina.$$eval('.top nav a[href^="#"]', (links: Element[]) => links.map((a: Element) => a.getAttribute('href')))
+    const secoes = await pagina.$$eval('section[id]', (blocos: Element[]) => blocos.map((b: Element) => '#' + b.id))
+    conferir('landing: o menu tem todas as seções, na mesma ordem da página', JSON.stringify(menu) === JSON.stringify(secoes), `${menu.join(' ')} | ${secoes.join(' ')}`)
+    let anterior = -1
+    let desceSempre = true
+    let tituloAVista = true
+    let marcaCerta = true
+    for (const href of menu) {
+      await pagina.click(`.top nav a[href="${href}"]`)
+      let ultimo = -1
+      let parado = 0
+      for (let i = 0; i < 60 && parado < 4; i++) {
+        await pagina.waitForTimeout(100)
+        const y = await pagina.evaluate(() => Math.round(window.scrollY))
+        parado = y === ultimo ? parado + 1 : 0
+        ultimo = y
+      }
+      if (ultimo < anterior) desceSempre = false
+      anterior = ultimo
+      const medida = await pagina.evaluate((alvo: string) => {
+        const cabecalho = (document.querySelector('.top') as HTMLElement).getBoundingClientRect().bottom
+        const titulo = (document.querySelector(`${alvo} h2`) as HTMLElement).getBoundingClientRect().top
+        return { folga: titulo - cabecalho, atual: document.querySelector('.top nav a[aria-current]')?.getAttribute('href') }
+      }, href as string)
+      if (medida.folga < 10 || medida.folga > 140) tituloAVista = false
+      if (medida.atual !== href) marcaCerta = false
+    }
+    conferir('landing: clicar no menu só desce, na ordem das seções', desceSempre)
+    conferir('landing: o título da seção chega abaixo do cabeçalho, nunca escondido', tituloAVista)
+    conferir('landing: o menu destaca a seção para onde se foi', marcaCerta)
+
+    // Motion do hero: ativo com movimento normal, texto intacto, e parado com movimento reduzido
+    const textoDoHero = await pagina.evaluate(async () => {
+      // O campo só desenha com o hero na tela: dá tempo ao observador de visibilidade depois de voltar ao topo.
+      window.scrollTo({ top: 0, behavior: 'instant' })
+      await new Promise((r) => setTimeout(r, 700))
+      const w = window as unknown as { sfHeroSeek?: (t: number | null) => void }
+      w.sfHeroSeek?.(3.3)
+      await new Promise((r) => setTimeout(r, 400))
+      const c = document.querySelector('.campo-pontos') as HTMLCanvasElement | null
+      let acento = 0
+      if (c) {
+        const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data
+        for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 120 && (d[i] ?? 0) > 150 && (d[i + 2] ?? 0) < 150) acento++
+      }
+      const h1 = (document.querySelector('.hero h1') as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
+      w.sfHeroSeek?.(null)
+      return { acento, h1, letras: document.querySelectorAll('.hero h1 .l').length, tem: typeof w.sfHeroSeek === 'function' }
+    })
+    conferir('hero: o motion está ativo (letras separadas e campo de pontos)', textoDoHero.tem && textoDoHero.letras > 20 && textoDoHero.acento > 300, JSON.stringify(textoDoHero))
+    conferir('hero: o texto do título continua intacto', textoDoHero.h1 === 'A programação morreu. A engenharia não.', textoDoHero.h1)
+    const reduzido = await navegador.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+    await reduzido.addInitScript(() => localStorage.setItem('sf-guia', 'visto'))
+    await reduzido.goto(BASE + '/')
+    await reduzido.waitForLoadState('networkidle')
+    const parado = await reduzido.evaluate(() => ({ campo: document.querySelectorAll('.campo-pontos').length, letras: document.querySelectorAll('.hero h1 .l').length, opacidade: getComputedStyle(document.querySelector('.hero h1 .linha') as Element).opacity, rede: getComputedStyle(document.querySelector('.hero .rede') as Element).opacity }))
+    conferir('hero: com movimento reduzido nada é animado e tudo aparece', parado.campo === 0 && parado.letras === 0 && parado.opacidade === '1' && parado.rede === '1', JSON.stringify(parado))
+    await reduzido.close()
     await pagina.screenshot({ path: path.join(saida, 'landing.png'), fullPage: true })
 
     for (const largura of [320, 360, 390, 430, 768]) {

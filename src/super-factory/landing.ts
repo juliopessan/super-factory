@@ -65,6 +65,11 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
     nav a { color: var(--muted); font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
     nav a::before { content: ""; width: 4px; height: 4px; border-radius: 9px; background: var(--faint); }
     nav a:hover { color: var(--text); }
+    nav a[aria-current="location"] { color: var(--text); }
+    nav a[aria-current="location"]::before { background: var(--accent); transform: scale(1.5); }
+    nav a::before { transition: background-color .2s var(--ease), transform .2s var(--ease); }
+    /* O título da seção para 28px abaixo do cabeçalho fixo: o ponto de chegada desconta o respiro do topo da seção. */
+    section[id] { scroll-margin-top: calc(var(--topo, 61px) - var(--respiro) + 28px); }
     .nav-cta { margin-left: auto; display: flex; align-items: center; gap: 14px; }
     .nav-cta .link { color: var(--muted); font-size: 14px; background: none; border: 0; cursor: pointer; font-family: inherit; }
     .nav-cta .link:hover { color: var(--text); }
@@ -95,8 +100,19 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
     .seta { color: var(--muted); font-size: 15px; }
     .seta:hover { color: var(--text); }
 
+    /* motion do hero: só vale com a classe mov (sem movimento reduzido). Sem o script, o hero aparece inteiro. */
+    .hero { position: relative; }
+    :where(.hero) > :where(:not(.campo-pontos)) { position: relative; z-index: 1; }
+    .campo-pontos { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; -webkit-mask-image: radial-gradient(ellipse 74% 64% at 50% 36%, #000 38%, transparent 100%); mask-image: radial-gradient(ellipse 74% 64% at 50% 36%, #000 38%, transparent 100%); }
+    .mov .hero h1 .linha, .mov .hero .rede, .mov .hero .rotulo-hero, .mov .hero .lead, .mov .hero .primario, .mov .hero .seta { opacity: 0; animation: hero-seguro .01s 4.4s forwards; }
+    @keyframes hero-seguro { to { opacity: 1; } }
+    .mov .hero .p { display: inline-block; white-space: nowrap; }
+    .mov .hero .l { display: inline-block; transform-origin: 50% 100%; }
+    .mov .hero .sub { text-decoration: none; position: relative; }
+    .mov .hero .sub::after { content: ""; position: absolute; left: 0; right: 0; bottom: .09em; height: max(1.5px, .04em); background: var(--accent); transform-origin: left center; transform: scaleX(var(--ul, 1)); }
+
     /* seções */
-    section { padding: 120px 0 0; }
+    section { --respiro: 120px; padding: var(--respiro) 0 0; }
     .cabeca { text-align: center; margin: 0 auto 64px; max-width: 760px; }
     .cabeca h2 { font-size: clamp(2.25rem, 1.2rem + 2.6vw, 3.6rem); line-height: 1.05; letter-spacing: -.035em; }
     .cabeca p { margin: 16px auto 0; color: var(--muted); font-size: clamp(1.05rem, .95rem + .4vw, 1.3rem); max-width: 58ch; }
@@ -278,7 +294,10 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
     .guia-acoes .solid { background: var(--button); color: var(--button-text); border-color: transparent; }
 
     @media (max-width: 1080px) {
-      nav { display: none; }
+      .top-inner { flex-wrap: wrap; row-gap: 0; padding-top: 8px; }
+      nav { order: 3; flex: 1 0 100%; gap: 20px; margin: 0 -16px; padding: 0 16px 8px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+      nav::-webkit-scrollbar { display: none; }
+      nav a { flex: none; white-space: nowrap; min-height: 30px; }
       .grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .trilha-grade { grid-template-columns: 1fr; }
       .auto-grade { grid-template-columns: 1fr; padding: 24px; }
@@ -287,7 +306,7 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
       .passos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 760px) {
-      section { padding-top: 72px; }
+      section { --respiro: 72px; }
       .cabeca { margin-bottom: 40px; }
       .grade, .grade.dois, .passos, .lados { grid-template-columns: 1fr; }
       .lados > div { padding: 8px 0; }
@@ -322,9 +341,11 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
       <nav aria-label="Seções">
         <a href="#manifesto">Manifesto</a>
         <a href="#autonomo">Autônomo</a>
-        <a href="#harness">Harness</a>
-        <a href="#papeis">Papéis</a>
         <a href="#ciclo">Ciclo</a>
+        <a href="#papeis">Papéis</a>
+        <a href="#quadro">Quadro</a>
+        <a href="#trilha">Trilha</a>
+        <a href="#harness">Harness</a>
         <a href="#limites">Limites</a>
         <a href="#instalar">Instalar</a>
       </nav>
@@ -433,7 +454,6 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
         </div>
       </div>
     </section>
-
     <section id="autonomo">
       <div class="wrap">
         <div class="cabeca" data-revela>
@@ -465,7 +485,41 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
         </div>
       </div>
     </section>
-
+    <section id="ciclo">
+      <div class="wrap">
+        <div class="cabeca" data-revela>
+          <h2>Ciclo</h2>
+          <p>O workflow autonomo conduz o card da triagem ao pull request e guarda cada passo. O sdlc continua para quem quer três gates.</p>
+        </div>
+        <div class="grade dois">
+          <article class="card grao" data-revela>
+            <h3>Um container por card</h3>
+            <p class="desc">Tudo roda num Docker descartável. Nada toca a sua máquina nem produção.</p>
+            <div class="mini"><div class="suspende"><div class="linha"><b><span class="gira" aria-hidden="true">✻</span>sandbox · node:22</b><small>C-14</small></div><p>destruído no fim do card</p><div class="pills"><span>cap-drop ALL</span><span>no-new-privileges</span><span>512 processos</span><span>4 GB</span></div></div></div>
+          </article>
+          <article class="card grao" data-revela>
+            <h3>Evidência observada</h3>
+            <p class="desc">O teste do seu repositório roda no container. O resultado vem do código de saída, não de relato.</p>
+            <div class="mini"><pre aria-label="Exemplo de evidência do sandbox">{
+  <span class="k">"nome"</span>: <span class="s">"testes-no-sandbox"</span>,
+  <span class="k">"resultado"</span>: <span class="s">"PASS"</span>,
+  <span class="k">"comando"</span>: <span class="s">"npm test"</span>,
+  <span class="k">"evidencia"</span>: <span class="s">"código de saída 0, 2814 ms"</span>
+}</pre></div>
+          </article>
+          <article class="card grao" data-revela>
+            <h3>Token fora do container</h3>
+            <p class="desc">O token entra só no clone e no push. O diff é varrido antes do envio: com segredo, nada sai.</p>
+            <div class="mini"><div class="tracejado"><span class="mono">git push</span><code>FACTORY_GIT_AUTH → só no clone e no push</code><code>diff com <b>[segredo:token-github]</b> → bloqueado</code></div></div>
+          </article>
+          <article class="card grao" data-revela>
+            <h3>GitHub e Azure DevOps</h3>
+            <p class="desc">Clona, envia a branch e abre o pull request pronto para revisão. Não há endpoint de merge.</p>
+            <div class="mini chamadas"><div class="chamada"><code>criarRascunhoAzure()</code><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="30" fill="var(--card-2)"/><path d="M18 30 A36 36 0 0 1 40 13" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path d="M78 66 A36 36 0 0 1 56 83" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path transform="translate(36 36)" d="M7 3h7l4 4v14H7z M14 3v4h4" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="chamada"><code>criarRascunhoGithub()</code><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="30" fill="var(--card-2)"/><path d="M18 30 A36 36 0 0 1 40 13" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path d="M78 66 A36 36 0 0 1 56 83" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path transform="translate(36 36)" d="M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 9c0 6-12 3-12 9" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+          </article>
+        </div>
+      </div>
+    </section>
     <section id="papeis">
       <div class="wrap">
         <div class="cabeca" data-revela>
@@ -524,43 +578,55 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
         <p class="cabeca" style="margin: 28px auto 0; font-size: 15px; color: var(--muted)">Frontend, Backend e Docs completam os oito. No modo autônomo, o Construtor escreve o código dentro do container do card.</p>
       </div>
     </section>
-
-    <section id="ciclo">
+    <section id="quadro">
       <div class="wrap">
         <div class="cabeca" data-revela>
-          <h2>Ciclo</h2>
-          <p>O workflow autonomo conduz o card da triagem ao pull request e guarda cada passo. O sdlc continua para quem quer três gates.</p>
+          <h2>Quadro</h2>
+          <p>Pedido claro entra em ready. Pedido vago, segredo ou force-push vai para blocked. Cada onda leva no máximo 5 cards.</p>
         </div>
-        <div class="grade dois">
-          <article class="card grao" data-revela>
-            <h3>Um container por card</h3>
-            <p class="desc">Tudo roda num Docker descartável. Nada toca a sua máquina nem produção.</p>
-            <div class="mini"><div class="suspende"><div class="linha"><b><span class="gira" aria-hidden="true">✻</span>sandbox · node:22</b><small>C-14</small></div><p>destruído no fim do card</p><div class="pills"><span>cap-drop ALL</span><span>no-new-privileges</span><span>512 processos</span><span>4 GB</span></div></div></div>
-          </article>
-          <article class="card grao" data-revela>
-            <h3>Evidência observada</h3>
-            <p class="desc">O teste do seu repositório roda no container. O resultado vem do código de saída, não de relato.</p>
-            <div class="mini"><pre aria-label="Exemplo de evidência do sandbox">{
-  <span class="k">"nome"</span>: <span class="s">"testes-no-sandbox"</span>,
-  <span class="k">"resultado"</span>: <span class="s">"PASS"</span>,
-  <span class="k">"comando"</span>: <span class="s">"npm test"</span>,
-  <span class="k">"evidencia"</span>: <span class="s">"código de saída 0, 2814 ms"</span>
-}</pre></div>
-          </article>
-          <article class="card grao" data-revela>
-            <h3>Token fora do container</h3>
-            <p class="desc">O token entra só no clone e no push. O diff é varrido antes do envio: com segredo, nada sai.</p>
-            <div class="mini"><div class="tracejado"><span class="mono">git push</span><code>FACTORY_GIT_AUTH → só no clone e no push</code><code>diff com <b>[segredo:token-github]</b> → bloqueado</code></div></div>
-          </article>
-          <article class="card grao" data-revela>
-            <h3>GitHub e Azure DevOps</h3>
-            <p class="desc">Clona, envia a branch e abre o pull request pronto para revisão. Não há endpoint de merge.</p>
-            <div class="mini chamadas"><div class="chamada"><code>criarRascunhoAzure()</code><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="30" fill="var(--card-2)"/><path d="M18 30 A36 36 0 0 1 40 13" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path d="M78 66 A36 36 0 0 1 56 83" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path transform="translate(36 36)" d="M7 3h7l4 4v14H7z M14 3v4h4" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="chamada"><code>criarRascunhoGithub()</code><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="30" fill="var(--card-2)"/><path d="M18 30 A36 36 0 0 1 40 13" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path d="M78 66 A36 36 0 0 1 56 83" fill="none" stroke="var(--line-2)" stroke-width="2.5" stroke-linecap="round"/><path transform="translate(36 36)" d="M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 9c0 6-12 3-12 9" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+        <div class="moldura" data-revela>
+          <div class="card grao">
+            <div class="colunas" aria-label="Colunas do quadro">
+              <div class="coluna"><span class="mono">backlog</span><div class="cartao">C-16 Exportar CSV</div></div>
+              <div class="coluna pronto"><span class="mono">ready</span><div class="cartao">C-14 Filtro de datas</div></div>
+              <div class="coluna"><span class="mono">build</span></div>
+              <div class="coluna"><span class="mono">qa</span></div>
+              <div class="coluna"><span class="mono">review</span></div>
+              <div class="coluna parado"><span class="mono">blocked</span><div class="cartao">C-15 com token</div></div>
+              <div class="coluna"><span class="mono">done</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="trilha">
+      <div class="wrap">
+        <div class="cabeca" data-revela>
+          <h2>Trilha</h2>
+          <p>Cada passo deixa registro, com tempo, entrada e saída. O relatório fecha com o que foi observado e o que ficou de fora.</p>
+        </div>
+        <div class="trilha-grade">
+          <div class="pilha-cards">
+            <article class="card" data-revela><h3>Siga cada passo</h3><p class="desc">Veja onde o card parou, quem estava com ele e por quê.</p></article>
+            <article class="card" data-revela><h3>Base do projeto</h3><p class="desc">As regras que uma pessoa do cliente ditou, com o nome dela como autora.</p></article>
+            <article class="card" data-revela><h3>Avalie o ciclo</h3><p class="desc">Evidência honesta, gates humanos e relatório completo viram notas no Studio.</p></article>
+          </div>
+          <article class="card grao brilho" data-revela>
+            <h3>Trilha do card</h3>
+            <p class="desc">Do pedido ao gate, cada linha é uma observação. Nenhuma é um PASS inventado.</p>
+            <div class="trace" role="table" aria-label="Trilha do card C-14">
+              <div class="trace-topo"><span aria-hidden="true">≡</span>Trilha <small>R-3 · C-14 Filtro de datas com hora</small></div>
+              <div class="passo" data-n="0" role="row"><span class="nome">card: C-14</span><span class="trilho"><i class="verde-b" style="--w: 92%"></i></span><span class="t">4,212 s</span></div>
+              <div class="passo" data-n="1" role="row"><span class="nome">triagem</span><span class="trilho"><i class="verde-b" style="--w: 6%"></i></span><span class="t">0,012 s</span></div>
+              <div class="passo" data-n="1" role="row"><span class="nome">especificação</span><span class="trilho"><i class="violeta-b" style="--w: 18%"></i></span><span class="t">0,041 s</span></div>
+              <div class="passo" data-n="1" role="row"><span class="nome">gate: beforeImplementation</span><span class="trilho"><i class="laranja-b" style="--w: 64%"></i></span><span class="t">Joana</span></div>
+              <div class="passo" data-n="2" role="row"><span class="nome">check: testes-do-produto</span><span class="trilho"><i class="laranja-b" style="--w: 3%"></i></span><span class="t">NOT_RUN</span></div>
+              <div class="passo" data-n="1" role="row"><span class="nome">revisão: security</span><span class="trilho"><i class="violeta-b" style="--w: 22%"></i></span><span class="t">0,388 s</span></div>
+            </div>
           </article>
         </div>
       </div>
     </section>
-
     <section id="harness">
       <div class="wrap">
         <div class="cabeca" data-revela>
@@ -591,58 +657,6 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
         </div>
       </div>
     </section>
-
-    <section id="quadro">
-      <div class="wrap">
-        <div class="cabeca" data-revela>
-          <h2>Quadro</h2>
-          <p>Pedido claro entra em ready. Pedido vago, segredo ou force-push vai para blocked. Cada onda leva no máximo 5 cards.</p>
-        </div>
-        <div class="moldura" data-revela>
-          <div class="card grao">
-            <div class="colunas" aria-label="Colunas do quadro">
-              <div class="coluna"><span class="mono">backlog</span><div class="cartao">C-16 Exportar CSV</div></div>
-              <div class="coluna pronto"><span class="mono">ready</span><div class="cartao">C-14 Filtro de datas</div></div>
-              <div class="coluna"><span class="mono">build</span></div>
-              <div class="coluna"><span class="mono">qa</span></div>
-              <div class="coluna"><span class="mono">review</span></div>
-              <div class="coluna parado"><span class="mono">blocked</span><div class="cartao">C-15 com token</div></div>
-              <div class="coluna"><span class="mono">done</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="trilha">
-      <div class="wrap">
-        <div class="cabeca" data-revela>
-          <h2>Trilha</h2>
-          <p>Cada passo deixa registro, com tempo, entrada e saída. O relatório fecha com o que foi observado e o que ficou de fora.</p>
-        </div>
-        <div class="trilha-grade">
-          <div class="pilha-cards">
-            <article class="card" data-revela><h3>Siga cada passo</h3><p class="desc">Veja onde o card parou, quem estava com ele e por quê.</p></article>
-            <article class="card" data-revela><h3>Base do projeto</h3><p class="desc">As regras que uma pessoa do cliente ditou, com o nome dela como autora.</p></article>
-            <article class="card" data-revela><h3>Avalie o ciclo</h3><p class="desc">Evidência honesta, gates humanos e relatório completo viram notas no Studio.</p></article>
-          </div>
-          <article class="card grao brilho" data-revela>
-            <h3>Trilha do card</h3>
-            <p class="desc">Do pedido ao gate, cada linha é uma observação. Nenhuma é um PASS inventado.</p>
-            <div class="trace" role="table" aria-label="Trilha do card C-14">
-              <div class="trace-topo"><span aria-hidden="true">≡</span>Trilha <small>R-3 · C-14 Filtro de datas com hora</small></div>
-              <div class="passo" data-n="0" role="row"><span class="nome">card: C-14</span><span class="trilho"><i class="verde-b" style="--w: 92%"></i></span><span class="t">4,212 s</span></div>
-              <div class="passo" data-n="1" role="row"><span class="nome">triagem</span><span class="trilho"><i class="verde-b" style="--w: 6%"></i></span><span class="t">0,012 s</span></div>
-              <div class="passo" data-n="1" role="row"><span class="nome">especificação</span><span class="trilho"><i class="violeta-b" style="--w: 18%"></i></span><span class="t">0,041 s</span></div>
-              <div class="passo" data-n="1" role="row"><span class="nome">gate: beforeImplementation</span><span class="trilho"><i class="laranja-b" style="--w: 64%"></i></span><span class="t">Joana</span></div>
-              <div class="passo" data-n="2" role="row"><span class="nome">check: testes-do-produto</span><span class="trilho"><i class="laranja-b" style="--w: 3%"></i></span><span class="t">NOT_RUN</span></div>
-              <div class="passo" data-n="1" role="row"><span class="nome">revisão: security</span><span class="trilho"><i class="violeta-b" style="--w: 22%"></i></span><span class="t">0,388 s</span></div>
-            </div>
-          </article>
-        </div>
-      </div>
-    </section>
-
     <section id="limites">
       <div class="wrap">
         <div class="cabeca" data-revela>
@@ -673,7 +687,6 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
         </div>
       </div>
     </section>
-
     <section id="instalar">
       <div class="wrap">
         <div class="cabeca" data-revela>
@@ -958,6 +971,423 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
         })()
       }, { threshold: 0.3 })
       observador.observe(sessao)
+    })()
+  </script>
+  <script>
+    // Motion do hero, no estilo do modelo "orange dot": cada quadro sai só do tempo (seek(t)), com molas de forma
+    // fechada. Um ponto de acento sai do "i" de "engenharia", salta e pousa no gate; a pancada percorre o campo de pontos.
+    (function () {
+      var reduz = false
+      try { reduz = matchMedia('(prefers-reduced-motion: reduce)').matches } catch (e) {}
+      var raiz = document.documentElement
+      var hero = document.querySelector('.hero')
+      if (reduz || !hero || !raiz.classList.contains('mov')) return
+      var rede = hero.querySelector('.rede')
+      var rotulo = hero.querySelector('.rotulo-hero')
+      var h1 = hero.querySelector('h1')
+      var lead = hero.querySelector('.lead')
+      var primario = hero.querySelector('.primario')
+      var seta = hero.querySelector('.seta')
+      var linhas = h1 ? [].slice.call(h1.querySelectorAll('.linha')) : []
+      if (!rede || !h1 || !linhas.length) return
+
+      function limitar(x, a, b) { return x < a ? a : x > b ? b : x }
+      // Mola de forma fechada, de 0 a 1. zeta < 1 passa do alvo e assenta.
+      function mola(t, zeta, w) {
+        if (t <= 0) return 0
+        var wd = w * Math.sqrt(1 - zeta * zeta)
+        return 1 - Math.exp(-zeta * w * t) * (Math.cos(wd * t) + (zeta * w / wd) * Math.sin(wd * t))
+      }
+      function entra(p) { p = limitar(p, 0, 1); return 1 - Math.pow(1 - p, 3) }
+      function vaiVolta(p) { p = limitar(p, 0, 1); return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2 }
+
+      // ---- letras: cada uma é um elemento, para entrar sozinha
+      function dividir(no, letras) {
+        [].slice.call(no.childNodes).forEach(function (n) {
+          if (n.nodeType === 3) {
+            var frag = document.createDocumentFragment()
+            var palavra = null
+            for (var i = 0; i < n.nodeValue.length; i++) {
+              var c = n.nodeValue.charAt(i)
+              if (c === ' ') { palavra = null; frag.appendChild(document.createTextNode(' ')); continue }
+              if (!palavra) { palavra = document.createElement('span'); palavra.className = 'p'; frag.appendChild(palavra) }
+              var l = document.createElement('span')
+              l.className = 'l'
+              l.textContent = c
+              l.style.opacity = '0'
+              palavra.appendChild(l)
+              letras.push(l)
+            }
+            n.parentNode.replaceChild(frag, n)
+          } else if (n.nodeType === 1 && !n.classList.contains('gira')) dividir(n, letras)
+        })
+      }
+      var letrasH1 = []
+      linhas.forEach(function (linha, i) {
+        var daLinha = []
+        dividir(linha, daLinha)
+        daLinha.forEach(function (l) { l.setAttribute('data-linha', String(i)) })
+        letrasH1 = letrasH1.concat(daLinha)
+        linha.style.opacity = '1'
+      })
+      var letrasRotulo = []
+      if (rotulo) { dividir(rotulo, letrasRotulo); rotulo.style.opacity = '1' }
+      var sub = h1.querySelector('.sub')
+      var letraI = sub ? sub.querySelectorAll('.l')[8] : null
+
+      // ---- rede: fios que se desenham até o gate, nós que pulam, gate que pulsa
+      var fios = [].slice.call(rede.querySelectorAll('.fio'))
+      fios.forEach(function (f) { f.setAttribute('pathLength', '1'); f.style.strokeDasharray = '1'; f.style.strokeDashoffset = '1' })
+      var fluxos = [].slice.call(rede.querySelectorAll('.fluxo'))
+      fluxos.forEach(function (f) { f.style.opacity = '0' })
+      var nos = [].slice.call(rede.querySelectorAll('circle.no')).map(function (n) {
+        var fundo = n.previousElementSibling
+        var icone = n.nextElementSibling && n.nextElementSibling.classList.contains('ic') ? n.nextElementSibling : null
+        ;[fundo, n].forEach(function (c) { c.style.transformBox = 'fill-box'; c.style.transformOrigin = '50% 50%'; c.style.transform = 'scale(0)' })
+        if (icone) icone.style.opacity = '0'
+        return { fundo: fundo, n: n, icone: icone }
+      })
+      var gate = [rede.querySelector('circle[r="92"]'), rede.querySelector('circle[r="58"]'), rede.querySelector('g[stroke]'), rede.querySelector('text')].filter(Boolean)
+      gate.forEach(function (g) { g.style.transformBox = 'view-box'; g.style.transformOrigin = '380px 150px'; g.style.transform = 'scale(0)' })
+      rede.style.opacity = '1'
+      ;[lead, primario, seta].forEach(function (e) { if (e) { e.style.opacity = '0'; e.style.transition = 'none' } })
+
+      // ---- campo de pontos (halftone) atrás do hero
+      var cv = document.createElement('canvas')
+      cv.className = 'campo-pontos'
+      cv.setAttribute('aria-hidden', 'true')
+      hero.insertBefore(cv, hero.firstChild)
+      var cx = cv.getContext('2d')
+      var largura = 0, altura = 0, dpr = 1, passo = 22
+      var corPonto = '#888', corAcento = '#f5a25d'
+      var orbe = { x: 0, y: 0 }, inicio = { x: 0, y: 0 }, raio = 8
+      var ondas = []
+      var ptr = { x: -999, y: -999, sx: -999, sy: -999, f: 0 }
+      function cores() {
+        var cs = getComputedStyle(raiz)
+        corPonto = cs.getPropertyValue('--faint').trim() || corPonto
+        corAcento = cs.getPropertyValue('--accent').trim() || corAcento
+      }
+      function medir() {
+        largura = hero.clientWidth
+        altura = hero.clientHeight
+        dpr = Math.min(2, window.devicePixelRatio || 1)
+        cv.width = Math.round(largura * dpr)
+        cv.height = Math.round(altura * dpr)
+        passo = largura < 600 ? 18 : 22
+        // O SVG não tem offsetLeft/offsetTop: a posição sai do retângulo, descontando o parallax já aplicado.
+        var hr = hero.getBoundingClientRect()
+        var sr = rede.getBoundingClientRect()
+        orbe.x = sr.left - hr.left + sr.width / 2
+        orbe.y = sr.top - hr.top + sr.height / 2 - paralaxe
+        marcarInicio()
+      }
+      function marcarInicio() {
+        if (!letraI) { inicio.x = orbe.x; inicio.y = orbe.y + 200; return }
+        var hr = hero.getBoundingClientRect()
+        var lr = letraI.getBoundingClientRect()
+        inicio.x = lr.left - hr.left + lr.width / 2
+        inicio.y = lr.top - hr.top + lr.height * 0.02
+        raio = Math.max(4, lr.height * 0.085)
+      }
+      cores()
+      try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', cores) } catch (e) {}
+      medir()
+      window.addEventListener('resize', medir)
+      hero.addEventListener('pointermove', function (e) {
+        if (e.pointerType === 'touch') return
+        var hr = hero.getBoundingClientRect()
+        ptr.x = e.clientX - hr.left
+        ptr.y = e.clientY - hr.top
+        ptr.f = 1
+        if (ptr.sx < -900) { ptr.sx = ptr.x; ptr.sy = ptr.y }
+      })
+      hero.addEventListener('pointerleave', function () { ptr.f = 0 })
+
+      // ---- linha do tempo (segundos)
+      var T = { rotulo: 0.3, linha1: 0.55, linha2: 0.95, sublinha: 1.7, ponto: 1.9, salto: 2.15, pouso: 2.95, lead: 2.55, botoes: 2.8 }
+      var periodo = 4.8
+      var pousou = false
+      var ultimoCiclo = -1
+      var visivel = true
+      var terminou = false
+      var paralaxe = 0
+
+      function pos(i, linha) { return T[linha] + i * 0.026 }
+      function letra(l, p, rot, subida) {
+        if (p <= 0) return
+        var k = mola(p, 0.5, 21)
+        l.style.opacity = String(limitar(p / 0.12, 0, 1))
+        l.style.transform = 'translate3d(0,' + ((1 - k) * subida).toFixed(3) + 'em,0) rotate(' + ((1 - k) * rot).toFixed(2) + 'deg)'
+      }
+
+      function renderizar(t) {
+        // letras do rótulo e do título
+        letrasRotulo.forEach(function (l, i) { letra(l, t - (T.rotulo + i * 0.018), 0, 0.55) })
+        var contagem = [0, 0]
+        letrasH1.forEach(function (l, i) {
+          var n = Number(l.getAttribute('data-linha'))
+          var k = contagem[n]++
+          var rot = (((k * 37) % 11) - 5) * 2.4
+          letra(l, t - (n === 0 ? T.linha1 : T.linha2) - k * 0.026, rot, 0.85)
+        })
+        if (sub) sub.style.setProperty('--ul', String(entra((t - T.sublinha) / 0.45)))
+
+        // fios entram em direção ao gate; os nós pulam antes
+        fios.forEach(function (f, i) { f.style.strokeDashoffset = String(1 - entra((t - (0.35 + i * 0.04)) / 0.8)) })
+        fluxos.forEach(function (f) { f.style.opacity = String(0.8 * limitar((t - 1.5) / 0.6, 0, 1)) })
+        nos.forEach(function (no, i) {
+          var d = 0.1 + i * 0.045
+          var k = mola(t - d, 0.5, 20)
+          no.fundo.style.transform = no.n.style.transform = 'scale(' + k.toFixed(4) + ')'
+          if (no.icone) no.icone.style.opacity = String(limitar((t - d - 0.12) / 0.2, 0, 1))
+        })
+
+        // gate: entra, leva a pancada do pouso e dá um batimento a cada ciclo
+        var tp = t - T.pouso
+        var escala = mola(t - 0.9, 0.5, 17)
+        var pulso = tp > 0 ? Math.exp(-tp * 5) * Math.cos(tp * 26) * 0.12 : 0
+        var ciclo = t > 3.8 ? Math.floor((t - 3.8) / periodo) : -1
+        if (ciclo >= 0) {
+          var tc = (t - 3.8) - ciclo * periodo
+          pulso += Math.exp(-tc * 6) * Math.cos(tc * 30) * 0.045
+          if (ciclo !== ultimoCiclo) { ultimoCiclo = ciclo; ondas.push({ t: t, a: 0.55 }) }
+        }
+        gate.forEach(function (g, i) { g.style.transform = 'scale(' + (escala * (1 + pulso * (i === 0 ? 1.8 : 1))).toFixed(4) + ')' })
+        if (!pousou && t >= T.pouso) { pousou = true; ondas.push({ t: T.pouso, a: 1 }) }
+
+        // texto e botões
+        if (lead) { var kl = mola(t - T.lead, 0.7, 14); lead.style.opacity = String(limitar((t - T.lead) / 0.4, 0, 1)); lead.style.transform = 'translateY(' + ((1 - kl) * 18).toFixed(2) + 'px)' }
+        ;[primario, seta].forEach(function (e, i) {
+          if (!e) return
+          var kb = mola(t - (T.botoes + i * 0.14), 0.55, 18)
+          e.style.opacity = String(limitar((t - (T.botoes + i * 0.14)) / 0.25, 0, 1))
+          e.style.transform = 'scale(' + (0.82 + 0.18 * kb).toFixed(4) + ')'
+        })
+        rede.style.transform = 'translateY(' + paralaxe.toFixed(1) + 'px)'
+
+        if (!visivel) return
+        desenhar(t)
+      }
+
+      function desenhar(t) {
+        cx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        cx.clearRect(0, 0, largura, altura)
+        ptr.sx += (ptr.x - ptr.sx) * 0.2
+        ptr.sy += (ptr.y - ptr.sy) * 0.2
+        var cy0 = orbe.y + paralaxe
+        var alcance = Math.sqrt(largura * largura + altura * altura) * 0.8
+        var revelar = vaiVolta(t / 1.5) * alcance
+        ondas = ondas.filter(function (o) { return t - o.t < 2.4 })
+        var cols = Math.ceil(largura / passo) + 1
+        var lins = Math.ceil(altura / passo) + 1
+        for (var j = 0; j < lins; j++) {
+          for (var i = 0; i < cols; i++) {
+            var gx = i * passo + ((j % 2) * passo) / 2
+            var gy = j * passo
+            var dx = gx - orbe.x, dy = gy - cy0
+            var d = Math.sqrt(dx * dx + dy * dy)
+            var rev = limitar((revelar - d) / 90, 0, 1)
+            if (rev <= 0) continue
+            var r = 1.1 + 0.3 * Math.sin(t * 0.9 + gx * 0.016 + gy * 0.012)
+            var tom = 0
+            for (var k = 0; k < ondas.length; k++) {
+              var e = t - ondas[k].t
+              var frente = e * 380
+              var w = Math.exp(-Math.pow((d - frente) / 58, 2)) * ondas[k].a * (1 - e / 2.4)
+              r += 2.8 * w
+              if (w > tom) tom = w
+            }
+            if (ptr.f > 0.01 || ptr.sx > -900) {
+              var mx = gx - ptr.sx, my = gy - ptr.sy
+              var dp2 = mx * mx + my * my
+              if (dp2 < 14400) { var q = 1 - Math.sqrt(dp2) / 120; q = q * q * Math.max(ptr.f, 0.0); r += 2.4 * q; if (q * 0.7 > tom) tom = q * 0.7 }
+            }
+            cx.globalAlpha = rev * (0.5 + 0.5 * limitar(tom * 1.6, 0, 1))
+            cx.fillStyle = tom > 0.14 ? corAcento : corPonto
+            cx.beginPath()
+            cx.arc(gx, gy, r, 0, 6.2832)
+            cx.fill()
+          }
+        }
+        ptr.f *= 0.97
+        cx.globalAlpha = 1
+
+        // anel da pancada
+        var tpouso = t - T.pouso
+        if (tpouso > 0 && tpouso < 1.3) {
+          cx.strokeStyle = corAcento
+          cx.globalAlpha = 0.5 * (1 - tpouso / 1.3)
+          cx.lineWidth = 2
+          cx.beginPath()
+          cx.arc(orbe.x, cy0, 40 + tpouso * 300, 0, 6.2832)
+          cx.stroke()
+          cx.globalAlpha = 1
+        }
+
+        // o ponto de acento: sai do "i", agacha, salta em arco e é absorvido pelo gate
+        if (t < T.ponto || t > T.pouso + 0.22) return
+        var x = inicio.x, y = inicio.y, sx = 1, sy = 1, esc = 1
+        if (t < T.salto) {
+          var pop = mola(t - T.ponto, 0.45, 24)
+          esc = pop
+          var agacha = limitar((t - (T.salto - 0.16)) / 0.16, 0, 1)
+          sy = 1 - 0.3 * agacha
+          sx = 1 + 0.22 * agacha
+          y = inicio.y - raio * 1.8 * pop + raio * 0.9 * agacha
+        } else if (t <= T.pouso) {
+          var p = (t - T.salto) / (T.pouso - T.salto)
+          var e2 = vaiVolta(p)
+          var cxc = (inicio.x + orbe.x) / 2 + (orbe.x - inicio.x) * 0.1
+          var cyc = Math.min(inicio.y, cy0) - 120
+          x = (1 - e2) * (1 - e2) * inicio.x + 2 * (1 - e2) * e2 * cxc + e2 * e2 * orbe.x
+          y = (1 - e2) * (1 - e2) * (inicio.y - raio * 0.9) + 2 * (1 - e2) * e2 * cyc + e2 * e2 * cy0
+          var vel = Math.sin(Math.PI * p)
+          sx = 1 + 0.35 * vel
+          sy = 1 - 0.18 * vel
+          var ang = Math.atan2(2 * (1 - e2) * (cyc - inicio.y) + 2 * e2 * (cy0 - cyc), 2 * (1 - e2) * (cxc - inicio.x) + 2 * e2 * (orbe.x - cxc))
+          cx.save()
+          cx.translate(x, y)
+          cx.rotate(ang)
+          cx.fillStyle = corAcento
+          cx.beginPath()
+          cx.ellipse(0, 0, raio * sx, raio * sy, 0, 0, 6.2832)
+          cx.fill()
+          cx.restore()
+          return
+        } else {
+          x = orbe.x; y = cy0
+          esc = 1 - limitar((t - T.pouso) / 0.22, 0, 1)
+        }
+        cx.fillStyle = corAcento
+        cx.beginPath()
+        cx.ellipse(x, y, raio * esc * sx, raio * esc * sy, 0, 0, 6.2832)
+        cx.fill()
+      }
+
+      // ---- relógio
+      var t0 = null
+      var congelado = null
+      var noFim = false
+      function quadro(agora) {
+        if (t0 === null) t0 = agora - (hero.getBoundingClientRect().bottom < 0 ? 6000 : 0)
+        var t = congelado !== null ? congelado : (agora - t0) / 1000
+        if (visivel || t < 4) renderizar(t)
+        if (!noFim && t > 3.6) { noFim = true; liberar() }
+        requestAnimationFrame(quadro)
+      }
+      // Passada a entrada, solta o que era só da animação: o hover do botão e o texto voltam ao normal.
+      function liberar() {
+        letrasH1.concat(letrasRotulo).forEach(function (l) { l.style.transform = ''; l.style.opacity = '' })
+        fios.forEach(function (f) { f.style.strokeDasharray = ''; f.style.strokeDashoffset = '' })
+        fluxos.forEach(function (f) { f.style.opacity = '' })
+        nos.forEach(function (no) { no.fundo.style.transform = no.n.style.transform = ''; if (no.icone) no.icone.style.opacity = '' })
+        ;[lead, primario, seta].forEach(function (e) { if (e) { e.style.transform = ''; e.style.opacity = ''; e.style.transition = '' } })
+        if (sub) sub.style.removeProperty('--ul')
+        terminou = true
+      }
+      // Depois de liberar, só o gate, o campo e o ponteiro seguem animados.
+      var renderOriginal = renderizar
+      renderizar = function (t) {
+        if (!terminou) return renderOriginal(t)
+        var tp = t - T.pouso
+        var pulso = tp > 0 && tp < 1.5 ? Math.exp(-tp * 5) * Math.cos(tp * 26) * 0.12 : 0
+        var ciclo = t > 3.8 ? Math.floor((t - 3.8) / periodo) : -1
+        if (ciclo >= 0) {
+          var tc = (t - 3.8) - ciclo * periodo
+          pulso += Math.exp(-tc * 6) * Math.cos(tc * 30) * 0.045
+          if (ciclo !== ultimoCiclo) { ultimoCiclo = ciclo; ondas.push({ t: t, a: 0.55 }) }
+        }
+        gate.forEach(function (g, i) { g.style.transform = 'scale(' + (1 + pulso * (i === 0 ? 1.8 : 1)).toFixed(4) + ')' })
+        rede.style.transform = 'translateY(' + paralaxe.toFixed(1) + 'px)'
+        if (visivel) desenhar(t)
+      }
+
+      if (window.IntersectionObserver) new IntersectionObserver(function (es) { visivel = es[0].isIntersecting }, { threshold: 0 }).observe(hero)
+      window.addEventListener('scroll', function () { paralaxe = limitar(window.scrollY, 0, 700) * 0.1 }, { passive: true })
+
+      // Para conferir um quadro exato: sfHeroSeek(2.5). sfHeroSeek(null) volta ao tempo real.
+      var renderEnvolvido = renderizar
+      window.sfHeroSeek = function (t) {
+        congelado = t === null ? null : Number(t)
+        if (congelado === null) { renderizar = renderEnvolvido; noFim = false; return }
+        // Cada quadro pedido sai só do tempo: o estado que depende do relógio recomeça do zero.
+        terminou = false
+        pousou = false
+        ultimoCiclo = -1
+        ondas = []
+        renderizar = renderOriginal
+        ;[lead, primario, seta].forEach(function (e) { if (e) e.style.transition = 'none' })
+        renderizar(congelado)
+      }
+
+      var comecar = function () { requestAnimationFrame(quadro) }
+      var pronto = document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise(function (r) { setTimeout(r, 700) })]) : Promise.resolve()
+      pronto.then(function () { medir(); comecar() })
+    })()
+  </script>
+  <script>
+    // Menu em sintonia com a página: marca a seção que está na tela e mede o cabeçalho para o ponto de chegada.
+    (function () {
+      var topo = document.querySelector('.top')
+      var links = [].slice.call(document.querySelectorAll('nav a[href^="#"]'))
+      if (!topo || !links.length) return
+      var secoes = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)) }).filter(Boolean)
+      var ativa = null
+      var travado = false
+      var fimDoRolar = null
+      var reduz = false
+      try { reduz = matchMedia('(prefers-reduced-motion: reduce)').matches } catch (e) {}
+
+      function medir() { document.documentElement.style.setProperty('--topo', topo.offsetHeight + 'px') }
+      medir()
+      window.addEventListener('resize', medir)
+      if (window.ResizeObserver) new ResizeObserver(medir).observe(topo)
+
+      function centralizar(a) {
+        var nav = a.parentElement
+        if (!nav || nav.scrollWidth <= nav.clientWidth) return
+        nav.scrollTo({ left: a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2, behavior: reduz ? 'auto' : 'smooth' })
+      }
+      function marcar(id) {
+        if (id === ativa) return
+        ativa = id
+        links.forEach(function (a) {
+          if (id && a.getAttribute('href') === '#' + id) { a.setAttribute('aria-current', 'location'); centralizar(a) }
+          else a.removeAttribute('aria-current')
+        })
+      }
+      function atualizar() {
+        if (travado) return
+        // A seção atual é a última cujo topo já passou desta linha, um pouco abaixo do cabeçalho.
+        var linha = topo.offsetHeight + window.innerHeight * 0.25
+        var atual = null
+        secoes.forEach(function (s) { if (s.getBoundingClientRect().top <= linha) atual = s.id })
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4 && secoes.length) atual = secoes[secoes.length - 1].id
+        marcar(atual)
+      }
+      var agendado = false
+      function agendar() { if (!agendado) { agendado = true; requestAnimationFrame(function () { agendado = false; atualizar() }) } }
+
+      // Num clique no menu a marca vai direto para o destino. Sem isto ela varreria todas as seções do caminho.
+      links.forEach(function (a) {
+        a.addEventListener('click', function () {
+          ativa = null
+          marcar(a.getAttribute('href').slice(1))
+          travado = true
+          // Se o clique não gerar rolagem (já estou lá), a trava solta sozinha.
+          clearTimeout(fimDoRolar)
+          fimDoRolar = setTimeout(function () { travado = false; atualizar() }, 1600)
+        })
+      })
+      window.addEventListener('scroll', function () {
+        agendar()
+        if (!travado) return
+        clearTimeout(fimDoRolar)
+        fimDoRolar = setTimeout(function () { travado = false; atualizar() }, 160)
+      }, { passive: true })
+      window.addEventListener('resize', agendar)
+      atualizar()
     })()
   </script>
 </body>

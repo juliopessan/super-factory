@@ -335,6 +335,23 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
   },
 ]
 
+/**
+ * Um ensaio não pode parecer entrega de verdade: a entrega vira "fixture", sem número nem link de
+ * pull request, e a trilha do card diz que nada foi clonado, escrito ou enviado.
+ */
+export function marcarEnsaio(estado: Estado): Estado {
+  const entrega = estado.entrega
+    ? {
+        ...estado.entrega,
+        modo: 'fixture' as const,
+        pullRequestId: null,
+        pullRequestUrl: null,
+        nota: 'ENSAIO: nada foi clonado, escrito nem enviado, e nenhum pull request existe. Rode sem ensaio para valer.',
+      }
+    : estado.entrega
+  return anotarAuto({ ...estado, entrega }, estado.estagio, 'ENSAIO: percurso simulado, com sandbox de mentira. Nenhum repositório foi tocado.', 'reported')
+}
+
 export function contextoInicial(pedido: PedidoBruto): ContextoAutonomo {
   return { estado: iniciar(pedido), branch: null, verificacao: null, estatistica: null }
 }

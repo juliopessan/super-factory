@@ -10,10 +10,22 @@ export function lerCriterios(texto: string): string[] {
     .filter(Boolean)
 }
 
-export function lintarCriterios(criterios: string[]): { ok: boolean; issues: string[] } {
+function normalizar(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function lintarCriterios(criterios: string[], contexto: { titulo?: string; descricao?: string } = {}): { ok: boolean; issues: string[] } {
   const issues: string[] = []
   if (criterios.length === 0) issues.push('Nenhum critério de aceite.')
+  const repetiveis = [contexto.titulo, contexto.descricao].filter((texto): texto is string => Boolean(texto?.trim())).map(normalizar)
   for (const criterio of criterios) {
+    // Um critério igual ao título ou à descrição só repete o pedido: não diz como saber que ficou pronto.
+    if (repetiveis.includes(normalizar(criterio))) issues.push(`Repete o título ou a descrição e não diz como saber que ficou pronto: ${criterio}`)
     if (criterio.length < 12) issues.push(`Curto demais: ${criterio}`)
     if (VAGO.test(criterio)) issues.push(`Vago: ${criterio}`)
     if (!OBSERVAVEL.test(criterio)) issues.push(`Sem condição observável: ${criterio}`)
