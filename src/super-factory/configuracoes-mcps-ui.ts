@@ -345,12 +345,83 @@ export const SCRIPT_MCPS = String.raw`
     return d
   }
 
+  // ---- colar a configuração (formato do Cursor, do Claude Desktop e do VS Code)
+  var colado = ''
+  function formularioColar() {
+    var painel = criar('div', 'chave'); painel.id = 'colar-painel'
+    painel.appendChild(criar('p', 'ajuda', 'Cole o trecho do mcp.json do Cursor, do Claude Desktop ou do VS Code. O que está no catálogo é instalado na versão revisada da Factory; o resto passa pelas mesmas checagens de segurança. Chaves e tokens vão para o cofre criptografado.'))
+    var f = criar('form'); f.id = 'colar-form'
+    var texto = criar('textarea'); texto.id = 'colar-texto'; texto.rows = 9; texto.spellcheck = false; texto.autocomplete = 'off'
+    texto.placeholder = '{\\n  "mcpServers": {\\n    "context7": {\\n      "command": "npx",\\n      "args": ["-y", "@upstash/context7-mcp"]\\n    }\\n  }\\n}'
+    texto.style.fontFamily = 'ui-monospace, monospace'; texto.style.width = '100%'
+    texto.value = colado
+    texto.addEventListener('input', function () { colado = texto.value; previa.textContent = ''; msg.textContent = '' })
+    f.appendChild(campo('Configuração (JSON)', texto))
+    var linha = criar('div', 'linha'); var ir = criar('button', 'primario', 'Analisar'); ir.type = 'submit'; ir.id = 'colar-analisar'; linha.appendChild(ir); f.appendChild(linha)
+    var msg = criar('div', 'msg'); msg.setAttribute('role', 'status'); f.appendChild(msg)
+    var previa = criar('div'); previa.id = 'colar-previa'; previa.setAttribute('aria-live', 'polite'); f.appendChild(previa)
+
+    function instalarTudo(semTeste) {
+      ocupar(f, true); dizer(msg, 'neutra', 'Conectando e listando as ferramentas. Na primeira vez pode levar até um minuto…')
+      chamar({ acao: 'colar', texto: texto.value, semTeste: semTeste === true }).then(function (r) {
+        if (r.corpo.erro) return dizer(msg, 'erro', r.corpo.erro)
+        var rs = r.corpo.resultados || []
+        var falhas = rs.filter(function (x) { return !x.instalado })
+        if (falhas.length === 0) { colado = ''; return desenhar(r.corpo.estado) }
+        previa.textContent = ''
+        rs.forEach(function (x) {
+          var linhaR = criar('p', x.instalado ? 'msg ok' : 'msg erro', x.nome + ': ' + (x.instalado ? 'instalado' + (x.ferramentas && x.ferramentas.length ? ' · ' + x.ferramentas.length + ' ferramentas' : '') : x.erro))
+          previa.appendChild(linhaR)
+        })
+        dizer(msg, 'erro', falhas.length + (falhas.length === 1 ? ' servidor não foi instalado.' : ' servidores não foram instalados.'))
+        if (falhas.some(function (x) { return x.tipoDoErro === 'sem-resposta' })) {
+          var b = criar('button', '', 'Instalar mesmo assim'); b.type = 'button'
+          b.addEventListener('click', function () { instalarTudo(true) })
+          msg.appendChild(document.createTextNode(' ')); msg.appendChild(b)
+        }
+        carregar()
+      }).catch(function () { dizer(msg, 'erro', 'Sem conexão com a Factory.') }).finally(function () { ocupar(f, false) })
+    }
+
+    f.addEventListener('submit', function (e) {
+      e.preventDefault()
+      ocupar(f, true); dizer(msg, 'neutra', 'Lendo a configuração…'); previa.textContent = ''
+      chamar({ acao: 'colar-analisar', texto: texto.value }).then(function (r) {
+        if (r.corpo.erro) return dizer(msg, 'erro', r.corpo.erro)
+        msg.textContent = ''
+        var itens = r.corpo.itens || []
+        itens.forEach(function (item) {
+          var c = criar('div', 'chave')
+          var topo = criar('div', 'topo'); topo.appendChild(criar('b', '', item.nome))
+          topo.appendChild(criar('span', item.pronto ? 'estado ok' : 'estado falta', item.pronto ? (item.modo === 'catalogo' ? 'do catálogo' : item.modo === 'remoto' ? 'remoto' : 'comando') : 'não instala'))
+          c.appendChild(topo)
+          if (item.erro) c.appendChild(criar('p', 'msg erro', item.erro))
+          else c.appendChild(criar('p', 'ajuda', item.resumo))
+          if (item.segredos && item.segredos.length) c.appendChild(criar('p', 'ajuda', 'Segredos que vão para o cofre: ' + item.segredos.join(', ') + '.'))
+          ;(item.avisos || []).forEach(function (a) { c.appendChild(criar('p', 'ajuda', 'Atenção: ' + a)) })
+          previa.appendChild(c)
+        })
+        ;(r.corpo.avisos || []).forEach(function (a) { previa.appendChild(criar('p', 'ajuda', a)) })
+        var prontos = itens.filter(function (i) { return i.pronto }).length
+        if (prontos > 0) {
+          var l2 = criar('div', 'linha'); var ok = criar('button', 'primario', prontos === 1 ? 'Instalar' : 'Instalar ' + prontos); ok.type = 'button'; ok.id = 'colar-instalar'
+          ok.addEventListener('click', function () { instalarTudo(false) })
+          l2.appendChild(ok); previa.appendChild(l2)
+        }
+      }).catch(function () { dizer(msg, 'erro', 'Sem conexão com a Factory.') }).finally(function () { ocupar(f, false) })
+    })
+    painel.appendChild(f)
+    return painel
+  }
+
   function desenhar(estado) {
     estadoAtual = estado
     lista.textContent = ''
     lista.appendChild(criar('h2', '', 'Instalados (' + estado.instalados.length + ')'))
     if (estado.instalados.length === 0) lista.appendChild(criar('p', 'ajuda', 'Nenhuma ferramenta instalada ainda. Escolha uma do catálogo abaixo.'))
     estado.instalados.forEach(function (item) { lista.appendChild(cartaoInstalado(item)) })
+    lista.appendChild(criar('h2', '', 'Colar configuração'))
+    lista.appendChild(formularioColar())
     var disponiveis = estado.catalogo.filter(function (c) { return !c.instalado })
     lista.appendChild(criar('h2', '', 'Catálogo'))
     if (disponiveis.length === 0) lista.appendChild(criar('p', 'ajuda', 'Todo o catálogo já está instalado.'))

