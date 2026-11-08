@@ -93,7 +93,7 @@ export function iniciar(bruto: PedidoBruto): Estado {
   const titulo = redigirSegredos(pedido.titulo)
   const descricao = redigirSegredos(pedido.descricao)
   const criterios = pedido.criterios.map((criterio) => redigirSegredos(criterio))
-  const lint = lintarCriterios(criterios)
+  const lint = lintarCriterios(criterios, { titulo, descricao })
   const rota = rotear(descricao, lint.ok)
   const bloqueios = [
     ...lint.issues,
