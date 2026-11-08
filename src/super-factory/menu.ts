@@ -139,11 +139,11 @@ export const SCRIPT_MENU = String.raw`
     fetch('/factory/menu', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : { skills: [], cards: [] } })
       .then(function (j) { dados = { skills: j.skills || [], cards: j.cards || [] }; carregadoEm = Date.now() })
       .catch(function () { dados = dados || { skills: [], cards: [] }; carregadoEm = Date.now() })
-      .finally(function () { carregando = false; if (aberto && alvo) atualizar(alvo) })
+      .finally(function () { carregando = false; if (alvo && document.activeElement === alvo) atualizar(alvo) })
     if (!workflows) {
       fetch('/api/workflows', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {} }).then(function (j) {
         workflows = Object.keys(j || {}).filter(function (id) { return !/-(input|output)-processor$/.test(id) }).map(function (id) { return { id: id, descricao: String((j[id] && j[id].description) || '').slice(0, 160) } })
-        if (aberto && alvo) atualizar(alvo)
+        if (alvo && document.activeElement === alvo) atualizar(alvo)
       }).catch(function () { workflows = [] })
     }
   }
@@ -301,6 +301,8 @@ export const SCRIPT_MENU = String.raw`
 
   document.addEventListener('input', function (e) { if (e.target && e.target.tagName === 'TEXTAREA') { ativo = 0; atualizar(e.target) } }, true)
   document.addEventListener('click', function (e) { if (e.target && e.target.tagName === 'TEXTAREA') atualizar(e.target) }, true)
+  // Os dados já estão prontos quando a pessoa digita / ou @: busca assim que o campo do chat ganha foco.
+  document.addEventListener('focusin', function (e) { if (ehChat(e.target)) { alvo = e.target; carregar() } }, true)
   document.addEventListener('focusout', function () { setTimeout(function () { if (document.activeElement !== alvo) fechar() }, 120) }, true)
   window.addEventListener('resize', posicionar)
   window.addEventListener('popstate', fechar)

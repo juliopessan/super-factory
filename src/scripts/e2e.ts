@@ -482,6 +482,7 @@ async function testarNavegador(): Promise<void> {
     await caixaMn.waitFor()
     await mn.waitForTimeout(1500)
     await caixaMn.click()
+    await mn.waitForTimeout(800)
     await caixaMn.pressSequentially('/')
     await mn.locator('#sf-menu').waitFor({ state: 'visible', timeout: 8000 })
     const nomesMn = await mn.locator('#sf-menu [role=option] .nome').allInnerTexts()
