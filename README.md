@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/img/landing.png" alt="Página inicial da Super Factory: A programação morreu. A engenharia não." width="100%" />
+  <a href="docs/motion/super-factory-hero.mp4" title="Assistir ao vídeo completo (20 s)">
+    <img src="docs/motion/super-factory-hero.webp" alt="Vídeo de apresentação da Super Factory: Programming is dead. Engineering is not. Um card vira pull request, com evidência, e você decide o merge." width="100%" />
+  </a>
+  <br />
+  <sub><a href="docs/motion/super-factory-hero.mp4">▶ Assistir ao vídeo completo (20 s, com som)</a> · <a href="docs/img/landing.png">ver a página inicial</a></sub>
 </p>
 
 # Super Factory
