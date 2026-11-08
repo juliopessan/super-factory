@@ -56,7 +56,7 @@ Em qualquer dúvida na hora: use **ensaio**.
 
 ## 5. Voltar atrás
 
-Versões conhecidas boas no `main`: `98f28e7` (menu e beta), `03af920` (time animado) e `b074987` (anterior). Para voltar:
+Versões conhecidas boas no `main`: `23d9621` (login, waitlist e novo vídeo), `98f28e7` (menu e beta), `03af920` (time animado) e `b074987` (anterior). Para voltar:
 
 ```bash
 cd /opt/super-factory
@@ -76,9 +76,11 @@ Os dados ficam em `/data` (volume): estado, cofre de chaves, MCPs e observabilid
 
 ## 7. Ligar o login e a lista de espera (faça com calma, não minutos antes da demo)
 
-1. Crie o OAuth App no GitHub (callback `https://SEU-DOMINIO/auth/retorno`) e preencha o `.env` (README, seção *Login e lista de espera*).
-2. `sudo bash /opt/super-factory/deploy/atualizar.sh`, depois `sudo bash /opt/super-factory/deploy/ativar-login.sh`. O script só segue com o `.env` completo, testa que o Studio ficou protegido e volta sozinho se não ficou.
+1. `sudo bash /opt/super-factory/deploy/atualizar.sh`.
+2. `sudo bash /opt/super-factory/deploy/configurar-login.sh`: o assistente diz o que criar no GitHub (callback `https://SEU-DOMINIO/auth/retorno`), pergunta Client ID, Client Secret e o seu usuário, grava no `.env` e liga o login. O script só segue com o `.env` completo, testa que o Studio ficou protegido e volta sozinho se não ficou.
 3. Em **janela anônima**: abra o endereço, confira que cai em `/login`, entre com o seu GitHub (admin), abra `/admin/waitlist`, e cadastre-se na `/waitlist` com outro e-mail para ver o fluxo.
 4. Convide o time: peça que preencham `/waitlist` (com o usuário do GitHub) e aprove em `/admin/waitlist`.
 
 Se algo falhar: `sudo bash /opt/super-factory/deploy/ativar-login.sh --desfazer` volta ao login básico do Traefik.
+
+Se o login falhar: `docker logs --tail 80 super-factory | grep "\[auth\]"` diz o motivo (callback diferente, segredo errado, usuário não aprovado...). Sem nenhuma linha `[auth] login com GitHub ligado`, o login **não está ligado** (o padrão é desligado): rode o `configurar-login.sh`.

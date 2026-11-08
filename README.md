@@ -277,7 +277,9 @@ A Factory tem login próprio (GitHub OAuth) e uma lista de espera com qualifica�
 - **Segurança:** sessão em cookie assinado (`HttpOnly`, `SameSite=Lax`, `__Host-` e `Secure` em https), PKCE e `state` no OAuth, o token do GitHub nunca chega ao navegador, redirecionamento só para caminhos da própria Factory. Ligado com configuração incompleta, a Factory **fecha** tudo que não é público (503), nunca abre. A trilha de auditoria do cofre passa a registrar o usuário do GitHub.
 - **Automação:** `SUPER_FACTORY_API_TOKEN` (32+ caracteres) libera só `/api`, com `Authorization: Bearer`.
 
-**Como ligar na VPS (Traefik):**
+**Jeito mais curto (VPS com Traefik):** `sudo bash /opt/super-factory/deploy/atualizar.sh` e depois `sudo bash /opt/super-factory/deploy/configurar-login.sh`. O assistente mostra o que preencher no GitHub (inclusive a callback exata), pergunta o Client ID, o Client Secret (digitado sem aparecer, nunca vai para chat ou histórico), e o seu usuário do GitHub, grava no `.env` com cópia de segurança e liga o login. Se algo falhar, `docker logs --tail 80 super-factory | grep "\[auth\]"` mostra o motivo.
+
+**Passo a passo manual (equivalente):**
 1. No GitHub: *Settings → Developer settings → OAuth Apps → New*. Callback: `https://SEU-DOMINIO/auth/retorno`.
 2. No `/opt/super-factory/.env`: `SUPER_FACTORY_AUTH=github`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `SUPER_FACTORY_PUBLIC_URL` e `SUPER_FACTORY_ADMINS` (veja `.env.example`).
 3. `sudo bash /opt/super-factory/deploy/atualizar.sh`, depois `sudo bash /opt/super-factory/deploy/ativar-login.sh`.
