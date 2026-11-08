@@ -56,7 +56,7 @@ Em qualquer dúvida na hora: use **ensaio**.
 
 ## 5. Voltar atrás
 
-Versões conhecidas boas no `main`: `23d9621` (login, waitlist e novo vídeo), `98f28e7` (menu e beta), `03af920` (time animado) e `b074987` (anterior). Para voltar:
+Versões conhecidas boas no `main`: `f126260` (login com GitHub validado na VPS), `23d9621` (login, waitlist e novo vídeo), `98f28e7` (menu e beta), `03af920` (time animado) e `b074987` (anterior). Para voltar:
 
 ```bash
 cd /opt/super-factory
@@ -84,3 +84,7 @@ Os dados ficam em `/data` (volume): estado, cofre de chaves, MCPs e observabilid
 Se algo falhar: `sudo bash /opt/super-factory/deploy/ativar-login.sh --desfazer` volta ao login básico do Traefik.
 
 Se o login falhar: `docker logs --tail 80 super-factory | grep "\[auth\]"` diz o motivo (callback diferente, segredo errado, usuário não aprovado...). Sem nenhuma linha `[auth] login com GitHub ligado`, o login **não está ligado** (o padrão é desligado): rode o `configurar-login.sh`.
+
+## 8. Estado validado na VPS
+
+O login com GitHub foi ligado com o `configurar-login.sh` e confirmado pelos logs (`[auth] login com GitHub ligado`, fluxo OAuth real com o GitHub completo). Se um admin novo não entrar, confira `SUPER_FACTORY_ADMINS` no `.env` (usuário do GitHub, sem @) e recrie o container: `sudo docker compose -f /docker/super-factory/docker-compose.yml up -d --force-recreate`.
