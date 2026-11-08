@@ -4,60 +4,19 @@
 import crypto from 'node:crypto'
 
 import { definicao, estadoDasChaves, removerChave, salvarChave, testarChave, validarValor } from '../factory/chaves.ts'
+import { ESTILO_MCPS, SCRIPT_MCPS } from './configuracoes-mcps-ui.ts'
+import { criarLimite, lerPedido, origemConfere, quemE, resposta } from './protecao.ts'
 
-const CABECALHOS_JSON = {
-  'Content-Type': 'application/json; charset=utf-8',
-  'Cache-Control': 'no-store',
-  'X-Content-Type-Options': 'nosniff',
-}
+export { origemConfere, quemE }
 
-function resposta(corpo: unknown, status = 200): Response {
-  return new Response(JSON.stringify(corpo), { status, headers: CABECALHOS_JSON })
-}
-
-// Pedidos por minuto, no processo todo. Basta para frear tentativa em massa.
-const janela: number[] = []
-function dentroDoLimite(agora = Date.now()): boolean {
-  while (janela.length > 0 && agora - (janela[0] ?? 0) > 60_000) janela.shift()
-  if (janela.length >= 40) return false
-  janela.push(agora)
-  return true
-}
-
-/** Nome de quem entrou pelo login do proxy (Basic). Só o nome: a senha nunca é lida nem guardada. */
-export function quemE(req: Request): string {
-  const encontrado = /^Basic\s+(.+)$/i.exec(req.headers.get('authorization') ?? '')
-  if (!encontrado) return 'local'
-  try {
-    const usuario = Buffer.from(encontrado[1] ?? '', 'base64').toString('utf8').split(':')[0] ?? ''
-    return usuario.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 32) || 'login'
-  } catch {
-    return 'login'
-  }
-}
-
-/** O navegador reenvia o login sozinho: sem conferir a origem, outro site poderia trocar as chaves. */
-export function origemConfere(req: Request): boolean {
-  const origem = req.headers.get('origin')
-  if (!origem) return false
-  const host = req.headers.get('host') ?? req.headers.get('x-forwarded-host')
-  try {
-    return new URL(origem).host === host
-  } catch {
-    return false
-  }
-}
+const dentroDoLimite = criarLimite(40)
 
 export async function tratarChaves(req: Request, deps: { fetch?: typeof fetch } = {}): Promise<Response> {
   if (req.method === 'GET') return resposta(estadoDasChaves())
   if (req.method !== 'POST') return resposta({ erro: 'Método não permitido.' }, 405)
-  if (!origemConfere(req) || req.headers.get('x-sf-csrf') !== '1') {
-    return resposta({ erro: 'Pedido recusado. Use a tela de chaves da própria Factory.' }, 403)
-  }
-  if (!(req.headers.get('content-type') ?? '').includes('application/json')) return resposta({ erro: 'Formato inválido.' }, 415)
-  if (!dentroDoLimite()) return resposta({ erro: 'Muitas tentativas. Espere um minuto.' }, 429)
-  const texto = await req.text()
-  if (texto.length > 2000) return resposta({ erro: 'Pedido grande demais.' }, 413)
+  const pedido = await lerPedido(req, { limite: dentroDoLimite, bytes: 2000 })
+  if ('recusa' in pedido) return pedido.recusa
+  const texto = pedido.texto
   let corpo: { acao?: unknown; nome?: unknown; valor?: unknown; semTeste?: unknown }
   try {
     corpo = JSON.parse(texto) as typeof corpo
@@ -137,15 +96,27 @@ export function paginaConfiguracoes(opcoes: { embed: boolean; tema: 'dark' | 'li
   .msg.ok { color: var(--ok); } .msg.erro { color: var(--erro); } .msg.neutra { color: var(--muted); }
   .rodape { margin-top: 28px; display: flex; gap: 12px; align-items: center; justify-content: space-between; font-size: 13px; }
   a { color: var(--text); }
+${ESTILO_MCPS}
 </style>
 </head>
 <body>
 <main>
   <h1><span class="marca" aria-hidden="true">SF</span> Chaves e acessos</h1>
-  <p>Cole aqui as chaves do modo autônomo. Elas ficam criptografadas, não aparecem de novo e valem na hora, sem reiniciar.</p>
-  <div class="aviso">Quem entra na Factory com o login pode trocar estas chaves. Use contas e tokens com o mínimo de permissão, num repositório de teste primeiro.</div>
-  <div id="avisos"></div>
-  <div id="lista" aria-live="polite"><p class="aviso">Carregando…</p></div>
+  <div class="abas" role="tablist" aria-label="Seções">
+    <button type="button" class="aba" role="tab" id="aba-chaves" aria-selected="true" aria-controls="painel-chaves" tabindex="0">Chaves</button>
+    <button type="button" class="aba" role="tab" id="aba-mcps" aria-selected="false" aria-controls="painel-mcps" tabindex="-1">Ferramentas (MCP)</button>
+  </div>
+  <section id="painel-chaves" role="tabpanel" aria-labelledby="aba-chaves">
+    <p>Cole aqui as chaves do modo autônomo. Elas ficam criptografadas, não aparecem de novo e valem na hora, sem reiniciar.</p>
+    <div class="aviso">Quem entra na Factory com o login pode trocar estas chaves. Use contas e tokens com o mínimo de permissão, num repositório de teste primeiro.</div>
+    <div id="avisos"></div>
+    <div id="lista" aria-live="polite"><p class="aviso">Carregando…</p></div>
+  </section>
+  <section id="painel-mcps" role="tabpanel" aria-labelledby="aba-mcps" hidden>
+    <p>Conecte ferramentas externas (MCP) aos agentes da Factory: documentação, repositórios, work items. O que não é só de leitura pede a sua aprovação a cada uso. Merge, deploy e aprovação ficam sempre bloqueados.</p>
+    <div class="aviso">As ferramentas valem para os agentes do Studio. O modo autônomo continua só com o sandbox: o agente construtor não usa MCP.</div>
+    <div id="mcp-lista" aria-live="polite"><p class="aviso">Carregando…</p></div>
+  </section>
   <div class="rodape">
     <span>Nunca cole chave no chat da Factory. É por isso que esta tela existe.</span>
     ${opcoes.embed ? '<button type="button" id="fechar">Fechar</button>' : '<a href="/studio">Voltar ao Studio</a>'}
@@ -270,6 +241,7 @@ export function paginaConfiguracoes(opcoes: { embed: boolean; tema: 'dark' | 'li
   carregar().catch(function () { lista.textContent = ''; lista.appendChild(criar('div', 'aviso erro', 'Não consegui carregar as chaves.')) })
 })()
 </script>
+<script nonce="${nonce}">${SCRIPT_MCPS}</script>
 </body>
 </html>`
   return new Response(html, {
