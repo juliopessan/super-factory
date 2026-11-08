@@ -1,5 +1,7 @@
 // Proteções comuns das rotas de configuração (/configuracoes/chaves e /configuracoes/mcps).
 
+import { usuarioRegistrado } from './identidade.ts'
+
 const CABECALHOS_JSON = {
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
@@ -23,6 +25,9 @@ export function criarLimite(maximo: number): (agora?: number) => boolean {
 
 /** Nome de quem entrou pelo login do proxy (Basic). Só o nome: a senha nunca é lida nem guardada. */
 export function quemE(req: Request): string {
+  // Com o login da Factory ligado, quem vale é o usuário da sessão.
+  const daSessao = usuarioRegistrado(req)
+  if (daSessao) return daSessao.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 32) || 'login'
   const encontrado = /^Basic\s+(.+)$/i.exec(req.headers.get('authorization') ?? '')
   if (!encontrado) return 'local'
   try {
@@ -58,4 +63,26 @@ export async function lerPedido(
   const texto = await req.text()
   if (texto.length > opcoes.bytes) return { recusa: resposta({ erro: 'Pedido grande demais.' }, 413) }
   return { texto }
+}
+
+/** Limite por chave (IP, por exemplo) numa janela. Guarda só o necessário e esquece o resto. */
+export function criarLimitePorChave(maximo: number, janelaMs: number): (chave: string, agora?: number) => boolean {
+  const marcas = new Map<string, number[]>()
+  return (chave, agora = Date.now()) => {
+    if (marcas.size > 5000) for (const [k, v] of marcas) if (agora - (v.at(-1) ?? 0) > janelaMs) marcas.delete(k)
+    const lista = (marcas.get(chave) ?? []).filter((t) => agora - t <= janelaMs)
+    if (lista.length >= maximo) {
+      marcas.set(chave, lista)
+      return false
+    }
+    lista.push(agora)
+    marcas.set(chave, lista)
+    return true
+  }
+}
+
+/** IP do cliente atrás do Traefik: vale o último da lista, que foi o proxy quem acrescentou. */
+export function ipDe(req: Request): string {
+  const lista = (req.headers.get('x-forwarded-for') ?? '').split(',').map((parte) => parte.trim()).filter(Boolean)
+  return (lista.at(-1) ?? 'local').slice(0, 64)
 }

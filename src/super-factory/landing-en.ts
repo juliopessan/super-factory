@@ -27,6 +27,8 @@ export const PARES_EN: Array<[string, string]> = [
   ['<span class="linha" aria-hidden="true">A programação morreu.</span> <span class="linha" aria-hidden="true">A <span class="sub">engenharia</span> não.</span>', '<span class="linha" aria-hidden="true">Programming is dead.</span> <span class="linha" aria-hidden="true"><span class="sub">Engineering</span> is not.</span>'],
   ['Agentes escrevem o código. Engenharia é decidir o que entra. A Super Factory lê a demanda no Azure DevOps ou no GitHub, implementa e testa num container e abre o pull request. Você decide o merge.', 'Agents write the code. Engineering is deciding what ships. Super Factory reads the request from Azure DevOps or GitHub, builds and tests it in a container, and opens the pull request. You decide the merge.'],
   ['<a class="primario" href="/studio">Abrir a Factory', '<a class="primario" href="/studio">Open the Factory'],
+  ['aria-label="Apresentação da Super Factory, 20 segundos, em inglês, sem som"', 'aria-label="Super Factory presentation, 20 seconds, no sound"'],
+  ['<a class="seta" href="/waitlist">Lista de espera ↗</a>', '<a class="seta" href="/waitlist">Join the waitlist ↗</a>'],
   ['href="#instalar">Instalar ↗</a>', 'href="#instalar">Install ↗</a>'],
 
   // manifesto

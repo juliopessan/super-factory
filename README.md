@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/img/landing.png" alt="Página inicial da Super Factory: A programação morreu. A engenharia não." width="100%" />
+  <a href="docs/motion/super-factory-hero.mp4" title="Assistir ao vídeo completo (20 s)">
+    <img src="docs/motion/super-factory-hero.webp" alt="Vídeo de apresentação da Super Factory: Programming is dead. Engineering is not. Um card vira pull request, com evidência, e você decide o merge." width="100%" />
+  </a>
+  <br />
+  <sub><a href="docs/motion/super-factory-hero.mp4">▶ Assistir ao vídeo completo (20 s, com som)</a> · <a href="docs/img/landing.png">ver a página inicial</a></sub>
 </p>
 
 # Super Factory
@@ -261,6 +265,26 @@ O Chief of Staff **executa** o que não exige mudar código, em vez de só relat
 
 - **Metrics e Logs** usam um arquivo **DuckDB** (`SUPER_FACTORY_OBS_DB`; no container, `/data/observabilidade.duckdb`, no mesmo volume). O banco principal (agentes, memória, workflows) continua no LibSQL. Se o DuckDB não abrir, a Factory sobe sem métricas e avisa no log. Os traces antigos ficavam no LibSQL e não aparecem mais no Studio; os novos passam a valer daqui para a frente.
 - **Datasets** abre com o conjunto **Critérios de aceite (triagem)**: casos do lint com o veredito esperado. É criado uma vez e não é sobrescrito se você editar. **Experiments** e **Review Queue** começam vazios de propósito: Experiments nasce quando você roda um conjunto contra um agente ou workflow (gasta chamadas de modelo, por isso nada roda sozinho), e a Review Queue recebe o que for marcado para revisão.
+
+## Login e lista de espera
+
+A Factory tem login próprio (GitHub OAuth) e uma lista de espera com qualificação, gravada no nosso banco (LibSQL, o mesmo `SUPER_FACTORY_DB`).
+
+- **Páginas públicas:** a landing, `/waitlist` (formulário), `/login` e `/auth/*`. **Todo o resto** (Studio, `/api`, `/configuracoes`, MCP, `/admin`) exige login.
+- **Quem entra:** só quem a waitlist aprovou (pelo usuário do GitHub informado ou por **e-mail verificado** do GitHub) ou quem está em `SUPER_FACTORY_ADMINS`. Recusar alguém na waitlist tira o acesso em até 30 s, mesmo com a sessão aberta.
+- **Waitlist:** pessoa ou empresa, nome, e-mail, empresa e cargo, tamanho da equipe, quantas pessoas usariam, uso principal, ferramentas, o que quer automatizar, usuário do GitHub e consentimento. Um cadastro por e-mail; reenviar atualiza as respostas e nunca muda a decisão. Anti-abuso: isca para robô, limite de 5 envios por hora por IP, CSRF e tamanho máximo.
+- **Admin:** `/admin/waitlist` (só admins) lista, filtra, aprova, recusa e exporta CSV. Pela linha de comando: `docker exec -it super-factory node --experimental-strip-types src/scripts/waitlist.ts listar pendente` (também `aprovar <email|id>` e `recusar`).
+- **Segurança:** sessão em cookie assinado (`HttpOnly`, `SameSite=Lax`, `__Host-` e `Secure` em https), PKCE e `state` no OAuth, o token do GitHub nunca chega ao navegador, redirecionamento só para caminhos da própria Factory. Ligado com configuração incompleta, a Factory **fecha** tudo que não é público (503), nunca abre. A trilha de auditoria do cofre passa a registrar o usuário do GitHub.
+- **Automação:** `SUPER_FACTORY_API_TOKEN` (32+ caracteres) libera só `/api`, com `Authorization: Bearer`.
+
+**Como ligar na VPS (Traefik):**
+1. No GitHub: *Settings → Developer settings → OAuth Apps → New*. Callback: `https://SEU-DOMINIO/auth/retorno`.
+2. No `/opt/super-factory/.env`: `SUPER_FACTORY_AUTH=github`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `SUPER_FACTORY_PUBLIC_URL` e `SUPER_FACTORY_ADMINS` (veja `.env.example`).
+3. `sudo bash /opt/super-factory/deploy/atualizar.sh`, depois `sudo bash /opt/super-factory/deploy/ativar-login.sh`.
+
+O instalador antigo põe um login básico do Traefik na frente de tudo, o que esconderia a landing e a lista de espera. O `ativar-login.sh` confere o `.env`, tira esse login do Traefik, sobe de novo e **testa**: se o Studio não ficar protegido (302 sem sessão, 401 na API), volta sozinho ao que estava. Para desfazer à mão: `bash deploy/ativar-login.sh --desfazer`. Emergência sem script: `SUPER_FACTORY_AUTH=off` no `.env` e recriar o container.
+
+Por que GitHub e não Composio: o Composio guarda credenciais de agentes em apps de terceiros (agir no GitHub ou no Gmail em nome de alguém); não é um provedor de login do seu produto. Para empresas que não usam GitHub, o próximo provedor natural é Microsoft Entra ou Google.
 
 ## Menu `/` e `@` no chat
 

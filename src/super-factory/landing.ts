@@ -421,12 +421,13 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
       <div class="acoes">
         <a class="primario" href="/studio">Abrir a Factory <span class="gira" aria-hidden="true">✻</span></a>
         <a class="seta" href="#instalar">Instalar ↗</a>
+        <a class="seta" href="/waitlist">Lista de espera ↗</a>
       </div>
     </div>
 
     <div class="wrap video-apresentacao" id="apresentacao">
       <figure class="video-quadro" id="video-quadro" style="margin-left:auto;margin-right:auto">
-        <video id="video-hero" muted playsinline loop preload="metadata" poster="/motion/super-factory-hero.jpg" aria-label="Apresentação da Super Factory, 15 segundos, sem som">
+        <video id="video-hero" muted playsinline loop preload="metadata" poster="/motion/super-factory-hero.jpg" aria-label="Apresentação da Super Factory, 20 segundos, em inglês, sem som">
           <source src="/motion/super-factory-hero.mp4" type="video/mp4">
         </video>
       </figure>
