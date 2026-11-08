@@ -4,6 +4,7 @@ import { Memory } from '@mastra/memory'
 import { conhecimento, definirPoliticaProjeto, lerBaseProjeto, lerPoliticaProjeto, relatarMerge } from '../conhecimento.ts'
 import { conduzirInstalacaoFerramenta } from '../instalacao.ts'
 import { habilidades } from '../habilidades.ts'
+import { ferramentasDoUsuario } from '../mcp-usuario.ts'
 import { TokenLimiterProcessor } from '@mastra/core/processors'
 
 import { modeloConfigurado } from '../model.ts'
@@ -49,7 +50,9 @@ function criar(id: string, name: string, description: string, papel: string, ext
     // Modelo único, para o Studio mostrar o seletor de provedor e modelo. Falha transitória tenta de novo até 2 vezes.
     model: () => modeloConfigurado(),
     maxRetries: 2,
-    tools,
+    // As ferramentas fixas do papel mais as dos MCPs que o usuário instalou. O Security é somente
+    // leitura, então só recebe as que o servidor declara de leitura. Merge e deploy nunca entram.
+    tools: async () => ({ ...tools, ...(await ferramentasDoUsuario({ somenteLeitura: id === 'security' })) }),
     memory: memoria,
     knowledge: conhecimento,
     workspace: habilidades,

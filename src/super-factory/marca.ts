@@ -5,6 +5,7 @@ import path from 'node:path'
 import { FASES_AUTONOMO } from '../factory/autonomo.ts'
 import { marcarSegredos } from '../factory/guards.ts'
 import { paginaConfiguracoes, tratarChaves } from './configuracoes.ts'
+import { tratarMcps } from './configuracoes-mcps.ts'
 import { paginaInicial } from './landing.ts'
 
 // Marca: tile claro (text-main-white) com a sigla no preto da página (surface-bg), em Greed.
@@ -375,6 +376,7 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
     return paginaConfiguracoes({ embed: consulta.get('embed') === '1', tema: tema === 'dark' || tema === 'light' ? tema : null })
   }
   if (caminho === '/configuracoes/chaves') return tratarChaves(c.req.raw)
+  if (caminho === '/configuracoes/mcps') return tratarMcps(c.req.raw)
   if (caminho === '/sf.svg' || caminho.endsWith('/sf.svg') || caminho.endsWith('/mastra-dark-tile.svg') || caminho.endsWith('/mastra-light-tile.svg')) {
     return icone()
   }

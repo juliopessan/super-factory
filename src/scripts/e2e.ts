@@ -49,7 +49,7 @@ async function subirServidor(): Promise<ChildProcess | null> {
     console.error('A porta 4721 já está em uso. Pare o npm run dev ou rode com E2E_REUSE=1.')
     process.exit(2)
   }
-  const env: NodeJS.ProcessEnv = { ...process.env, FACTORY_STATE_PATH: path.join(saida, 'state.json'), SUPER_FACTORY_KEYS_PATH: path.join(saida, 'cofre', 'chaves.enc.json'), SUPER_FACTORY_ENSAIO_MS: '60' }
+  const env: NodeJS.ProcessEnv = { ...process.env, FACTORY_STATE_PATH: path.join(saida, 'state.json'), SUPER_FACTORY_KEYS_PATH: path.join(saida, 'cofre', 'chaves.enc.json'), SUPER_FACTORY_MCPS_PATH: path.join(saida, 'cofre', 'mcps.json'), SUPER_FACTORY_MCP_COMANDO: '1', SUPER_FACTORY_ENSAIO_MS: '60' }
   for (const nome of [
     'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY',
     'SUPER_FACTORY_MODEL', 'FACTORY_MODEL', 'GITHUB_TOKEN', 'GH_TOKEN',
@@ -164,6 +164,23 @@ async function testarWorkflow(): Promise<void> {
   const semOrigem = await fetch(BASE + '/configuracoes/chaves', { method: 'POST', headers: { 'content-type': 'application/json', 'x-sf-csrf': '1' }, body: JSON.stringify({ acao: 'remover', nome: 'GITHUB_TOKEN' }) })
   conferir('chaves: pedido sem Origin é recusado', semOrigem.status === 403)
 
+  // MCPs do usuário: instala um servidor MCP de verdade e confere o que cada agente do Studio enxerga
+  const fixtureMcp = fileURLToPath(new URL('./fixtures/mcp-eco.mjs', import.meta.url))
+  const postMcp = (corpo: unknown, origem: string | null = BASE) =>
+    fetch(BASE + '/configuracoes/mcps', { method: 'POST', headers: { 'content-type': 'application/json', 'x-sf-csrf': '1', ...(origem ? { origin: origem } : {}) }, body: JSON.stringify(corpo) })
+  const ferramentasDoAgente = async (id: string) => Object.keys(((await (await fetch(`${BASE}/api/agents/${id}`)).json()) as { tools?: Record<string, unknown> }).tools ?? {}).filter((nome) => nome.startsWith('eco-de-teste_'))
+  const catalogo = (await (await fetch(BASE + '/configuracoes/mcps')).json()) as { catalogo?: unknown[]; instalados?: unknown[] }
+  conferir('mcps: o painel lista os 5 MCPs do catálogo e nenhum instalado', catalogo.catalogo?.length === 5 && catalogo.instalados?.length === 0)
+  conferir('mcps: pedido sem Origin é recusado', (await postMcp({ acao: 'remover', id: 'abc' }, null)).status === 403)
+  conferir('mcps: pedido de outro site é recusado', (await postMcp({ acao: 'remover', id: 'abc' }, 'https://outro-site.com')).status === 403)
+  const instalado = (await (await postMcp({ acao: 'instalar-comando', nome: 'Eco de teste', comando: 'node', args: [fixtureMcp], segredos: { TOKEN_FALSO: 'abc123456' } })).text())
+  conferir('mcps: instala um servidor MCP de verdade, conecta e não devolve o segredo', instalado.includes('"instalado":true') && instalado.includes('"conectado"') && !instalado.includes('abc123456'), instalado.slice(0, 160))
+  const doSecurity = await ferramentasDoAgente('security')
+  const doChief = await ferramentasDoAgente('chief-of-staff')
+  conferir('mcps: o agente Security só recebe as ferramentas de leitura', doSecurity.sort().join() === 'eco-de-teste_ambiente,eco-de-teste_eco', doSecurity.join())
+  conferir('mcps: o Chief of Staff recebe também a que pede aprovação', doChief.includes('eco-de-teste_gravar_nota') && doChief.includes('eco-de-teste_eco'), doChief.join())
+  conferir('mcps: merge nunca chega a nenhum agente', !doSecurity.concat(doChief).some((nome) => nome.includes('merge')))
+
   const curto = await ciclo({ ...pedido, titulo: 'x' }, [])
   conferir('schema: título curto é recusado', curto.r.status >= 400 || curto.r.corpo?.status === 'failed', String(curto.r.status))
 }
@@ -238,6 +255,13 @@ async function testarNavegador(): Promise<void> {
     const popup = pagina.frameLocator('#sf-chaves-fundo iframe')
     await popup.locator('form.chave').first().waitFor()
     conferir('chaves: o popup abre com as seis chaves e campos de senha', (await popup.locator('form.chave').count()) === 6 && (await popup.locator('input[type=password]').count()) === 5)
+    await popup.locator('#aba-mcps').click()
+    await popup.locator('[data-mcp="eco-de-teste"]').waitFor({ timeout: 10000 })
+    conferir('mcps: a aba mostra o catálogo e o MCP instalado, conectado', (await popup.locator('form[data-catalogo]').count()) === 5 && /4 ferramentas/.test(await popup.locator('[data-mcp="eco-de-teste"] .estado').first().innerText()))
+    await popup.locator('[data-mcp="eco-de-teste"] summary', { hasText: 'Ferramentas' }).click()
+    const merge = popup.locator('[data-mcp="eco-de-teste"] .ferr', { hasText: 'merge_pull_request' })
+    conferir('mcps: a tela mostra o merge bloqueado e desabilitado', /bloqueada/.test(await merge.innerText()) && (await merge.locator('input').isDisabled()))
+    conferir('mcps: o segredo não aparece na tela', !(await popup.locator('body').innerHTML()).includes('abc123456'))
     await pagina.keyboard.press('Escape')
     await pagina.locator('#sf-chaves-fundo').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {})
     conferir('chaves: Esc fecha o popup', (await pagina.locator('#sf-chaves-fundo').count()) === 0)

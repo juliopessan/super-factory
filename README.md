@@ -246,6 +246,25 @@ Para o time não precisar de SSH nem de editor de texto, o Studio tem o botão *
 
 Quem entra na Factory com o login pode trocar estas chaves: use contas e tokens com o mínimo de permissão.
 
+## Ferramentas (MCP) que o time instala
+
+O Studio traz uma segunda aba no painel **Chaves e acessos**: **Ferramentas (MCP)**. Cada pessoa conecta aos agentes da Factory as ferramentas que ajudam no processo, sem SSH e sem mexer em arquivo.
+
+- **Catálogo curado, versões fixas:** Microsoft Learn (documentação do Azure, sem chave), Context7 (documentação de bibliotecas), GitHub (leitura de repositórios, issues e PRs), Azure DevOps (work items, repositórios, builds) e Raciocínio em etapas.
+- **Servidor remoto:** qualquer MCP publicado em https. A URL precisa ser pública; endereço da rede interna, IP e nome interno são recusados. O token vai criptografado, nunca na URL.
+- **Comando no servidor:** só para o administrador, com `SUPER_FACTORY_MCP_COMANDO=1` no `.env`. Rodar um comando é executar código dentro da Factory, por isso a tela não liga isso sozinha.
+- **Testa antes de gravar:** a Factory conecta, lista as ferramentas e só então instala. Credencial recusada nunca instala. Na primeira vez, o `npx` baixa o pacote e pode levar até um minuto.
+- **Cada ferramenta liga e desliga** na própria tela, com um selo: *somente leitura*, *pede aprovação* ou *bloqueada*.
+
+O que protege o processo:
+
+- **Merge, deploy, publicação e aprovação nunca chegam a um agente.** Uma ferramenta com esse jeito, como `merge_pull_request`, fica bloqueada mesmo que o servidor a ofereça.
+- **O que não é declarado somente leitura pede a sua aprovação a cada uso.** O papel Security só recebe ferramentas de leitura.
+- **As chaves da Factory não vazam para o MCP.** O subprocesso só enxerga as variáveis dele; o token do MCP mora no cofre criptografado e só sai dali para conectar.
+- **Um MCP quebrado não derruba nada.** Cada um tem a própria conexão; o que falha fica de fora, com o motivo na tela.
+
+Vale para os agentes do Studio. O modo autônomo continua só com o sandbox: o agente construtor não usa MCP.
+
 ## Por dentro
 
 ### Onde está o código

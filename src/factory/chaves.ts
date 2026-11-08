@@ -299,3 +299,65 @@ export function removerChave(nome: string): void {
   gravarCofre(resto)
   aplicarNoAmbiente(resto)
 }
+
+// ---------- segredos dos MCPs instalados pelo usuário ----------
+// Moram no mesmo cofre criptografado, num espaço de nomes próprio (MCP__<id>__<NOME>).
+// Nunca vão para process.env, não aparecem na lista de chaves e só saem daqui para o
+// subprocesso ou o cabeçalho do próprio MCP, no momento de conectar.
+
+const ID_DE_MCP = /^[a-z0-9][a-z0-9-]{1,22}[a-z0-9]$/
+const NOME_DE_SEGREDO = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/
+
+function nomeNoCofre(id: string, nome: string): string {
+  if (!ID_DE_MCP.test(id)) throw new Error('Identificador de MCP inválido.')
+  if (!NOME_DE_SEGREDO.test(nome)) throw new Error('Nome de segredo inválido.')
+  return `MCP__${id}__${nome}`
+}
+
+export function validarSegredoDeMcp(valor: unknown): string {
+  if (typeof valor !== 'string') throw new Error('Cole o valor do segredo.')
+  const limpo = valor.trim()
+  if (limpo.length < 1 || limpo.length > 4096) throw new Error('O segredo está vazio ou grande demais.')
+  if (!/^[\x20-\x7E]+$/.test(limpo)) throw new Error('O segredo não pode ter quebras de linha nem caracteres especiais. Copie de novo, sem sobras.')
+  return limpo
+}
+
+/** Valores para conectar. Uso interno do gerente de MCPs: nunca devolva isto numa resposta HTTP. */
+export function segredosDoMcp(id: string): Record<string, string> {
+  const prefixo = nomeNoCofre(id, 'x').slice(0, -1)
+  const saida: Record<string, string> = {}
+  const cofre = lerCofre()
+  if (cofre.corrompido) return saida
+  for (const [nome, item] of Object.entries(cofre.conteudo)) {
+    if (nome.startsWith(prefixo)) saida[nome.slice(prefixo.length)] = item.valor
+  }
+  return saida
+}
+
+/** Só os nomes que têm valor guardado. É isto que a tela pode saber. */
+export function nomesDeSegredosDoMcp(id: string): string[] {
+  return Object.keys(segredosDoMcp(id))
+}
+
+export function salvarSegredosDoMcp(id: string, valores: Record<string, string>, por: string): void {
+  const cofre = lerCofre()
+  if (cofre.corrompido) throw new Error('O arquivo de chaves não abriu com a chave mestra atual. Nada foi gravado, para não perder o que existe.')
+  const conteudo = { ...cofre.conteudo }
+  for (const [nome, valor] of Object.entries(valores)) {
+    conteudo[nomeNoCofre(id, nome)] = { valor: validarSegredoDeMcp(valor), em: new Date().toISOString(), por: por.slice(0, 32) }
+  }
+  gravarCofre(conteudo)
+}
+
+export function removerSegredosDoMcp(id: string, nomes?: string[]): void {
+  const cofre = lerCofre()
+  if (cofre.corrompido) throw new Error('O arquivo de chaves não abriu com a chave mestra atual. Nada foi alterado.')
+  const prefixo = nomeNoCofre(id, 'x').slice(0, -1)
+  const alvo = nomes ? new Set(nomes.map((nome) => nomeNoCofre(id, nome))) : null
+  const conteudo: Conteudo = {}
+  for (const [nome, item] of Object.entries(cofre.conteudo)) {
+    const sai = nome.startsWith(prefixo) && (!alvo || alvo.has(nome))
+    if (!sai) conteudo[nome] = item
+  }
+  gravarCofre(conteudo)
+}
