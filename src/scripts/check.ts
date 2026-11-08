@@ -555,7 +555,7 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   await marcaSuperFactory(contexto, async () => {})
   const html = await contexto.res.text()
   const injetados = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? '')
-  assert.equal(injetados.length, 3, 'o Studio recebe três scripts: a marca, as sugestões e o time')
+  assert.equal(injetados.length, 4, 'o Studio recebe quatro scripts: a marca, as sugestões, o time e o menu')
   for (const [i, codigo] of injetados.entries()) assert.doesNotThrow(() => new Function(codigo), `o script ${i + 1} injetado no Studio tem sintaxe válida`)
   assert.ok(injetados.some((codigo) => codigo.includes('popupDeChaves')), 'o script do Studio traz o botão de chaves')
   assert.ok(injetados.some((codigo) => codigo.includes('sf-sugestoes') && codigo.includes('Tab')), 'o script de sugestões com Tab está no Studio')
@@ -1583,6 +1583,36 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   for (const agente of ['chief-of-staff', 'architect', 'frontend', 'backend', 'integrations', 'qa', 'security', 'docs']) assert.ok(SCRIPT_TIME.includes(`id: '${agente}'`), `o time inclui ${agente}`)
   assert.match(SCRIPT_TIME, /humano: true/, 'o merge é o nó humano')
   new Function(SCRIPT_TIME) // sintaxe válida
+}
+
+// --- Menu / e @: só preenche a mensagem, lê skills e cards, e pode ser desligado
+{
+  const menu = await import('../super-factory/menu.ts')
+  const cab = menu.lerCabecalhoDeSkill('---\nname: super-qa\ndescription: >-\n  Primeira linha da descrição\n  e a segunda.\nlicense: x\n---\n# Corpo')
+  assert.deepEqual(cab, { nome: 'super-qa', descricao: 'Primeira linha da descrição e a segunda.' }, 'descrição dobrada em várias linhas')
+  assert.deepEqual(menu.lerCabecalhoDeSkill('---\nname: curta\ndescription: numa linha\n---\n'), { nome: 'curta', descricao: 'numa linha' })
+  assert.equal(menu.lerCabecalhoDeSkill('---\nname: ../escapa\ndescription: x\n---\n'), null, 'nome fora do padrão é ignorado')
+  assert.equal(menu.lerCabecalhoDeSkill('sem cabeçalho'), null)
+  const skills = menu.listarSkills()
+  for (const nome of ['super-qa', 'super-review', 'factory-ui']) assert.ok(skills.some((s) => s.nome === nome), `o menu lista a skill ${nome}`)
+  const get = (extra: Record<string, string> = {}, metodo = 'GET') => menu.tratarMenu(new Request('http://factory.test/factory/menu', { method: metodo, headers: extra }))
+  const ok = get()
+  assert.equal(ok.status, 200)
+  assert.equal(ok.headers.get('cache-control'), 'no-store')
+  const corpoMenu = (await ok.json()) as { skills: unknown[]; cards: Array<{ id: string; titulo: string }> }
+  assert.ok(Array.isArray(corpoMenu.skills) && Array.isArray(corpoMenu.cards))
+  assert.equal(get({}, 'POST').status, 405, 'só leitura')
+  assert.equal(get({ 'sec-fetch-site': 'cross-site' }).status, 403, 'outro site não lê')
+  const gravado = JSON.stringify(corpoMenu)
+  assert.ok(!/ghp_[A-Za-z0-9]{30,}/.test(gravado), 'nenhum token no menu')
+  const fonte = fs.readFileSync(new URL('../super-factory/marca.ts', import.meta.url), 'utf8')
+  assert.match(fonte, /SUPER_FACTORY_MENU\?\.trim\(\) !== '0'/, 'SUPER_FACTORY_MENU=0 desliga o menu')
+  new Function(menu.SCRIPT_MENU)
+  assert.doesNotMatch(menu.SCRIPT_MENU, /innerHTML/, 'o menu monta tudo com textContent')
+  const modelos = /var MODELOS = \{[\s\S]*?\n  \}\n/.exec(menu.SCRIPT_MENU)?.[0] ?? ''
+  assert.ok(modelos.includes('iniciarOnda'), 'os modelos pedem a ferramenta que existe')
+  assert.doesNotMatch(modelos + menu.SCRIPT_MENU.slice(menu.SCRIPT_MENU.indexOf('var ATALHOS'), menu.SCRIPT_MENU.indexOf('var CHAVE')), /merge|deploy|aprov/i, 'nenhum modelo ou atalho fala de merge, deploy ou aprovação')
+  assert.match(menu.SCRIPT_MENU, /nome: c\.id, descricao: c\.titulo[^\n]*texto: c\.id/, 'no @ entra só o identificador do card, nunca o título')
 }
 
 // --- Repositório: aceita o endereço copiado do navegador ou do git

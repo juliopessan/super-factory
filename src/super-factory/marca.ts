@@ -8,6 +8,7 @@ import { paginaConfiguracoes, tratarChaves } from './configuracoes.ts'
 import { tratarMcps } from './configuracoes-mcps.ts'
 import { paginaInicial } from './landing.ts'
 import { SCRIPT_SUGESTOES } from './sugestoes.ts'
+import { SCRIPT_MENU, tratarMenu } from './menu.ts'
 import { SCRIPT_TIME } from './time-animado.ts'
 
 // Marca: tile claro (text-main-white) com a sigla no preto da página (surface-bg), em Greed.
@@ -490,6 +491,11 @@ async function limparEntrada(req: Pedido): Promise<void> {
   req.bodyCache = { text: Promise.resolve(limpo) }
 }
 
+/** SUPER_FACTORY_MENU=0 desliga o menu / e @ sem mexer no resto. */
+function menuLigado(): boolean {
+  return process.env.SUPER_FACTORY_MENU?.trim() !== '0'
+}
+
 export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next: () => Promise<void>) {
   const caminho = c.req.path
   await limparEntrada(c.req)
@@ -502,6 +508,7 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   }
   if (caminho === '/configuracoes/chaves') return tratarChaves(c.req.raw)
   if (caminho === '/configuracoes/mcps') return tratarMcps(c.req.raw)
+  if (caminho === '/factory/menu') return tratarMenu(c.req.raw)
   if (caminho === '/sf.svg' || caminho.endsWith('/sf.svg') || caminho.endsWith('/mastra-dark-tile.svg') || caminho.endsWith('/mastra-light-tile.svg')) {
     return icone()
   }
@@ -527,7 +534,7 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   const marcado = html
     .replaceAll('<title>Mastra Studio</title>', '<title>Super Factory</title>')
     .replaceAll('href="./mastra-dark-tile.svg"', 'href="./sf.svg"')
-    .replace('</body>', `<script>${SCRIPT}</script><script>${SCRIPT_SUGESTOES}</script><script>${SCRIPT_TIME}</script></body>`)
+    .replace('</body>', `<script>${SCRIPT}</script><script>${SCRIPT_SUGESTOES}</script><script>${SCRIPT_TIME}</script>${menuLigado() ? `<script>${SCRIPT_MENU}</script>` : ''}</body>`)
   const headers = new Headers(c.res.headers)
   headers.delete('content-length')
   c.res = new Response(marcado, { status: c.res.status, headers })
