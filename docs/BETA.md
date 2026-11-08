@@ -56,7 +56,7 @@ Em qualquer dúvida na hora: use **ensaio**.
 
 ## 5. Voltar atrás
 
-Versões conhecidas boas no `main`: `03af920` (time animado) e `b074987` (anterior). Para voltar:
+Versões conhecidas boas no `main`: `98f28e7` (menu e beta), `03af920` (time animado) e `b074987` (anterior). Para voltar:
 
 ```bash
 cd /opt/super-factory
