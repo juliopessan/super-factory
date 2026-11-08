@@ -555,7 +555,7 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   await marcaSuperFactory(contexto, async () => {})
   const html = await contexto.res.text()
   const injetados = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? '')
-  assert.equal(injetados.length, 2, 'o Studio recebe dois scripts: a marca e as sugestões')
+  assert.equal(injetados.length, 3, 'o Studio recebe três scripts: a marca, as sugestões e o time')
   for (const [i, codigo] of injetados.entries()) assert.doesNotThrow(() => new Function(codigo), `o script ${i + 1} injetado no Studio tem sintaxe válida`)
   assert.ok(injetados.some((codigo) => codigo.includes('popupDeChaves')), 'o script do Studio traz o botão de chaves')
   assert.ok(injetados.some((codigo) => codigo.includes('sf-sugestoes') && codigo.includes('Tab')), 'o script de sugestões com Tab está no Studio')
@@ -1570,6 +1570,19 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   await assert.rejects(() => colar.analisarColagem(JSON.stringify({ mcpServers: Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`s${i}`, { url: 'https://a.exemplo.com' }])) }), 'ana', publica), /No máximo 5/)
   if (antes === undefined) delete process.env.SUPER_FACTORY_MCP_COMANDO
   else process.env.SUPER_FACTORY_MCP_COMANDO = antes
+}
+
+// --- Time animado: o script é injetado na tela de agentes e respeita movimento reduzido
+{
+  const { SCRIPT_TIME } = await import('../super-factory/time-animado.ts')
+  const marcaFonte = fs.readFileSync(new URL('../super-factory/marca.ts', import.meta.url), 'utf8')
+  assert.match(marcaFonte, /<script>\$\{SCRIPT_TIME\}<\/script>/, 'o time é injetado no Studio')
+  assert.match(SCRIPT_TIME, /prefers-reduced-motion/, 'respeita movimento reduzido')
+  assert.match(SCRIPT_TIME, /\/studio\/agents'/, 'só na tela de agentes')
+  assert.doesNotMatch(SCRIPT_TIME, /innerHTML/, 'monta o desenho sem innerHTML')
+  for (const agente of ['chief-of-staff', 'architect', 'frontend', 'backend', 'integrations', 'qa', 'security', 'docs']) assert.ok(SCRIPT_TIME.includes(`id: '${agente}'`), `o time inclui ${agente}`)
+  assert.match(SCRIPT_TIME, /humano: true/, 'o merge é o nó humano')
+  new Function(SCRIPT_TIME) // sintaxe válida
 }
 
 // --- Repositório: aceita o endereço copiado do navegador ou do git

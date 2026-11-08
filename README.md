@@ -262,6 +262,10 @@ O Chief of Staff **executa** o que não exige mudar código, em vez de só relat
 - **Metrics e Logs** usam um arquivo **DuckDB** (`SUPER_FACTORY_OBS_DB`; no container, `/data/observabilidade.duckdb`, no mesmo volume). O banco principal (agentes, memória, workflows) continua no LibSQL. Se o DuckDB não abrir, a Factory sobe sem métricas e avisa no log. Os traces antigos ficavam no LibSQL e não aparecem mais no Studio; os novos passam a valer daqui para a frente.
 - **Datasets** abre com o conjunto **Critérios de aceite (triagem)**: casos do lint com o veredito esperado. É criado uma vez e não é sobrescrito se você editar. **Experiments** e **Review Queue** começam vazios de propósito: Experiments nasce quando você roda um conjunto contra um agente ou workflow (gasta chamadas de modelo, por isso nada roda sozinho), e a Review Queue recebe o que for marcado para revisão.
 
+## Time de agentes animado
+
+Na tela **Agents** do Studio, o espaço abaixo dos cards mostra **Como o time trabalha**: o Chief of Staff no topo delegando para o time (Architect, Frontend, Backend, Construtor, QA, Security, Docs, Integrations) e, embaixo, o **merge**, o único nó humano. Um pulso percorre o ciclo a cada 12 s e cada agente acende na sua vez; o merge pulsa em âmbar esperando uma pessoa. Passe o mouse para ver o papel e clique para abrir o chat do agente. Aparece nas visões em cards e em lista, acompanha o tema claro/escuro e fica parado com `prefers-reduced-motion`. O desenho é fixo no código (`src/super-factory/time-animado.ts`): ao criar um agente novo, inclua-o lá.
+
 ## Conversa com o agente
 
 O Studio abre uma conversa nova toda vez que você volta para o agente, e a anterior fica na lista de threads. A Factory lembra a última conversa de cada agente (neste navegador) e a reabre quando você volta pelo menu ou pela lista. O trabalho do agente continua no servidor enquanto você está em outra tela: ao voltar, a conversa mostra a pergunta, o botão de parar indica que ainda está rodando e a resposta aparece quando termina. **New Thread** continua começando uma conversa nova.
