@@ -199,23 +199,12 @@ export function aprovar(
     `${entrada.portao} ${entrada.aprovado ? 'aprovado' : 'recusado'} por ${entrada.aprovador}.`,
     entrada.aprovador,
   )
-  if (!entrada.aprovado && entrada.portao === 'beforeRelease') {
-    return {
-      ...proximo,
-      desfecho: 'retido',
-      motivo: null,
-      parado: false,
-      card: { ...proximo.card, coluna: 'review' },
-    }
-  }
   if (!entrada.aprovado) return parar(proximo, `Gate ${entrada.portao} recusado por ${entrada.aprovador}.`)
-  if (entrada.portao === 'beforeImplementation') {
-    return { ...proximo, estagio: 'implementation', card: { ...proximo.card, coluna: 'build' } }
-  }
+  // Só o merge é gate. Os valores antigos do enum continuam aceitos para ler execuções já gravadas.
   if (entrada.portao === 'beforeMerge') {
     return { ...proximo, estagio: 'delivery', card: { ...proximo.card, coluna: 'review' } }
   }
-  return { ...proximo, card: { ...proximo.card, coluna: 'done' } }
+  return proximo
 }
 
 export function comoRetomada(valor: unknown): Retomada | null {
@@ -227,18 +216,12 @@ export function comoRetomada(valor: unknown): Retomada | null {
   return { aprovado: item.aprovado, aprovador: item.aprovador.trim(), nota: item.nota.trim() }
 }
 
-function textoDoPortao(portao: Portao): string {
-  if (portao === 'beforeImplementation') return 'Uma pessoa precisa liberar a implementação. O agente não aprova este gate.'
-  if (portao === 'beforeMerge') return 'Uma pessoa precisa liberar o acompanhamento. A Factory não faz merge.'
-  return 'Uma pessoa precisa aceitar o release. A Factory não faz deploy.'
+function textoDoPortao(_portao: Portao): string {
+  return 'Última decisão humana do ciclo: uma pessoa libera a entrega do pull request e fica com o merge. A Factory não faz merge nem deploy.'
 }
 
 export function podePedirMerge(estado: Estado): string[] {
   const motivos: string[] = []
-  const implementacao = estado.aprovacoes.find(
-    (item) => item.portao === 'beforeImplementation' && item.aprovado && item.origem === 'human',
-  )
-  if (!implementacao) motivos.push('Falta aprovação humana antes da implementação.')
   if (estado.achados.some((achado) => achado.severidade === 'blocking')) motivos.push('Há achado bloqueante em aberto.')
   if (estado.checks.some((check) => check.resultado === 'FAIL')) motivos.push('Há check em FAIL.')
   if (estado.checks.some((check) => check.resultado === 'PASS' && check.evidencia.trim().length < 8)) {
@@ -246,14 +229,6 @@ export function podePedirMerge(estado: Estado): string[] {
   }
   const rascunho = validarRascunho(estado.card.branchBase, estado.card.branchHead)
   if (rascunho) motivos.push(rascunho)
-  return motivos
-}
-
-export function podePedirRelease(estado: Estado): string[] {
-  const motivos = podePedirMerge(estado).filter((motivo) => !motivo.startsWith('Falta aprovação humana antes da implementação.'))
-  const merge = estado.aprovacoes.find((item) => item.portao === 'beforeMerge' && item.aprovado && item.origem === 'human')
-  if (!merge) motivos.push('Falta aprovação humana antes do merge.')
-  if (!estado.entrega?.ok) motivos.push('A entrega no provedor não foi concluída.')
   return motivos
 }
 
@@ -266,7 +241,9 @@ export function decidirPortao(
   | { acao: 'parar'; estado: Estado }
   | { acao: 'suspender'; pausa: { portao: Portao; cardId: string; resumo: string; motivos: string[] } } {
   if (estado.parado || estado.desfecho === 'retido') return { acao: 'seguir', estado }
-  const motivos = portao === 'beforeImplementation' ? [] : portao === 'beforeMerge' ? podePedirMerge(estado) : podePedirRelease(estado)
+  // Gates antigos (implementação e release) não pausam mais: só o merge é decisão de uma pessoa.
+  if (portao !== 'beforeMerge') return { acao: 'seguir', estado }
+  const motivos = podePedirMerge(estado)
   if (motivos.length > 0) return { acao: 'parar', estado: parar(estado, motivos.join(' ')) }
   const decisao = comoRetomada(retomada)
   if (!decisao) {
@@ -461,15 +438,10 @@ export async function entregar(estado: Estado, clientes: Clientes = {}): Promise
 export function fechar(estado: Estado): Estado {
   let proximo = estado
   if (!proximo.parado && proximo.desfecho === 'em-andamento') {
-    const release = proximo.aprovacoes.find(
-      (item) => item.portao === 'beforeRelease' && item.aprovado && item.origem === 'human',
-    )
-    if (release && proximo.checks.every((check) => check.resultado !== 'FAIL')) {
-      proximo = {
-        ...proximo,
-        desfecho: 'aceito-com-ressalvas',
-        card: { ...proximo.card, coluna: 'done' },
-      }
+    const merge = proximo.aprovacoes.find((item) => item.portao === 'beforeMerge' && item.aprovado && item.origem === 'human')
+    // Com o merge liberado e a entrega feita, o card fica em review até uma pessoa fazer o merge de verdade.
+    if (merge && proximo.entrega?.ok && proximo.checks.every((check) => check.resultado !== 'FAIL')) {
+      proximo = { ...proximo, desfecho: 'aceito-com-ressalvas' }
     }
   }
   proximo = { ...proximo, evidencia: evidenciaDe(proximo), atualizadoEm: agora() }

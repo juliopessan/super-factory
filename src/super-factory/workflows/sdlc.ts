@@ -52,11 +52,6 @@ function passoPortao(id: string, portao: Portao, description: string) {
 }
 
 const especificarPasso = passo('especificar', 'Registra a especificação. Não altera o repositório.', especificar)
-const gateImplementacao = passoPortao(
-  'gate-implementacao',
-  'beforeImplementation',
-  'Para até uma pessoa liberar a implementação.',
-)
 const planejarPasso = passo('planejar', 'Separa os donos e os caminhos. As escritas não se sobrepõem.', planejar)
 const verificarPasso = passo(
   'verificar',
@@ -64,9 +59,8 @@ const verificarPasso = passo(
   verificar,
 )
 const revisarPasso = passo('revisar', 'Segurança e revisão. Achado bloqueante impede o merge.', revisar)
-const gateMerge = passoPortao('gate-merge', 'beforeMerge', 'Para até uma pessoa liberar o acompanhamento. Não faz merge.')
+const gateMerge = passoPortao('gate-merge', 'beforeMerge', 'A única decisão humana do ciclo: para até uma pessoa liberar a entrega e ficar com o merge. Não faz merge.')
 const entregarPasso = passo('entregar', 'Abre issue ou work item e, se houver branch, um pull request rascunho.', entregar)
-const gateRelease = passoPortao('gate-release', 'beforeRelease', 'Para até uma pessoa aceitar o release. Não faz deploy.')
 
 const fecharPasso = createStep({
   id: 'fechar',
@@ -83,18 +77,16 @@ const fecharPasso = createStep({
 
 export const sdlcWorkflow = createWorkflow({
   id: 'sdlc',
-  description: 'Conduz um card da triagem ao release, com três gates humanos. Não faz merge, push protegido nem deploy.',
+  description: 'Conduz um card da triagem à entrega, com um só gate humano: o merge. Não faz merge, push protegido nem deploy.',
   inputSchema: pedidoSchema,
   outputSchema: estadoSchema,
 })
   .then(abrirCard)
   .then(especificarPasso)
-  .then(gateImplementacao)
   .then(planejarPasso)
   .then(verificarPasso)
   .then(revisarPasso)
   .then(gateMerge)
   .then(entregarPasso)
-  .then(gateRelease)
   .then(fecharPasso)
   .commit()

@@ -214,6 +214,32 @@ const SCRIPT = `(function () {
     painelDeFases()
   }, 1700)
 
+  // Lista de agentes: abre nos cartões (Compact view), que leem melhor que a tabela. O Studio não guarda a escolha,
+  // então quem prefere a tabela clica em List view e a Factory lembra disso neste navegador.
+  var visaoAplicada = ''
+  function visaoDosAgentes() {
+    var rota = location.pathname
+    if (rota.length > 1 && rota.charAt(rota.length - 1) === '/') rota = rota.slice(0, -1)
+    if (rota !== '/studio/agents') { visaoAplicada = ''; return }
+    if (visaoAplicada === rota) return
+    var compacta = document.querySelector('button[aria-label="Compact view"]')
+    if (!compacta || !document.querySelector('button[aria-label="List view"]')) return
+    visaoAplicada = rota
+    var escolha = null
+    try { escolha = localStorage.getItem('sf-visao-agentes') } catch (e) {}
+    if (escolha !== 'lista' && compacta.getAttribute('aria-pressed') === 'false') compacta.click()
+  }
+  // Só o clique de uma pessoa vale como escolha: o clique automático acima não passa de isTrusted.
+  document.addEventListener('click', function (e) {
+    if (!e.isTrusted || !e.target || !e.target.closest) return
+    var botao = e.target.closest('button[aria-label]')
+    var rotulo = botao ? botao.getAttribute('aria-label') : ''
+    try {
+      if (rotulo === 'List view') localStorage.setItem('sf-visao-agentes', 'lista')
+      else if (rotulo === 'Compact view') localStorage.removeItem('sf-visao-agentes')
+    } catch (x) {}
+  }, true)
+
   // Botão "Chaves e acessos": abre /configuracoes num popup dentro do Studio.
   function popupDeChaves() {
     if (document.getElementById('sf-chaves-fundo')) return
@@ -259,7 +285,8 @@ const SCRIPT = `(function () {
   function ligar() {
     estilo()
     botaoDeChaves()
-    new MutationObserver(function () { marcar(); botaoDeChaves(); painelDeFases() }).observe(document.documentElement, { subtree: true, childList: true, characterData: true })
+    visaoDosAgentes()
+    new MutationObserver(function () { marcar(); botaoDeChaves(); painelDeFases(); visaoDosAgentes() }).observe(document.documentElement, { subtree: true, childList: true, characterData: true })
     marcar()
   }
   if (document.body) ligar()

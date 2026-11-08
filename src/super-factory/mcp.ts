@@ -6,9 +6,13 @@ import { conduzirInstalacaoFerramenta } from './instalacao.ts'
 import {
   abrirCard,
   avaliarGateMerge,
+  lerArquivoGithub,
   lerLedger,
+  lerProjetoGithub,
   lintarCriterios,
+  listarArquivosGithub,
   listarAzure,
+  listarBranchesGithub,
   listarGithub,
   planejarOnda,
   statusQuadro,
@@ -20,7 +24,7 @@ const INSTRUCOES = [
   'Este servidor é a Super Factory.',
   'O ciclo governado é o workflow sdlc. Ele suspende em implementação, merge e release.',
   'Quem retoma um gate é uma pessoa, com aprovado, aprovador e nota. Um agente não aprova.',
-  'Não há ferramenta de shell, merge, force-push ou deploy.',
+  'Não há ferramenta de shell, merge, force-push ou deploy. A única decisão humana do ciclo é o merge.',
   'Sem credencial, GitHub e Azure DevOps respondem em modo simulado e dizem isso.',
 ].join('\n')
 
@@ -46,8 +50,8 @@ export const servidorMcp = new MCPServer({
     security,
     docs,
   },
-  // criarIssueGithub e criarWorkItemAzure ficam fora: o MCP executa a ferramenta direto,
-  // sem a aprovação humana que elas exigem no Studio.
+  // As ferramentas que escrevem (criar issue, criar work item, organizar o Project) ficam fora: quem fala
+  // com este servidor MCP não passa pelo login do Studio nem pela conversa com um agente. Só leitura sai daqui.
   tools: {
     statusQuadro,
     validarManifesto,
@@ -58,6 +62,10 @@ export const servidorMcp = new MCPServer({
     lerLedger,
     listarGithub,
     listarAzure,
+    listarBranchesGithub,
+    listarArquivosGithub,
+    lerArquivoGithub,
+    lerProjetoGithub,
     lerBaseProjeto,
     registrarRegraProjeto,
     lerPoliticaProjeto,

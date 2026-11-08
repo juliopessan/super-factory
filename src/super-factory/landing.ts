@@ -489,7 +489,7 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
       <div class="wrap">
         <div class="cabeca" data-revela>
           <h2>Ciclo</h2>
-          <p>O workflow autonomo conduz o card da triagem ao pull request e guarda cada passo. O sdlc continua para quem quer três gates.</p>
+          <p>O workflow autonomo conduz o card da triagem ao pull request e guarda cada passo. O sdlc continua para quem prefere aprovar a entrega antes de abrir o pull request.</p>
         </div>
         <div class="grade dois">
           <article class="card grao" data-revela>

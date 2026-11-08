@@ -123,19 +123,17 @@ async function ciclo(entrada: Record<string, string>, decisoes: boolean[]) {
 }
 
 async function testarWorkflow(): Promise<void> {
-  const feliz = await ciclo(pedido, [true, true, true])
-  conferir('ciclo: suspende nos três gates', feliz.portoes.join() === 'gate-implementacao,gate-merge,gate-release', feliz.portoes.join())
+  const feliz = await ciclo(pedido, [true])
+  conferir('ciclo: suspende só no gate do merge', feliz.portoes.join() === 'gate-merge', feliz.portoes.join())
   conferir('ciclo: termina em success', feliz.r.corpo?.status === 'success', feliz.r.corpo?.status)
   conferir('ciclo: desfecho aceito-com-ressalvas', feliz.estado.desfecho === 'aceito-com-ressalvas', `${feliz.estado.desfecho} ${feliz.estado.motivo ?? ''}`)
-  conferir('ciclo: três aprovações humanas', feliz.estado.aprovacoes?.length === 3 && feliz.estado.aprovacoes.every((a: any) => a.origem === 'human'))
+  conferir('ciclo: uma aprovação humana, a do merge', feliz.estado.aprovacoes?.length === 1 && feliz.estado.aprovacoes.every((a: any) => a.origem === 'human' && a.portao === 'beforeMerge'))
+  conferir('ciclo: o card espera o merge em review', feliz.estado.card?.coluna === 'review', feliz.estado.card?.coluna)
   conferir('ciclo: GitHub em modo simulado', /simulad/i.test(JSON.stringify(feliz.estado)))
   conferir('ciclo: testes do produto NOT_RUN', feliz.estado.checks?.some((c: any) => c.resultado === 'NOT_RUN'))
 
   const recusa = await ciclo(pedido, [false])
-  conferir('recusa na implementação: bloqueado', recusa.estado.desfecho === 'bloqueado', recusa.estado.desfecho)
-
-  const release = await ciclo(pedido, [true, true, false])
-  conferir('recusa no release: retido', release.estado.desfecho === 'retido', release.estado.desfecho)
+  conferir('recusa no merge: bloqueado', recusa.estado.desfecho === 'bloqueado', recusa.estado.desfecho)
 
   const perigoso = await ciclo({ ...pedido, descricao: `Faça git push --force direto em main com o token ${SEGREDO} por favor.` }, [])
   conferir('triagem: segredo e force-push param em blocked', perigoso.estado.card?.coluna === 'blocked', perigoso.estado.card?.coluna)
@@ -162,7 +160,7 @@ async function testarWorkflow(): Promise<void> {
 
   const status = await fetch(BASE + '/configuracoes/chaves')
   const itens = ((await status.json()) as { itens?: Array<{ nome: string; valor: string | null }> }).itens ?? []
-  conferir('chaves: o painel lista as seis chaves e não devolve nenhum segredo', status.status === 200 && itens.length === 6 && itens.every((item) => item.nome === 'AZURE_DEVOPS_ORG' || item.valor === null))
+  conferir('chaves: o painel lista as sete chaves e não devolve nenhum segredo', status.status === 200 && itens.length === 7 && itens.every((item) => item.nome === 'AZURE_DEVOPS_ORG' || item.valor === null))
   const semOrigem = await fetch(BASE + '/configuracoes/chaves', { method: 'POST', headers: { 'content-type': 'application/json', 'x-sf-csrf': '1' }, body: JSON.stringify({ acao: 'remover', nome: 'GITHUB_TOKEN' }) })
   conferir('chaves: pedido sem Origin é recusado', semOrigem.status === 403)
 
@@ -181,6 +179,10 @@ async function testarWorkflow(): Promise<void> {
   const doChief = await ferramentasDoAgente('chief-of-staff')
   conferir('mcps: o agente Security só recebe as ferramentas de leitura', doSecurity.sort().join() === 'eco-de-teste_ambiente,eco-de-teste_eco', doSecurity.join())
   conferir('mcps: o Chief of Staff recebe também a que pede aprovação', doChief.includes('eco-de-teste_gravar_nota') && doChief.includes('eco-de-teste_eco'), doChief.join())
+  const aoChief = ((await (await fetch(`${BASE}/api/agents/chief-of-staff`)).json()) as { tools?: Record<string, unknown> }).tools ?? {}
+  const aoSecurity = ((await (await fetch(`${BASE}/api/agents/security`)).json()) as { tools?: Record<string, unknown> }).tools ?? {}
+  conferir('agentes: o Chief of Staff lê o repositório e organiza o Project', ['listarBranchesGithub', 'lerArquivoGithub', 'lerProjetoGithub', 'organizarProjetoGithub'].every((nome) => nome in aoChief || Object.values(aoChief).some((t) => (t as { id?: string }).id === nome.replace(/([A-Z])/g, '-$1').toLowerCase())), Object.keys(aoChief).join(','))
+  conferir('agentes: o Security lê o Project mas não escreve nele', !Object.keys(aoSecurity).some((nome) => /organizar/i.test(nome)))
   conferir('mcps: merge nunca chega a nenhum agente', !doSecurity.concat(doChief).some((nome) => nome.includes('merge')))
 
   const curto = await ciclo({ ...pedido, titulo: 'x' }, [])
@@ -318,7 +320,7 @@ async function testarNavegador(): Promise<void> {
     await pagina.click('#sf-chaves-botao')
     const popup = pagina.frameLocator('#sf-chaves-fundo iframe')
     await popup.locator('form.chave').first().waitFor()
-    conferir('chaves: o popup abre com as seis chaves e campos de senha', (await popup.locator('form.chave').count()) === 6 && (await popup.locator('input[type=password]').count()) === 5)
+    conferir('chaves: o popup abre com as sete chaves e campos de senha', (await popup.locator('form.chave').count()) === 7 && (await popup.locator('input[type=password]').count()) === 6)
     await popup.locator('#aba-mcps').click()
     await popup.locator('[data-mcp="eco-de-teste"]').waitFor({ timeout: 10000 })
     conferir('mcps: a aba mostra o catálogo e o MCP instalado, conectado', (await popup.locator('form[data-catalogo]').count()) === 5 && /4 ferramentas/.test(await popup.locator('[data-mcp="eco-de-teste"] .estado').first().innerText()))
@@ -334,6 +336,25 @@ async function testarNavegador(): Promise<void> {
     await pagina.locator('#sf-fases li').first().waitFor({ timeout: 15000 }).catch(() => {})
     conferir('autônomo: o canvas mostra o painel com as seis fases', (await pagina.locator('#sf-fases li').count()) === 6)
     conferir('autônomo: o ícone da marca é o tile branco', (await pagina.locator('svg[data-sf="1"] rect').first().getAttribute('fill')) === '#f0f0f0')
+
+    // Lista de agentes: abre nos cartões, e a escolha da tabela é lembrada
+    const visao = await navegador.newPage({ viewport: { width: 1440, height: 900 } })
+    const naTabela = async () => (await visao.locator('[aria-label^="Name, "]').count()) > 0
+    await visao.goto(BASE + '/studio/agents')
+    await visao.getByRole('button', { name: 'Compact view' }).waitFor()
+    await visao.waitForTimeout(800)
+    conferir('agentes: a lista abre nos cartões, não na tabela', (await visao.getByRole('button', { name: 'Compact view' }).getAttribute('aria-pressed')) === 'true' && !(await naTabela()))
+    await visao.getByRole('button', { name: 'List view' }).click()
+    await visao.reload()
+    await visao.getByRole('button', { name: 'List view' }).waitFor()
+    await visao.waitForTimeout(800)
+    conferir('agentes: quem escolhe a tabela fica com ela', await naTabela())
+    await visao.getByRole('button', { name: 'Compact view' }).click()
+    await visao.reload()
+    await visao.getByRole('button', { name: 'Compact view' }).waitFor()
+    await visao.waitForTimeout(800)
+    conferir('agentes: voltar aos cartões também é lembrado', !(await naTabela()))
+    await visao.close()
 
     // Sugestões com Tab, no estilo do Claude Code: campo vazio mostra a sugestão e Tab preenche
     const sug = await navegador.newPage({ viewport: { width: 1440, height: 900 } })
