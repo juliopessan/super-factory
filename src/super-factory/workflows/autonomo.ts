@@ -10,6 +10,7 @@ import {
   type FaseAutonomo,
   type SessaoAutonomo,
 } from '../../factory/autonomo.ts'
+import { redigirSegredos } from '../../factory/guards.ts'
 import { parar } from '../../factory/pipeline.ts'
 import { criarExecutorDocker } from '../../factory/sandbox.ts'
 import { estadoSchema, pedidoSchema } from '../../factory/schemas.ts'
@@ -54,8 +55,10 @@ function passo(fase: FaseAutonomo, ultima: boolean) {
     description: fase.descricao,
     inputSchema: contextoSchema,
     outputSchema: contextoSchema,
-    execute: async ({ inputData }) => {
+    execute: async (args) => {
+      const { inputData, loggerVNext } = args
       const { ensaio, ...contexto } = inputData as ContextoAutonomo & { ensaio: boolean }
+      const inicio = Date.now()
       const runId = contexto.estado.runId
       const sessao = sessoes.get(runId) ?? { executor: null }
       sessoes.set(runId, sessao)
@@ -66,6 +69,10 @@ function passo(fase: FaseAutonomo, ultima: boolean) {
         saida = { ...contexto, estado: parar(contexto.estado, erro instanceof Error ? erro.message : `A fase ${fase.titulo} falhou.`) }
       }
       if (ensaio && ultima && !saida.estado.parado) saida = { ...saida, estado: marcarEnsaio(saida.estado) }
+      // Logs do Studio: uma linha por fase, com o card, o tempo e, se parou, o motivo (sem segredo).
+      const dados = { card: saida.estado.card.id, fase: fase.id, ensaio, duracaoMs: Date.now() - inicio }
+      if (saida.estado.parado) loggerVNext?.warn(`Fase ${fase.titulo} parou`, { ...dados, motivo: redigirSegredos(saida.estado.motivo ?? '').slice(0, 300) })
+      else loggerVNext?.info(`Fase ${fase.titulo} concluída`, dados)
       if (saida.estado.parado || ultima) await encerrarSessao(runId)
       persistir(saida.estado)
       // Parou: o nó fica vermelho no canvas com o motivo, e as fases seguintes não começam.

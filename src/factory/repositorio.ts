@@ -3,6 +3,7 @@
 // O que sai daqui é conteúdo de terceiros: vai marcado como dado e passa pela redação de segredos.
 
 import { dividirRepositorio, normalizarRepositorio, redigirSegredos, semSegredo, validarBranch } from './guards.ts'
+import { mapearEmParalelo } from './paralelo.ts'
 import { buscarComRetry, type Esperar } from './retry.ts'
 
 export type DepsRepositorio = { fetch?: typeof fetch; token?: string; esperar?: Esperar }
@@ -159,5 +160,73 @@ export async function lerArquivoGithub(repositorio: string, branch: string, cami
     }
   } catch (erro) {
     return { ...vazio, caminho: alvo, nota: erro instanceof Error ? erro.message : 'Não consegui ler o arquivo.' }
+  }
+}
+
+export const MAXIMO_DE_BRANCHES = 20
+const ARQUIVOS_POR_BRANCH = 25
+
+export type ResumoDeBranch = {
+  branch: string
+  ok: boolean
+  aheadBy: number
+  behindBy: number
+  commits: number
+  ultimaMensagem: string
+  arquivos: string[]
+  totalDeArquivos: number
+  nota: string
+}
+
+/**
+ * Resume várias branches de uma vez: quanto cada uma está à frente da base, a última mensagem e os
+ * arquivos que mudou. Uma chamada no lugar de ler branch por branch; as consultas rodam 4 por vez.
+ */
+export async function compararBranchesGithub(repositorio: string, branches: string[], base?: string, deps?: DepsRepositorio) {
+  const vazio = { ok: false, base: '', resumos: [] as ResumoDeBranch[], aviso: AVISO_DE_TERCEIROS }
+  let ref: { owner: string; name: string }
+  let lista: string[]
+  try {
+    ref = referencia(repositorio)
+    lista = [...new Set(branches.map((nome) => validarBranch(nome)))]
+    if (lista.length === 0) throw new Error('Informe ao menos uma branch.')
+    if (lista.length > MAXIMO_DE_BRANCHES) throw new Error(`No máximo ${MAXIMO_DE_BRANCHES} branches por vez. Divida em lotes.`)
+  } catch (erro) {
+    return { ...vazio, nota: erro instanceof Error ? erro.message : 'Pedido inválido.' }
+  }
+  try {
+    let ramoBase = base?.trim() ? validarBranch(base) : ''
+    if (!ramoBase) {
+      const repo = await pedir(`https://api.github.com/repos/${ref.owner}/${ref.name}`, deps)
+      if (repo.status === 404) return { ...vazio, nota: naoAcheiHint() }
+      ramoBase = (repo.corpo as { default_branch?: string }).default_branch ?? 'main'
+    }
+    const resumos = await mapearEmParalelo(lista, 4, async (branch): Promise<ResumoDeBranch> => {
+      const falha = (nota: string): ResumoDeBranch => ({ branch, ok: false, aheadBy: 0, behindBy: 0, commits: 0, ultimaMensagem: '', arquivos: [], totalDeArquivos: 0, nota })
+      try {
+        const { status, corpo } = await pedir(`https://api.github.com/repos/${ref.owner}/${ref.name}/compare/${codificar(ramoBase)}...${codificar(branch)}`, deps)
+        if (status === 404) return falha('Branch não encontrada ou sem base em comum.')
+        const dados = corpo as { ahead_by?: number; behind_by?: number; total_commits?: number; commits?: Array<{ commit?: { message?: string } }>; files?: Array<{ filename?: string }> }
+        const arquivos = (dados.files ?? []).map((item) => item.filename ?? '').filter(Boolean)
+        const ultima = dados.commits?.at(-1)?.commit?.message?.split('\n')[0] ?? ''
+        return {
+          branch,
+          ok: true,
+          aheadBy: dados.ahead_by ?? 0,
+          behindBy: dados.behind_by ?? 0,
+          commits: dados.total_commits ?? 0,
+          ultimaMensagem: redigirSegredos(ultima).slice(0, 140),
+          arquivos: arquivos.slice(0, ARQUIVOS_POR_BRANCH),
+          totalDeArquivos: arquivos.length,
+          nota: `${dados.ahead_by ?? 0} à frente e ${dados.behind_by ?? 0} atrás de ${ramoBase}.`,
+        }
+      } catch (erro) {
+        return falha(erro instanceof Error ? erro.message : 'Não consegui comparar.')
+      }
+    })
+    const certas = resumos.filter((item) => item.ok).length
+    return { ok: certas > 0, base: ramoBase, resumos, aviso: AVISO_DE_TERCEIROS, nota: `${certas} de ${resumos.length} branches comparadas com ${ramoBase} em ${ref.owner}/${ref.name}.` }
+  } catch (erro) {
+    return { ...vazio, nota: erro instanceof Error ? erro.message : 'Não consegui comparar as branches.' }
   }
 }

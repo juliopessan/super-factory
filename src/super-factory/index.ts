@@ -32,6 +32,7 @@ import {
   validarManifesto,
 } from './tools/factory.ts'
 import { autonomoWorkflow } from './workflows/autonomo.ts'
+import { ondaWorkflow } from './workflows/onda.ts'
 import { sdlcWorkflow } from './workflows/sdlc.ts'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -71,7 +72,7 @@ export const mastra = new Mastra({
     security,
     docs,
   },
-  workflows: { sdlc: sdlcWorkflow, autonomo: autonomoWorkflow },
+  workflows: { sdlc: sdlcWorkflow, autonomo: autonomoWorkflow, onda: ondaWorkflow },
   tools: {
     statusQuadro,
     validarManifesto,
@@ -106,6 +107,8 @@ export const mastra = new Mastra({
     configs: {
       default: {
         serviceName: 'super-factory',
+        // Sem isto o Mastra só guarda logs de aviso para cima: as linhas de fase, onda e ferramentas somem.
+        logging: { enabled: true, level: 'info' as const },
         exporters: [new MastraStorageExporter()],
         spanOutputProcessors: [new SensitiveDataFilter()],
       },
