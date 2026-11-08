@@ -480,6 +480,7 @@ async function testarNavegador(): Promise<void> {
     await wl.locator('#form').waitFor()
     conferir('waitlist: a página abre sem login e tem o formulário com qualificação', (await wl.locator('#form [name=equipe] option').count()) > 3 && (await wl.locator('input[name=ferramentas]').count()) >= 6)
     await wl.click('#enviar')
+    await wl.locator('#msg', { hasText: /Informe/ }).waitFor({ timeout: 8000 }).catch(() => {})
     conferir('waitlist: formulário vazio é recusado com mensagem', /Informe/.test(await wl.locator('#msg').innerText()))
     await wl.locator('.opcoes label', { hasText: 'Empresa' }).click()
     await wl.fill('#nome', 'Teste E2E')
