@@ -259,6 +259,12 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
     @keyframes pisca { 50% { opacity: 0; } }
     .mov [data-revela] { opacity: 0; }
 
+    /* apresentação em vídeo: aparece 3 s depois da abertura */
+    .video-apresentacao { padding: 0 0 96px; }
+    .video-quadro { margin: 0 auto; max-width: 1120px; aspect-ratio: 16 / 9; border-radius: 28px; overflow: hidden; border: 1.5px solid var(--line-2); background: #050505; transition: opacity .7s cubic-bezier(.4,0,.2,1), transform .7s cubic-bezier(.4,0,.2,1); }
+    .video-quadro.espera { opacity: 0; transform: translateY(18px); }
+    .video-quadro video { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .video-legenda { margin: 14px 0 0; text-align: center; font-family: var(--mono); font-size: 13px; letter-spacing: .04em; color: var(--muted); }
     /* guia */
     .guia-alvo { position: relative; z-index: 40; outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 28px; }
     .guia-velo { position: fixed; inset: 0; z-index: 30; background: var(--veil); }
@@ -396,6 +402,26 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
         <a class="seta" href="#instalar">Instalar ↗</a>
       </div>
     </div>
+
+    <div class="wrap video-apresentacao" id="apresentacao">
+      <figure class="video-quadro" id="video-quadro" style="margin-left:auto;margin-right:auto">
+        <video id="video-hero" muted playsinline loop preload="metadata" poster="/motion/super-factory-hero.jpg" aria-label="Apresentação da Super Factory, 15 segundos, sem som">
+          <source src="/motion/super-factory-hero.mp4" type="video/mp4">
+        </video>
+      </figure>
+      <p class="video-legenda">Do card ao pull request, com o merge nas mãos de uma pessoa.</p>
+    </div>
+    <script>
+    (function () {
+      var quadro = document.getElementById('video-quadro'), video = document.getElementById('video-hero')
+      if (!quadro || !video) return
+      var reduz = false
+      try { reduz = matchMedia('(prefers-reduced-motion: reduce)').matches } catch (e) {}
+      if (reduz) { quadro.classList.remove('espera'); video.loop = false; video.controls = true; return }
+      quadro.classList.add('espera')
+      setTimeout(function () { quadro.classList.remove('espera'); video.play().catch(function () {}) }, 3000)
+    })()
+    </script>
 
     <section id="manifesto">
       <div class="wrap">

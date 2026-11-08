@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
@@ -283,6 +283,44 @@ function motionJs(): Response {
   })
 }
 
+// Vídeo e pôster da apresentação: arquivo estático, com Range para o Safari conseguir tocar.
+const ARQUIVOS_PUBLICOS: Record<string, string> = {
+  '/motion/super-factory-hero.mp4': 'video/mp4',
+  '/motion/super-factory-hero.jpg': 'image/jpeg',
+}
+
+function arquivoPublico(caminho: string, cabecalhoRange: string | null): Response {
+  const tipo = ARQUIVOS_PUBLICOS[caminho]!
+  // O módulo roda empacotado e o cwd muda conforme o modo (dev, build, imagem). Sobe a partir
+  // do cwd testando as duas formas: public/<arquivo> e src/super-factory/public/<arquivo>.
+  const nome = path.basename(caminho)
+  const candidatos: string[] = []
+  for (let dir = process.cwd(); ; dir = path.dirname(dir)) {
+    candidatos.push(path.join(dir, 'public', nome), path.join(dir, 'src', 'super-factory', 'public', nome))
+    if (path.dirname(dir) === dir) break
+  }
+  const arquivo = candidatos.find((candidato) => existsSync(candidato)) ?? ''
+  let tamanho: number
+  try {
+    if (!arquivo) throw new Error('sem arquivo')
+    tamanho = statSync(arquivo).size
+  } catch {
+    return new Response('', { status: 404 })
+  }
+  const base = { 'Content-Type': tipo, 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=86400' }
+  const faixa = cabecalhoRange?.match(/^bytes=(\d*)-(\d*)$/)
+  if (faixa && (faixa[1] || faixa[2])) {
+    const inicio = faixa[1] ? Number(faixa[1]) : Math.max(0, tamanho - Number(faixa[2]))
+    const fim = faixa[1] && faixa[2] ? Math.min(Number(faixa[2]), tamanho - 1) : tamanho - 1
+    if (inicio > fim || inicio >= tamanho) {
+      return new Response('', { status: 416, headers: { ...base, 'Content-Range': `bytes */${tamanho}` } })
+    }
+    const corpo = readFileSync(arquivo).subarray(inicio, fim + 1)
+    return new Response(corpo, { status: 206, headers: { ...base, 'Content-Length': String(corpo.length), 'Content-Range': `bytes ${inicio}-${fim}/${tamanho}` } })
+  }
+  return new Response(readFileSync(arquivo), { status: 200, headers: { ...base, 'Content-Length': String(tamanho) } })
+}
+
 function icone(): Response {
   return new Response(ICONE, {
     status: 200,
@@ -330,6 +368,7 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   const caminho = c.req.path
   await limparEntrada(c.req)
   if (caminho === '/motion.js') return motionJs()
+  if (caminho in ARQUIVOS_PUBLICOS) return arquivoPublico(caminho, c.req.raw.headers.get('range'))
   if (caminho === '/configuracoes' || caminho === '/configuracoes/') {
     const consulta = new URL(c.req.raw.url).searchParams
     const tema = consulta.get('tema')
