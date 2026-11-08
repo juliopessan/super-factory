@@ -4,6 +4,7 @@
 // Token: GITHUB_PROJECT_TOKEN, ou GITHUB_TOKEN se o outro não existir. Projeto de USUÁRIO só aceita
 // token clássico com o escopo "project"; token fine-grained cobre apenas projeto de organização.
 
+import { criarFilaSerial } from './paralelo.ts'
 import { semSegredo } from './guards.ts'
 import { buscarComRetry, type Esperar } from './retry.ts'
 
@@ -214,7 +215,19 @@ async function resolverConteudo(url: string, deps?: DepsProjeto): Promise<string
  * Executa as ações em ordem, uma a uma. Uma falha não derruba as outras: cada ação devolve o próprio resultado.
  * O projeto é lido uma vez para achar o id dele e as opções do campo de status.
  */
-export async function organizarProjeto(
+// O GitHub pede escrita em série: duas chamadas de organizar no mesmo Project esperam uma pela outra.
+const filaDeEscrita = criarFilaSerial()
+
+export function organizarProjeto(
+  referencia: ReferenciaDoProjeto,
+  acoes: Acao[],
+  campo = 'Status',
+  deps?: DepsProjeto,
+): Promise<{ ok: boolean; resultados: ResultadoDaAcao[]; nota: string }> {
+  return filaDeEscrita(`${referencia.dono}/${referencia.numero}`, () => organizarProjetoAgora(referencia, acoes, campo, deps))
+}
+
+async function organizarProjetoAgora(
   referencia: ReferenciaDoProjeto,
   acoes: Acao[],
   campo = 'Status',

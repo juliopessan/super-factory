@@ -151,12 +151,28 @@ async function testarWorkflow(): Promise<void> {
   const { corpo: criadoAuto } = await api('/api/workflows/autonomo/create-run', {})
   const auto = await api(`/api/workflows/autonomo/start-async?runId=${criadoAuto.runId}`, { inputData: { ...pedido, repositorio: 'https://github.com/acme/pedidos.git' } })
   conferir('autônomo: aceita o endereço do GitHub e, sem chave, para no primeiro nó pedindo a ANTHROPIC_API_KEY', auto.corpo?.status === 'failed' && /Receber o pedido: .*ANTHROPIC_API_KEY/.test(JSON.stringify(auto.corpo)), JSON.stringify(auto.corpo).slice(0, 200))
+  const iniciouEnsaio = Date.now()
   const { corpo: criadoEnsaio } = await api('/api/workflows/autonomo/create-run', {})
   const ensaio = await api(`/api/workflows/autonomo/start-async?runId=${criadoEnsaio.runId}`, { inputData: { ...pedido, ensaio: true } })
+  const duracaoEnsaio = Date.now() - iniciouEnsaio
   const passos = Object.keys(ensaio.corpo?.steps ?? {})
   const entregaEnsaio = (ensaio.corpo?.result?.entrega ?? {}) as { modo?: string; pullRequestId?: unknown; pullRequestUrl?: unknown; nota?: string }
   conferir('autônomo (ensaio): não finge entrega (título [ENSAIO], modo fixture, sem número de PR)', String(ensaio.corpo?.result?.card?.titulo).startsWith('[ENSAIO] ') && entregaEnsaio.modo === 'fixture' && entregaEnsaio.pullRequestId === null && entregaEnsaio.pullRequestUrl === null && /ENSAIO/.test(entregaEnsaio.nota ?? ''), JSON.stringify(entregaEnsaio))
   conferir('autônomo (ensaio): percorre as seis fases e termina aguardando revisão humana', ensaio.corpo?.status === 'success' && ensaio.corpo?.result?.card?.coluna === 'review' && ['triar', 'abrir-sandbox', 'clonar-e-preparar', 'construir-e-testar', 'revisar-e-enviar', 'abrir-pull-request'].every((id) => passos.includes(id)), `${ensaio.corpo?.status} ${passos.join(',')}`)
+  // Onda: três cards ao mesmo tempo. Em série seriam ~3x o tempo de um card; juntos, perto de 1x.
+  const iniciouOnda = Date.now()
+  const { corpo: criadoOnda } = await api('/api/workflows/onda/create-run', {})
+  const onda = await api(`/api/workflows/onda/start-async?runId=${criadoOnda.runId}`, {
+    inputData: { ensaio: true, pedidos: ['A', 'B', 'C'].map((letra) => ({ ...pedido, titulo: `Onda ${letra}: ${pedido.titulo}` })) },
+  })
+  const duracaoOnda = Date.now() - iniciouOnda
+  const cartoes = (onda.corpo?.result?.cartoes ?? []) as Array<{ ok: boolean; titulo: string }>
+  conferir('onda: três cards em ensaio terminam, cada um no seu run', onda.corpo?.status === 'success' && cartoes.length === 3 && cartoes.every((c) => c.ok), `${onda.corpo?.status} ${JSON.stringify(cartoes)}`)
+  conferir('onda: rodam em paralelo (menos de 2x o tempo de um card sozinho)', duracaoOnda < 2 * Math.max(duracaoEnsaio, 1000), `onda ${duracaoOnda} ms, um card ${duracaoEnsaio} ms`)
+  conferir('onda: o resumo lembra que o merge é de uma pessoa', /Merge e deploy ficam com uma pessoa/.test(String(onda.corpo?.result?.resumo)))
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  const logsDaFactory = (await (await fetch(`${BASE}/api/observability/logs?perPage=20`)).json()) as { logs?: Array<{ message?: string }> }
+  conferir('logs: as fases do autônomo aparecem nos Logs do Studio', (logsDaFactory.logs ?? []).some((l) => /^Fase .* concluída$/.test(l.message ?? '')), JSON.stringify((logsDaFactory.logs ?? []).map((l) => l.message)))
 
   const status = await fetch(BASE + '/configuracoes/chaves')
   const itens = ((await status.json()) as { itens?: Array<{ nome: string; valor: string | null }> }).itens ?? []

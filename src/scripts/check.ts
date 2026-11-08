@@ -1372,7 +1372,7 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.match(instrucoes, /única decisão humana do processo é o merge/)
   assert.match(instrucoes, /organizarProjetoGithub/)
   assert.match(instrucoes, /dado de terceiros/, 'conteúdo lido de fora não vira ordem')
-  assert.match(fonteAgentes, /maxSteps: 16/, 'o Chief de Staff tem fôlego para organizar um Project inteiro')
+  assert.match(fonteAgentes, /maxSteps: 30/, 'o Chief de Staff tem fôlego para organizar um Project inteiro')
 
   // ---- a chave do Project no painel: testa o token e confere o escopo
   const painel = await import('../factory/chaves.ts')
@@ -1414,6 +1414,102 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.ok(CASOS_DE_CRITERIOS.length >= 6, 'o conjunto tem casos suficientes')
   for (const caso of CASOS_DE_CRITERIOS) assert.equal(lintarCriterios(caso.criterios).ok, caso.ok, `caso "${caso.nome}" bate com o lint`)
   assert.ok(CASOS_DE_CRITERIOS.some((c) => c.ok) && CASOS_DE_CRITERIOS.some((c) => !c.ok), 'tem casos que passam e que falham')
+}
+
+// --- Paralelismo: teto respeitado, ordem mantida, escrita no mesmo recurso em série
+{
+  const { mapearEmParalelo, criarFilaSerial, paralelismoConfigurado } = await import('../factory/paralelo.ts')
+  assert.equal(paralelismoConfigurado(undefined), 3)
+  assert.equal(paralelismoConfigurado('9'), 5)
+  assert.equal(paralelismoConfigurado('0'), 1)
+  assert.equal(paralelismoConfigurado('abc'), 3)
+  let ativos = 0
+  let pico = 0
+  const espera = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  const dobrados = await mapearEmParalelo([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+    ativos++
+    pico = Math.max(pico, ativos)
+    await espera(n % 2 ? 15 : 5)
+    ativos--
+    return n * 2
+  })
+  assert.deepEqual(dobrados, [2, 4, 6, 8, 10, 12, 14], 'o resultado mantém a ordem dos itens')
+  assert.equal(pico, 3, 'roda no teto, sem passar dele')
+  const inicio = Date.now()
+  await mapearEmParalelo([1, 2, 3], 3, () => espera(60))
+  assert.ok(Date.now() - inicio < 150, 'três esperas de 60 ms andam juntas')
+  const fila = criarFilaSerial()
+  const ordem: string[] = []
+  let dentro = 0
+  let sobreposto = false
+  const tarefa = (nome: string, ms: number, falha = false) => async () => {
+    dentro++
+    if (dentro > 1) sobreposto = true
+    await espera(ms)
+    ordem.push(nome)
+    dentro--
+    if (falha) throw new Error('falhou')
+  }
+  const resultados = await Promise.allSettled([fila('projeto-3', tarefa('a', 20)), fila('projeto-3', tarefa('b', 5, true)), fila('projeto-3', tarefa('c', 1))])
+  assert.deepEqual(ordem, ['a', 'b', 'c'], 'mesma chave: uma depois da outra')
+  assert.equal(sobreposto, false)
+  assert.deepEqual(resultados.map((r) => r.status), ['fulfilled', 'rejected', 'fulfilled'], 'a falha de uma não trava a fila')
+}
+
+// --- Branches em lote: uma chamada resume várias, com teto de consultas simultâneas
+{
+  const repo = await import('../factory/repositorio.ts')
+  let simultaneas = 0
+  let pico = 0
+  const falso = (async (url: string) => {
+    const u = String(url)
+    if (u.endsWith('/repos/acme/app')) return new Response(JSON.stringify({ default_branch: 'main' }))
+    const achou = /\/compare\/main\.\.\.(.+)$/.exec(u)
+    if (!achou) return new Response('{}', { status: 404 })
+    simultaneas++
+    pico = Math.max(pico, simultaneas)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    simultaneas--
+    const ramo = decodeURIComponent(achou[1] ?? '')
+    if (ramo === 'sumiu') return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 })
+    return new Response(JSON.stringify({ ahead_by: 2, behind_by: 1, total_commits: 2, commits: [{ commit: { message: 'primeira\n\ncorpo' } }, { commit: { message: 'feat: token ghp_' + 'Q'.repeat(36) + ' vazou' } }], files: [{ filename: 'src/a.ts' }, { filename: 'README.md' }] }))
+  }) as unknown as typeof fetch
+  const nomes = ['feature/a', 'feature/b', 'exp/c', 'sumiu', 'd', 'e', 'f', 'g']
+  const lote = await repo.compararBranchesGithub('acme/app', nomes, undefined, { fetch: falso })
+  assert.equal(lote.ok, true)
+  assert.equal(lote.base, 'main', 'sem base, usa a padrão do repositório')
+  assert.equal(lote.resumos.length, 8)
+  assert.deepEqual(lote.resumos.map((r) => r.branch), nomes, 'ordem preservada')
+  assert.ok(pico > 1 && pico <= 4, `consultas em paralelo, no máximo 4 (pico ${pico})`)
+  assert.equal(lote.resumos[3]?.ok, false, 'uma branch que sumiu não derruba o lote')
+  assert.equal(lote.resumos[0]?.aheadBy, 2)
+  assert.ok(!JSON.stringify(lote).includes('ghp_QQQ'), 'segredo na mensagem do commit é redigido')
+  assert.match(lote.aviso, /terceiros/)
+  const demais = await repo.compararBranchesGithub('acme/app', Array.from({ length: 21 }, (_, i) => `b${i}`), 'main', { fetch: falso })
+  assert.equal(demais.ok, false)
+  assert.match(demais.nota, /No máximo 20/)
+}
+
+// --- Prompts dos agentes: batem com o que a Factory faz hoje
+{
+  const fonte = fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8')
+  assert.match(fonte, /iniciarOnda/, 'o Chief tem a ferramenta que dispara o modo autônomo')
+  assert.match(fonte, /compararBranchesGithub/)
+  assert.doesNotMatch(fonte, /use o workflow autonomo/, 'o Chief não manda usar um workflow que não consegue chamar')
+  assert.doesNotMatch(fonte, /Pull request rascunho só existe dentro do workflow, depois do gate de merge/, 'o texto antigo do PR saiu')
+  assert.doesNotMatch(fonte, /Sua escrita, quando o ciclo chega lá/, 'especialistas só leem: quem escreve é o construtor')
+  assert.match(fonte, /toolCallConcurrency/)
+  const { chiefOfStaff, integrations, qa } = await import('../super-factory/agents/factory.ts')
+  for (const agente of [chiefOfStaff, integrations]) {
+    const ferramentas = await agente.listTools()
+    assert.ok('compararBranchesGithub' in ferramentas, `${agente.id} resume branches em lote`)
+  }
+  assert.ok('iniciarOnda' in (await chiefOfStaff.listTools()), 'só o Chief dispara ondas')
+  assert.ok(!('iniciarOnda' in (await qa.listTools())), 'QA não dispara ondas')
+  assert.ok(!('iniciarOnda' in (await integrations.listTools())))
+  const onda = fs.readFileSync(new URL('../super-factory/workflows/onda.ts', import.meta.url), 'utf8')
+  assert.match(onda, /foreach\(cartao, \{ concurrency: paralelismoConfigurado\(\) \}\)/)
+  assert.match(onda, /Merge e deploy ficam com uma pessoa/, 'a onda diz quem faz o merge')
 }
 
 // --- Repositório: aceita o endereço copiado do navegador ou do git

@@ -262,6 +262,14 @@ O Chief of Staff **executa** o que não exige mudar código, em vez de só relat
 - **Metrics e Logs** usam um arquivo **DuckDB** (`SUPER_FACTORY_OBS_DB`; no container, `/data/observabilidade.duckdb`, no mesmo volume). O banco principal (agentes, memória, workflows) continua no LibSQL. Se o DuckDB não abrir, a Factory sobe sem métricas e avisa no log. Os traces antigos ficavam no LibSQL e não aparecem mais no Studio; os novos passam a valer daqui para a frente.
 - **Datasets** abre com o conjunto **Critérios de aceite (triagem)**: casos do lint com o veredito esperado. É criado uma vez e não é sobrescrito se você editar. **Experiments** e **Review Queue** começam vazios de propósito: Experiments nasce quando você roda um conjunto contra um agente ou workflow (gasta chamadas de modelo, por isso nada roda sozinho), e a Review Queue recebe o que for marcado para revisão.
 
+## Paralelismo
+
+- **Vários cards ao mesmo tempo:** o workflow **onda** (ou a ferramenta `iniciarOnda` do Chief of Staff) roda de 1 a 5 cards independentes juntos, cada um com sandbox, branch e pull request próprios. `SUPER_FACTORY_PARALELISMO` (padrão 3) limita quantos rodam simultâneos, porque cada card abre um container e chama o modelo. Um card que para não derruba os outros. Em ensaio, 3 cards levam o tempo de 1.
+- **Dentro de um card** as fases seguem em ordem de propósito: clonar, instalar, escrever, testar, enviar e abrir o PR dependem uma da anterior.
+- **Agentes:** leituras independentes do mesmo passo rodam juntas (até 4). `compararBranchesGithub` resume até 20 branches numa chamada, no lugar de ler branch por branch.
+- **Escrita no GitHub Project** é sempre uma por vez no mesmo Project, como o GitHub recomenda.
+- **Logs** do Studio mostram uma linha por fase do autônomo, por card da onda e por chamada das ferramentas de GitHub.
+
 ## Uma decisão humana: o merge
 
 Tudo antes do merge os agentes fazem sozinhos, sem pedir permissão a cada passo: ler, planejar, abrir issue, organizar o Project, implementar e testar no container. O que continua de uma pessoa é o merge. Merge, deploy e force-push seguem fora do alcance dos agentes, e nenhum papel aprova o gate.
