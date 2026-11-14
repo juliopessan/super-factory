@@ -80,7 +80,17 @@ Runs only when a commit group touches `supabase/` (migrations, schema, functions
    yes in this conversation. Otherwise offer a branch and a PR instead.
 5. Push rejected as non-fast-forward: go back to Pull once. Rejected again: stop.
 
-## 6 · Report
+## 6 · Verify
+
+Prove the sync before you say it worked.
+
+1. Run `git fetch`, then `git status -sb`. It must show no ahead or behind count.
+2. `git rev-parse HEAD` and `git rev-parse @{upstream}` must print the same sha.
+3. Look for directories that make no sense for the repo (`undefined`, `null`, `[object Object]`)
+   in the committed paths. List them in the report; do not delete them.
+4. A check fails: say so in the report with the command output. Do not write "in sync".
+
+## 7 · Report
 
 Keep it short:
 

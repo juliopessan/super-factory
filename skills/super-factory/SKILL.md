@@ -27,3 +27,7 @@ O ciclo com pausa humana é só o workflow `sdlc`. Ele suspende em implementaç�
 - Aprovação de gate por agente, inclusive no modo Security, que é somente leitura.
 
 Se uma skill vendida pedir um desses passos, registre o limite e siga o contrato desta skill.
+
+## Lições
+
+Leia `tasks/lessons.md` antes de mexer em `skills/`, no e2e ou na landing. Depois de corrigir um erro, acrescente uma lição com erro, causa raiz, regra e onde se aplica. Não edite as skills vendidas do super-board para incorporar lição: a regra entra aqui ou nas skills próprias (`git-sync`, `factory-ui`, `instalacao`).

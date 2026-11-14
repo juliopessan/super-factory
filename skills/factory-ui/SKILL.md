@@ -88,5 +88,5 @@ Português, frases curtas, números no lugar de adjetivo. Botão com verbo e set
 
 - Contraste 4.5:1 em texto nos dois temas; 3:1 em borda de controle e anel de foco.
 - Foco visível: `outline 2px solid var(--text)` com `offset 2px`.
-- Sem scroll horizontal de 320 a 1440px.
+- Sem scroll horizontal de 320 a 1440px. Filho direto de grade que tenha `<pre>` ou texto sem quebra leva `min-width: 0`, senão a grade estica (visto na landing, ver `tasks/lessons.md`, lição 002). Meça `scrollWidth` contra `clientWidth` em 320px em vez de olhar a tela.
 - Nenhum logo, personagem, ilustração ou texto de outra empresa.
