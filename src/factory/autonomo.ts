@@ -151,7 +151,11 @@ export type ResultadoAutonomo = { estado: Estado; branch: string | null; verific
  * não carrega segredo nem o container: o token é recalculado das credenciais
  * e o container fica na sessão.
  */
-export type ContextoAutonomo = ResultadoAutonomo & { estatistica: string | null }
+export type ContextoAutonomo = ResultadoAutonomo & {
+  estatistica: string | null
+  /** Branch do card pai, quando este card está empilhado sobre outro (PR em pilha). */
+  pilha?: string | null
+}
 
 /** O que vive só na memória durante a execução: o container do card. */
 export type SessaoAutonomo = { executor: Executor | null }
@@ -315,6 +319,13 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         (contexto.estatistica ?? '').slice(0, 2000),
         '```',
         '',
+        ...(contexto.pilha
+          ? [
+              '### Pull request em pilha',
+              `Este PR está **empilhado** sobre a branch \`${contexto.pilha}\`, de outro card, e não direto sobre a branch principal. Faça o merge **de baixo para cima**: primeiro o PR da base. Depois confira se este passou a apontar para a branch principal.`,
+              '',
+            ]
+          : []),
         passou
           ? 'Aberto pela Super Factory. Merge e deploy ficam com uma pessoa.'
           : 'Os testes não passaram no sandbox: aberto como rascunho. Merge e deploy ficam com uma pessoa.',
@@ -357,8 +368,8 @@ export function contextoInicial(pedido: PedidoBruto): ContextoAutonomo {
 }
 
 /** Leva um pedido do card ao pull request. Para no primeiro bloqueio e explica. */
-export async function executarAutonomo(pedido: PedidoBruto, deps: DepsAutonomo): Promise<ResultadoAutonomo> {
-  let contexto = contextoInicial(pedido)
+export async function executarAutonomo(pedido: PedidoBruto, deps: DepsAutonomo, opcoes: { pilha?: string } = {}): Promise<ResultadoAutonomo> {
+  let contexto: ContextoAutonomo = { ...contextoInicial(pedido), pilha: opcoes.pilha ?? null }
   const sessao: SessaoAutonomo = { executor: null }
   try {
     for (const fase of FASES_AUTONOMO) {

@@ -1509,7 +1509,7 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.ok(!('iniciarOnda' in (await qa.listTools())), 'QA não dispara ondas')
   assert.ok(!('iniciarOnda' in (await integrations.listTools())))
   const onda = fs.readFileSync(new URL('../super-factory/workflows/onda.ts', import.meta.url), 'utf8')
-  assert.match(onda, /foreach\(cartao, \{ concurrency: paralelismoConfigurado\(\) \}\)/)
+  assert.match(onda, /executarOnda<[^>]*>\(\s*nos,\s*paralelismoConfigurado\(\)/, 'a onda roda com o teto de simultâneos configurado e respeita as dependências')
   assert.match(onda, /Merge e deploy ficam com uma pessoa/, 'a onda diz quem faz o merge')
 }
 
@@ -1868,6 +1868,68 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   fs.rmSync(dirTmp, { recursive: true, force: true })
 }
 
+// --- Dependências entre cards e PRs em pilha
+{
+  const dep = await import('../factory/dependencias.ts')
+  const no = (chave: string | null, dependeDe: string | null = null) => ({ chave, dependeDe })
+  // validação
+  assert.doesNotThrow(() => dep.validarOnda([no('api'), no('ui', 'api'), no('docs', 'ui'), no(null)]))
+  const erro = (nos: Array<{ chave: string | null; dependeDe: string | null }>, trecho: RegExp, msg: string) => assert.throws(() => dep.validarOnda(nos), (e: unknown) => e instanceof dep.ErroDeOnda && trecho.test(e.message), msg)
+  erro([], /ao menos um/, 'onda vazia')
+  erro(Array.from({ length: 9 }, (_, i) => no(`c${i}`)), /No máximo 8/, 'cards demais')
+  erro([no('a'), no('a')], /mais de um card/, 'chave repetida')
+  erro([no('A b')], /letras minúsculas/, 'chave inválida')
+  erro([no('a', 'b')], /não é a chave de nenhum card/, 'pai inexistente')
+  erro([no('a', 'a')], /de si mesmo/, 'depender de si')
+  erro([no('a', 'b'), no('b', 'a')], /ciclo/, 'ciclo de dois')
+  erro([no('a', 'c'), no('b', 'a'), no('c', 'b')], /ciclo/, 'ciclo de três')
+  erro([no('a'), no(null, 'a,b')], /uma só chave/, 'dois pais não existem: um pai por card')
+  // ordem de merge: do pai para o filho, respeitando a entrada
+  assert.deepEqual(dep.ordemDeMerge([no('c', 'b'), no('a'), no('b', 'a'), no('z')]).map((n) => n.chave), ['a', 'b', 'c', 'z'])
+
+  // agendador: o filho espera o pai, recebe o resultado dele, e o teto de simultâneos vale
+  const espera = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  type R = { chave: string; ok: boolean; paiRecebido: string | null; bloqueado?: boolean }
+  const linha: string[] = []
+  let ativos = 0
+  let pico = 0
+  const falhas = new Set<string>()
+  const rodar = (nos: Array<{ chave: string | null; dependeDe: string | null }>, limite: number) =>
+    dep.executarOnda<{ chave: string | null; dependeDe: string | null }, R>(
+      nos,
+      limite,
+      async (n, pai) => {
+        linha.push(`começa ${n.chave}`)
+        ativos++
+        pico = Math.max(pico, ativos)
+        await espera(20)
+        ativos--
+        linha.push(`termina ${n.chave}`)
+        return { chave: n.chave as string, ok: !falhas.has(n.chave as string), paiRecebido: pai ? pai.chave : null }
+      },
+      (n, pai) => {
+        linha.push(`bloqueia ${n.chave}`)
+        return { chave: n.chave as string, ok: false, paiRecebido: pai.chave, bloqueado: true }
+      },
+    )
+  const cadeia = await rodar([no('a'), no('b', 'a'), no('c', 'b'), no('x')], 4)
+  assert.deepEqual(cadeia.map((r) => r.chave), ['a', 'b', 'c', 'x'], 'o resultado sai na ordem de entrada')
+  assert.deepEqual(cadeia.map((r) => r.paiRecebido), [null, 'a', 'b', null], 'cada filho recebe o resultado do pai')
+  assert.ok(linha.indexOf('termina a') < linha.indexOf('começa b') && linha.indexOf('termina b') < linha.indexOf('começa c'), 'o filho só começa depois que o pai termina')
+  assert.ok(linha.indexOf('começa x') < linha.indexOf('termina a'), 'o card independente roda junto com a cadeia')
+  linha.length = 0
+  pico = 0
+  await rodar([no('a'), no('b'), no('c'), no('d'), no('e')], 2)
+  assert.equal(pico, 2, 'o teto de simultâneos é respeitado')
+  linha.length = 0
+  falhas.add('a')
+  const bloqueio = await rodar([no('a'), no('b', 'a'), no('c', 'b'), no('x')], 3)
+  assert.deepEqual(bloqueio.map((r) => [r.chave, r.ok, r.bloqueado ?? false]), [['a', false, false], ['b', false, true], ['c', false, true], ['x', true, false]], 'se o pai falha, filho e neto ficam bloqueados e o independente segue')
+  assert.ok(!linha.includes('começa b') && !linha.includes('começa c'), 'um card bloqueado nunca roda')
+  falhas.clear()
+
+}
+
 // --- Repositório: aceita o endereço copiado do navegador ou do git
 {
   const { normalizarRepositorio, dividirRepositorio, dividirAzure } = await import('../factory/guards.ts')
@@ -1962,6 +2024,25 @@ function githubFalso() {
   assert.equal(comEnv.length, 2)
   assert.ok(comEnv[0]?.includes(' clone ') && comEnv[1]?.includes(' push '))
   assert.equal(executor.comandos.some((comando) => /push\s.*(--force|-f\b)|\bmerge\b/.test(comando)), false)
+}
+// --- PR em pilha: o filho aponta para a branch do pai e o corpo avisa
+{
+  // PR em pilha: o corpo avisa e o destino é a branch do pai
+  const gh = githubFalso()
+  const executor = criarExecutorFalso(roteiroNode())
+  const empilhado = await executarAutonomo({ ...pedidoAuto, branchBase: 'factory/c-1-api' }, {
+    criarExecutor: async () => executor,
+    implementador: async () => ({ resumo: 'ok' }),
+    credenciais: { githubToken: TOKEN_TESTE },
+    github: gh.deps,
+  }, { pilha: 'factory/c-1-api' })
+  assert.equal(empilhado.estado.parado, false, empilhado.estado.motivo ?? '')
+  assert.equal(gh.chamadas[0]?.corpo.base, 'factory/c-1-api', 'o PR do filho aponta para a branch do pai')
+  assert.match(String(gh.chamadas[0]?.corpo.body), /Pull request em pilha/)
+  assert.match(String(gh.chamadas[0]?.corpo.body), /de baixo para cima/)
+  const gh2 = githubFalso()
+  await executarAutonomo(pedidoAuto, { criarExecutor: async () => criarExecutorFalso(roteiroNode()), implementador: async () => ({ resumo: 'ok' }), credenciais: { githubToken: TOKEN_TESTE }, github: gh2.deps })
+  assert.doesNotMatch(String(gh2.chamadas[0]?.corpo.body), /em pilha/, 'sem pai, o corpo não fala de pilha')
 }
 {
   const executor = criarExecutorFalso(roteiroNode({ teste: [1, 1] }))
