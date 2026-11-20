@@ -288,6 +288,16 @@ O instalador antigo põe um login básico do Traefik na frente de tudo, o que es
 
 Por que GitHub e não Composio: o Composio guarda credenciais de agentes em apps de terceiros (agir no GitHub ou no Gmail em nome de alguém); não é um provedor de login do seu produto. Para empresas que não usam GitHub, o próximo provedor natural é Microsoft Entra ou Google.
 
+## Revisão automática de pull request
+
+O agente **PR Review** (`reviewer`) lê o PR (título, corpo com os critérios e a evidência do sandbox, arquivos e trechos do diff) e deixa **uma revisão como comentário**: resumo, achados por severidade (com comentário na linha, quando a linha está no diff) e a situação de cada critério de aceite. Converse com ele no Studio ("revise o PR 12 de acme/app") ou peça na onda: `revisar: true` faz o revisor comentar em cada PR que a onda abrir.
+
+- **Só comenta.** O evento da revisão é fixo no código (`COMMENT`): a ferramenta não tem como aprovar, pedir mudanças ou fazer merge, e o agente é instruído a nunca dizer que o PR pode ser mesclado. O merge continua sendo de uma pessoa.
+- **O texto final é montado pela Factory**, não pelo agente. `@menções` são neutralizadas (a revisão não chama ninguém) e segredos são redigidos.
+- **O PR é dado de terceiros.** O revisor não segue instruções que estejam no diff, no corpo ou nos comentários.
+- Sem `GITHUB_TOKEN` a revisão é simulada. Escrita com erro nunca é repetida (poderia duplicar a revisão); só o caso "linha fora do diff" (422) é refeito, sem os comentários no código.
+- Na onda, o resultado de cada card diz se a revisão foi `comentada` ou `nao-feita` (sem modelo, sem token ou falha); isso não derruba a onda.
+
 ## Épicos e PRs em pilha
 
 Tarefas que dependem uma da outra rodam na mesma **onda** (workflow `onda` ou a ferramenta `iniciarOnda` do Chief of Staff). Dê uma `chave` a cada card e `dependeDe` (a chave de **um** pai) ao que vem depois:

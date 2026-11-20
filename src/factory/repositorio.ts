@@ -19,7 +19,7 @@ function tokenDe(deps?: DepsRepositorio): string | null {
   return (deps?.token ?? process.env.GITHUB_TOKEN)?.trim() || null
 }
 
-async function pedir(url: string, deps?: DepsRepositorio): Promise<{ status: number; corpo: unknown }> {
+export async function pedir(url: string, deps?: DepsRepositorio): Promise<{ status: number; corpo: unknown }> {
   if (!url.startsWith('https://api.github.com/')) throw new Error('Host do GitHub recusado.')
   const token = tokenDe(deps)
   const headers = new Headers({ Accept: 'application/vnd.github+json', 'User-Agent': 'super-factory', 'X-GitHub-Api-Version': '2022-11-28' })
@@ -45,7 +45,7 @@ async function pedir(url: string, deps?: DepsRepositorio): Promise<{ status: num
   return { status: resposta.status, corpo }
 }
 
-function naoAcheiHint(): string {
+export function naoAcheiHint(): string {
   return tokenDe() ? 'Não achei o repositório ou a branch, ou o token não tem acesso a ele.' : 'Não achei o repositório ou a branch. Se for privado, defina o GITHUB_TOKEN.'
 }
 

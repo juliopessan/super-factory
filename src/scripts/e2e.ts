@@ -170,6 +170,11 @@ async function testarWorkflow(): Promise<void> {
   conferir('onda: três cards em ensaio terminam, cada um no seu run', onda.corpo?.status === 'success' && cartoes.length === 3 && cartoes.every((c) => c.ok), `${onda.corpo?.status} ${JSON.stringify(cartoes)}`)
   conferir('onda: rodam em paralelo (menos de 2x o tempo de um card sozinho)', duracaoOnda < 2 * Math.max(duracaoEnsaio, 1000), `onda ${duracaoOnda} ms, um card ${duracaoEnsaio} ms`)
   conferir('onda: o resumo lembra que o merge é de uma pessoa', /Merge e deploy ficam com uma pessoa/.test(String(onda.corpo?.result?.resumo)))
+  // Revisor de PR: só ele comenta; os outros papéis só leem o PR
+  const todosOsAgentes = (await (await fetch(`${BASE}/api/agents`)).json()) as Record<string, { tools?: Record<string, unknown> }>
+  const quemComenta = Object.entries(todosOsAgentes).filter(([, a]) => Object.keys(a.tools ?? {}).includes('comentarPullRequestGithub')).map(([id]) => id)
+  conferir('revisor: o agente existe e é o único com a ferramenta de comentar em PR', 'reviewer' in todosOsAgentes && quemComenta.join() === 'reviewer', quemComenta.join())
+  conferir('revisor: os outros papéis podem ler o PR, mas não comentar', Object.keys(todosOsAgentes['qa']?.tools ?? {}).includes('lerPullRequestGithub') && !Object.keys(todosOsAgentes['qa']?.tools ?? {}).includes('comentarPullRequestGithub'))
   // Épico: api -> ui -> docs em cadeia (PRs em pilha) e um card solto que roda junto
   const card = (titulo: string, extra: Record<string, unknown> = {}) => ({ ...pedido, titulo, ...extra })
   const { corpo: criadoPilha } = await api('/api/workflows/onda/create-run', {})
@@ -426,7 +431,7 @@ async function testarNavegador(): Promise<void> {
     conferir('agentes: voltar aos cartões também é lembrado', !(await naTabela()))
     // Time animado no espaço vazio abaixo dos cards
     await visao.locator('#sf-time').waitFor({ timeout: 8000 })
-    conferir('time: o desenho do time aparece abaixo dos cartões, com os dez nós', (await visao.locator('#sf-time .no').count()) === 10 && (await visao.locator('#sf-time .no[data-agente="1"]').count()) === 8)
+    conferir('time: o desenho do time aparece abaixo dos cartões, com os onze nós', (await visao.locator('#sf-time .no').count()) === 11 && (await visao.locator('#sf-time .no[data-agente="1"]').count()) === 9)
     conferir('time: o merge é o nó humano', (await visao.locator('#sf-time .no.humano').count()) === 1 && /Merge/.test((await visao.locator('#sf-time .no.humano').textContent()) ?? ''))
     await visao.evaluate(() => (window as unknown as { sfTimeSeek: (t: number) => void }).sfTimeSeek(8.5))
     conferir('time: no fim do ciclo todos os agentes estão acesos', (await visao.locator('#sf-time .no .ponto').evaluateAll((pontos: Element[]) => pontos.every((p: Element) => (p as SVGElement).style.fill !== ''))) === true)

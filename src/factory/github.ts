@@ -41,13 +41,13 @@ function tokenDe(deps?: GithubDeps): string | null {
   return token || null
 }
 
-function cliente(deps?: GithubDeps): { fetch: typeof fetch; token: string; esperar?: Esperar } | null {
+export function cliente(deps?: GithubDeps): { fetch: typeof fetch; token: string; esperar?: Esperar } | null {
   const token = tokenDe(deps)
   if (!token) return null
   return { fetch: deps?.fetch ?? fetch, token, esperar: deps?.esperar }
 }
 
-async function pedir(url: string, deps: { fetch: typeof fetch; token: string; esperar?: Esperar }, init: RequestInit = {}): Promise<unknown> {
+export async function pedir(url: string, deps: { fetch: typeof fetch; token: string; esperar?: Esperar }, init: RequestInit = {}): Promise<unknown> {
   if (!url.startsWith('https://api.github.com/')) throw new Error('Host do GitHub recusado.')
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${deps.token}`)

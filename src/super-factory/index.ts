@@ -8,7 +8,7 @@ import { LibSQLStore } from '@mastra/libsql'
 import { KNOWLEDGE_ROUTES } from '@mastra/server/server-adapter'
 import { Observability, MastraStorageExporter, SensitiveDataFilter } from '@mastra/observability'
 
-import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, security } from './agents/factory.ts'
+import { architect, backend, chiefOfStaff, docs, frontend, integrations, memoria, qa, reviewer, security } from './agents/factory.ts'
 import { carregarChavesSalvas } from '../factory/chaves.ts'
 import { marcaSuperFactory } from './marca.ts'
 import { semearConjuntos } from './conjuntos.ts'
@@ -69,6 +69,7 @@ export const mastra = new Mastra({
     backend,
     integrations,
     qa,
+    reviewer,
     security,
     docs,
   },

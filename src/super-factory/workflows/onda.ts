@@ -2,7 +2,8 @@ import { createStep, createWorkflow } from '@mastra/core/workflows'
 import { z } from 'zod'
 
 import { executarOnda, MAXIMO_DE_CARDS_POR_ONDA, ordemDeMerge, PADRAO_DE_CHAVE, validarOnda } from '../../factory/dependencias.ts'
-import { paralelismoConfigurado, PARALELISMO_MAXIMO } from '../../factory/paralelo.ts'
+import { mapearEmParalelo, paralelismoConfigurado, PARALELISMO_MAXIMO } from '../../factory/paralelo.ts'
+import { foiComentado } from '../../factory/revisao.ts'
 import { pedidoSchema } from '../../factory/schemas.ts'
 
 const chaveSchema = z.string().regex(PADRAO_DE_CHAVE, 'De 1 a 24 letras minúsculas, números e hífen.')
@@ -25,6 +26,8 @@ export const resultadoDoCartaoSchema = z.object({
   /** Branch de destino do pull request: a do pai, quando o card está empilhado. */
   base: z.string().nullable().default(null),
   pai: z.string().nullable().default(null),
+  /** Revisão automática do PR: comentada, ou não feita (sem modelo, sem token ou falha). Nula quando não foi pedida. */
+  revisao: z.enum(['comentada', 'nao-feita']).nullable().default(null),
 })
 export type ResultadoDoCartao = z.infer<typeof resultadoDoCartaoSchema>
 
@@ -39,18 +42,20 @@ const entradaSchema = z.object({
     `De 1 a ${MAXIMO_DE_CARDS_POR_ONDA} cards, até ${PARALELISMO_MAXIMO} ao mesmo tempo. Cada um tem sandbox, branch e pull request próprios. Com "dependeDe", o filho espera o pai e empilha o PR sobre a branch dele.`,
   ),
   ensaio: z.boolean().optional().describe('Ensaio: cada card percorre as fases com sandbox de mentira, sem tocar repositório nem rede.'),
+  revisar: z.boolean().optional().describe('Depois que os PRs abrirem, o agente revisor comenta em cada um. Só comentário: nunca aprova nem trava o merge. Precisa de GITHUB_TOKEN e de um modelo.'),
 })
 
-type CartaoDaOnda = z.infer<typeof pedidoDaOndaSchema> & { ensaio: boolean }
+type CartaoDaOnda = z.infer<typeof pedidoDaOndaSchema> & { ensaio: boolean; revisar: boolean }
+const cartaoSchema = pedidoDaOndaSchema.extend({ ensaio: z.boolean(), revisar: z.boolean() })
 
 const receber = createStep({
   id: 'receber-onda',
   description: 'Confere as chaves e as dependências (um pai por card, sem ciclo) antes de rodar qualquer coisa.',
   inputSchema: entradaSchema,
-  outputSchema: z.array(pedidoDaOndaSchema.extend({ ensaio: z.boolean() })),
+  outputSchema: z.array(cartaoSchema),
   execute: async ({ inputData }) => {
     validarOnda(inputData.pedidos.map((p) => ({ chave: p.chave ?? null, dependeDe: p.dependeDe ?? null })))
-    return inputData.pedidos.map((pedido) => ({ ...pedido, ensaio: inputData.ensaio ?? false }))
+    return inputData.pedidos.map((pedido) => ({ ...pedido, ensaio: inputData.ensaio ?? false, revisar: inputData.revisar ?? false }))
   },
 })
 
@@ -58,7 +63,7 @@ const rodar = createStep({
   id: 'rodar-onda',
   description:
     'Roda os cards pelo modo autônomo, até o teto de simultâneos. O filho espera o pai, nasce da branch dele e abre o PR contra ela; se o pai para, o filho fica bloqueado. Um card que para não derruba os independentes.',
-  inputSchema: z.array(pedidoDaOndaSchema.extend({ ensaio: z.boolean() })),
+  inputSchema: z.array(cartaoSchema),
   outputSchema: saidaSchema,
   execute: async ({ inputData, mastra, loggerVNext }) => {
     const cartoes = inputData as CartaoDaOnda[]
@@ -69,7 +74,7 @@ const rodar = createStep({
       nos,
       paralelismoConfigurado(),
       async (no, pai) => {
-        const { chave: _chave, dependeDe: _dependeDe, ...pedido } = no.cartao
+        const { chave: _chave, dependeDe: _dependeDe, revisar: _revisar, ...pedido } = no.cartao
         const inicio = Date.now()
         // O filho parte da branch que o pai acabou de enviar: é isso que faz o PR ficar empilhado.
         const base = pai?.branch ?? null
@@ -91,11 +96,12 @@ const rodar = createStep({
             branch: estado.card?.branchHead ?? null,
             base: estado.card?.branchBase ?? base,
             pai: no.dependeDe,
+            revisao: null,
           }
         }
         const motivo = resultado.status === 'failed' ? (resultado.error?.message ?? 'Falhou.') : `Terminou como ${resultado.status}.`
         loggerVNext?.warn('Card da onda parou', { titulo: pedido.titulo, duracaoMs, motivo: motivo.slice(0, 300) })
-        return { titulo: pedido.titulo, ok: false, desfecho: 'parado', pullRequestUrl: null, motivo, chave: no.chave, branch: null, base, pai: no.dependeDe }
+        return { titulo: pedido.titulo, ok: false, desfecho: 'parado', pullRequestUrl: null, motivo, chave: no.chave, branch: null, base, pai: no.dependeDe, revisao: null }
       },
       (no, pai) => {
         loggerVNext?.warn('Card da onda bloqueado', { titulo: no.cartao.titulo, pai: no.dependeDe })
@@ -109,14 +115,38 @@ const rodar = createStep({
           branch: null,
           base: null,
           pai: no.dependeDe,
+          revisao: null,
         }
       },
     )
 
+    // Revisão automática: o revisor lê o PR e comenta. Só comentário. Falha de modelo ou de token não derruba a onda.
+    const revisar = cartoes.some((c) => c.revisar) && !cartoes.some((c) => c.ensaio)
+    if (revisar) {
+      const revisor = mastra.getAgent('reviewer')
+      const comPr = resultados.filter((r) => r.ok && r.pullRequestUrl && /github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(r.pullRequestUrl))
+      await mapearEmParalelo(comPr, 2, async (r) => {
+        const url = r.pullRequestUrl as string
+        const criterios = cartoes.find((c) => c.titulo === r.titulo)?.criterios ?? ''
+        try {
+          await Promise.race([
+            revisor.generate(`Revise o pull request ${url}. Leia-o com lerPullRequestGithub e deixe a revisão com comentarPullRequestGithub. Critérios de aceite do card, um por linha:\n${criterios}`, { maxSteps: 14 }),
+            new Promise((_, rejeitar) => setTimeout(() => rejeitar(new Error('A revisão passou de 3 minutos.')), 180_000)),
+          ])
+          r.revisao = foiComentado(url, '') ? 'comentada' : 'nao-feita'
+        } catch (erro) {
+          r.revisao = 'nao-feita'
+          loggerVNext?.warn('Revisão automática não feita', { titulo: r.titulo, motivo: erro instanceof Error ? erro.message.slice(0, 200) : 'erro' })
+        }
+      })
+      for (const r of resultados) if (r.ok && r.revisao === null) r.revisao = 'nao-feita'
+    }
+
     const certos = resultados.filter((r) => r.ok).length
     const ordem = ordemDeMerge(resultados.map((r) => ({ chave: r.chave, dependeDe: r.pai, titulo: r.titulo, ok: r.ok }))).filter((r) => r.ok).map((r) => r.titulo)
     const empilhados = resultados.some((r) => r.pai !== null)
-    const resumo = `${certos} de ${resultados.length} cards chegaram ao pull request.${empilhados && certos > 1 ? ` Há PRs em pilha: faça o merge de baixo para cima (${ordem.join(' → ')}).` : ''} Merge e deploy ficam com uma pessoa.`
+    const revisados = resultados.filter((r) => r.revisao === 'comentada').length
+    const resumo = `${certos} de ${resultados.length} cards chegaram ao pull request.${revisar ? ` Revisão automática comentada em ${revisados} deles (só comentário: o merge continua de uma pessoa).` : ''}${empilhados && certos > 1 ? ` Há PRs em pilha: faça o merge de baixo para cima (${ordem.join(' → ')}).` : ''} Merge e deploy ficam com uma pessoa.`
     return { cartoes: resultados, resumo, ordemDeMerge: ordem }
   },
 })
