@@ -2,6 +2,8 @@
 // um verbo da Super Factory e os segundos ("✻ Triando… (12s)"). Quando termina, a mensagem do agente ganha
 // "✻ Trabalhou por 12s". O Studio só mostra um ponto pulsando nessa hora, então a linha é da Factory.
 
+import { CODIGO_FERRAMENTAS_NO_CHAT } from './ferramentas-no-chat.ts'
+
 /** Verbos de cada agente, no vocabulário do projeto. Quem não está na lista usa PADRAO. */
 export const VERBOS_POR_AGENTE: Record<string, string[]> = {
   'chief-of-staff': ['Triando…', 'Lendo o quadro…', 'Separando donos…', 'Montando a onda…', 'Conferindo os critérios…', 'Delegando…'],
@@ -55,6 +57,7 @@ export const SCRIPT_TEMPO = `(function () {
   var POR_FERRAMENTA = ${JSON.stringify(VERBOS_POR_FERRAMENTA)}
   var CHAVE = 'sf-tempo'
   var MAXIMO_GUARDADO = 400
+${CODIGO_FERRAMENTAS_NO_CHAT}
 
   // Duração no formato do Claude Code: 7s, 59s, 1m 05s, 12m 40s.
   function formatar(segundos) {
@@ -126,18 +129,14 @@ export const SCRIPT_TEMPO = `(function () {
   }
 
   // Se a mensagem em andamento já mostra o nome de uma ferramenta, o verbo diz o que ela faz.
+  // O Studio escreve "IniciarOnda": a busca ignora maiúsculas (sfFerramentasNoTexto).
   function verboDaFerramenta() {
     var m = ultimaDoAgente()
     if (!m || idDe(m) === idAntes) return null
-    var texto = m.textContent || ''
+    var achados = sfFerramentasNoTexto(m.textContent || '', Object.keys(POR_FERRAMENTA))
     var melhor = null
-    var pos = -1
-    Object.keys(POR_FERRAMENTA).forEach(function (nome) {
-      var kebab = nome.replace(/([A-Z])/g, '-$1').toLowerCase()
-      var a = Math.max(texto.lastIndexOf(nome), texto.lastIndexOf(kebab))
-      if (a > pos) { pos = a; melhor = POR_FERRAMENTA[nome] }
-    })
-    return melhor
+    achados.forEach(function (a) { if (!melhor || a.pos > melhor.pos) melhor = a })
+    return melhor ? POR_FERRAMENTA[melhor.nome] : null
   }
 
   function atualizar(c) {

@@ -6,6 +6,8 @@
 // - Repositório, branch e aprovador só sugerem o que a própria pessoa já usou. Nada inventado.
 // - A nota de aprovação nunca é sugerida: uma frase pronta incentivaria carimbar o gate sem ler.
 
+import { CODIGO_FERRAMENTAS_NO_CHAT, CODIGO_PROXIMA_ETAPA, ETAPAS_POR_FERRAMENTA } from './ferramentas-no-chat.ts'
+
 export type Amostra = { titulo: string; descricao: string; criterios: string }
 
 export const AMOSTRAS: Amostra[] = [
@@ -43,9 +45,11 @@ export const CONVERSAS: Record<string, string[]> = {
 /** Só o branch base tem valor padrão. Repositório e aprovador vêm do histórico de quem usa. */
 export const PADROES: Record<string, string> = { branchBase: 'main' }
 
-const DADOS = JSON.stringify({ amostras: AMOSTRAS, chat: CONVERSAS, padrao: PADROES }).replace(/</g, '\\u003c')
+const DADOS = JSON.stringify({ amostras: AMOSTRAS, chat: CONVERSAS, padrao: PADROES, etapas: ETAPAS_POR_FERRAMENTA }).replace(/</g, '\\u003c')
 
 const CORPO = String.raw`
+${CODIGO_FERRAMENTAS_NO_CHAT}
+${CODIGO_PROXIMA_ETAPA}
   var CHAVE = 'sf-sugestoes'
   var CAMPOS_DE_HISTORICO = ['repositorio', 'branchBase', 'branchHead', 'aprovador']
   var mem = {}
@@ -71,11 +75,32 @@ const CORPO = String.raw`
     }
     if (CAMPOS_DE_HISTORICO.indexOf(nome) >= 0) return mem[nome] || DADOS.padrao[nome] || ''
     if (ehChat(el)) {
+      // Primeiro a próxima etapa que a conversa pede (a oferta do agente ou o passo seguinte do ciclo).
+      var contexto = sugestaoDoContexto()
+      if (contexto) return contexto
       var agente = agenteDaUrl()
       var lista = DADOS.chat[agente] || DADOS.chat['*']
       return lista[((mem.chat && mem.chat[agente]) || 0) % lista.length]
     }
     return ''
+  }
+
+  // A última mensagem do agente decide a sugestão, enquanto a pessoa ainda não respondeu e o agente não está
+  // trabalhando. O resultado é guardado por mensagem: a varredura roda a cada mudança da tela.
+  var cacheContexto = { chave: '', valor: '' }
+  function sugestaoDoContexto() {
+    if (document.querySelector('form button[aria-label="Cancel"]')) return ''
+    var todas = document.querySelectorAll('[data-slot="message"]')
+    var ultima = todas.length ? todas[todas.length - 1] : null
+    if (!ultima || ultima.getAttribute('data-from') !== 'assistant') return ''
+    var completo = ultima.textContent || ''
+    var chave = (ultima.getAttribute('data-message-id') || '') + ':' + completo.length
+    if (cacheContexto.chave === chave) return cacheContexto.valor
+    var corpo = ultima.querySelector('[data-slot="message-content"]')
+    var valor = ''
+    try { valor = sfProximaEtapa(corpo ? corpo.innerText : completo, completo, DADOS.etapas) } catch (e) { valor = '' }
+    cacheContexto = { chave: chave, valor: valor }
+    return valor
   }
 
   // A sugestão aparece como placeholder (cinza, como no Claude Code) enquanto o campo está vazio.
