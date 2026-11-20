@@ -300,3 +300,87 @@ async function organizarProjetoAgora(
   const certas = resultados.filter((item) => item.ok).length
   return { ok: certas === resultados.length, resultados, nota: `${certas} de ${resultados.length} ações feitas em ${projeto.titulo}.` }
 }
+
+export type ProjetoCriado = { id: string; numero: number; titulo: string; url: string }
+
+const DONO_VALIDO = /^[A-Za-z0-9-]{1,39}$/
+
+/**
+ * Cria um GitHub Project (v2) vazio na conta do dono (usuário ou organização). O GitHub já cria o campo Status
+ * com Todo, In Progress e Done. A API não escolhe o modelo nem o layout: quem quiser o quadro em colunas troca a
+ * visão para Board na tela do Project. Se já existe um Project aberto com o mesmo título, devolve esse e não cria
+ * outro: pedir duas vezes (ou o agente repetir) não duplica.
+ */
+export function criarProjeto(
+  dono: string,
+  titulo: string,
+  opcoes: { repositorio?: string } = {},
+  deps?: DepsProjeto,
+): Promise<{ ok: boolean; projeto: ProjetoCriado | null; jaExistia: boolean; ligadoAoRepositorio: boolean; nota: string }> {
+  return filaDeEscrita(`${dono.toLowerCase()}/novo`, () => criarProjetoAgora(dono, titulo, opcoes, deps))
+}
+
+async function criarProjetoAgora(
+  dono: string,
+  tituloBruto: string,
+  opcoes: { repositorio?: string },
+  deps?: DepsProjeto,
+): Promise<{ ok: boolean; projeto: ProjetoCriado | null; jaExistia: boolean; ligadoAoRepositorio: boolean; nota: string }> {
+  const falha = (nota: string) => ({ ok: false, projeto: null, jaExistia: false, ligadoAoRepositorio: false, nota })
+  if (!DONO_VALIDO.test(dono)) return falha('Dono inválido: use o usuário ou a organização do GitHub, sem @.')
+  const titulo = tituloBruto.replace(/\s+/g, ' ').trim()
+  if (titulo.length < 3 || titulo.length > 120) return falha('O título do Project precisa ter de 3 a 120 caracteres.')
+  let repoDono = ''
+  let repoNome = ''
+  if (opcoes.repositorio) {
+    const partes = opcoes.repositorio.trim().split('/')
+    if (partes.length !== 2 || !DONO_VALIDO.test(partes[0] ?? '') || !/^[A-Za-z0-9._-]{1,100}$/.test(partes[1] ?? '')) return falha('Repositório inválido: use owner/repo.')
+    ;[repoDono, repoNome] = partes as [string, string]
+  }
+  try {
+    const achado = await graphql(
+      `query($dono:String!){ repositoryOwner(login:$dono){ id __typename ... on ProjectV2Owner { projectsV2(first:50){ nodes { id number title url closed } } } } }`,
+      { dono },
+      false,
+      deps,
+    )
+    const dono_ = achado.repositoryOwner as { id?: string; projectsV2?: { nodes?: Array<{ id?: string; number?: number; title?: string; url?: string; closed?: boolean } | null> } } | null
+    if (!dono_?.id) return falha(`Não achei o usuário ou a organização "${dono}" no GitHub.`)
+    const existente = dono_.projectsV2?.nodes?.find((no) => no && !no.closed && (no.title ?? '').trim().toLowerCase() === titulo.toLowerCase())
+    if (existente?.id && typeof existente.number === 'number' && existente.url) {
+      const projeto = { id: existente.id, numero: existente.number, titulo: existente.title ?? titulo, url: existente.url }
+      return { ok: true, projeto, jaExistia: true, ligadoAoRepositorio: false, nota: `Já existe o Project "${projeto.titulo}" (${dono}/${projeto.numero}). Usei esse e não criei outro.` }
+    }
+    const dados = await graphql(
+      `mutation($dono:ID!,$titulo:String!){ createProjectV2(input:{ownerId:$dono,title:$titulo}){ projectV2 { id number title url } } }`,
+      { dono: dono_.id, titulo },
+      true,
+      deps,
+    )
+    const novo = (dados.createProjectV2 as { projectV2?: { id?: string; number?: number; title?: string; url?: string } } | undefined)?.projectV2
+    if (!novo?.id || typeof novo.number !== 'number' || !novo.url) return falha('O GitHub não confirmou o Project criado. Confira em github.com antes de tentar de novo, para não duplicar.')
+    const projeto = { id: novo.id, numero: novo.number, titulo: novo.title ?? titulo, url: novo.url }
+    let ligado = false
+    let aviso = ''
+    if (repoNome) {
+      try {
+        const repo = await graphql(`query($o:String!,$n:String!){ repository(owner:$o,name:$n){ id } }`, { o: repoDono, n: repoNome }, false, deps)
+        const repoId = (repo.repository as { id?: string } | null)?.id
+        if (!repoId) throw new Error('repositório não encontrado')
+        await graphql(`mutation($p:ID!,$r:ID!){ linkProjectV2ToRepository(input:{projectId:$p,repositoryId:$r}){ repository { id } } }`, { p: projeto.id, r: repoId }, true, deps)
+        ligado = true
+      } catch (erro) {
+        aviso = ` Não consegui ligar ao repositório ${opcoes.repositorio}: ${erro instanceof Error ? erro.message : 'falhou'}.`
+      }
+    }
+    return {
+      ok: true,
+      projeto,
+      jaExistia: false,
+      ligadoAoRepositorio: ligado,
+      nota: `Project "${projeto.titulo}" criado: ${projeto.url} (referência ${dono}/${projeto.numero}). Vem com o campo Status (Todo, In Progress, Done). Para ver em colunas, troque a visão para Board na tela do Project.${ligado ? ` Ligado a ${opcoes.repositorio}.` : ''}${aviso}`,
+    }
+  } catch (erro) {
+    return falha(erro instanceof Error ? erro.message : 'Não consegui criar o Project.')
+  }
+}

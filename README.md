@@ -288,6 +288,14 @@ O instalador antigo põe um login básico do Traefik na frente de tudo, o que es
 
 Por que GitHub e não Composio: o Composio guarda credenciais de agentes em apps de terceiros (agir no GitHub ou no Gmail em nome de alguém); não é um provedor de login do seu produto. Para empresas que não usam GitHub, o próximo provedor natural é Microsoft Entra ou Google.
 
+## Verbos e segundos no chat do Studio
+
+Enquanto um agente trabalha, uma linha acima do campo de texto mostra um verbo do projeto e os segundos, como no Claude Code: `✻ Conferindo evidência… (12s)`. Cada agente tem o próprio vocabulário (o QA fala de evidência e `NOT_RUN`, o Security de segredo e gate, o PR Review de diff e critérios, o Chief de quadro e onda), e quando a mensagem já mostra o nome de uma ferramenta o verbo diz o que ela faz (`Importando as issues etiquetadas…`, `Criando o Project…`). Quando o agente termina, a mensagem ganha `✻ Trabalhou por 1m 15s`; a nota volta quando a conversa é reaberta no mesmo navegador. O Studio só mostra um ponto pulsando nessa hora, então a linha é da Factory (`src/super-factory/tempo.ts`). O tempo é guardado só no navegador de quem usou, e o ícone não gira para quem pede menos movimento.
+
+## Criar o GitHub Project
+
+No chat do Chief: "crie o Project Backlog Super Factory em juliopessan". A ferramenta `criarProjetoGithub` cria o Project v2 (usuário ou organização) com o campo Status (Todo, In Progress, Done) e devolve a referência `dono/número`; em seguida o Chief adiciona as issues e ordena com `organizarProjetoGithub`. Se já existe um Project aberto com o mesmo título, devolve esse e **não cria outro**; a escrita nunca é repetida. Opcionalmente liga o Project a um repositório. A API do GitHub não escolhe o modelo nem o layout: para ver em colunas, troque a visão para **Board** na tela do Project. Precisa de `GITHUB_PROJECT_TOKEN` (ou `GITHUB_TOKEN`) clássico com os escopos `project` e `repo` para Project de usuário.
+
 ## Gatilho de issues
 
 No chat do Chief: "importe as issues etiquetadas de acme/pedidos". A ferramenta `importarIssuesGithub` traz as issues abertas com a etiqueta `super-factory` (ou outra, se você pedir) e cria um card para cada uma, sem repetir as que já viraram card. Os critérios saem da seção "Critérios" da issue ou da lista de tarefas (`- [ ] ...`); sem critério observável o card nasce **bloqueado**, com o motivo, e uma pessoa completa.
