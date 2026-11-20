@@ -878,6 +878,7 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   for (const nome of Object.keys(ETAPAS_POR_FERRAMENTA)) assert.ok(VERBOS_POR_FERRAMENTA[nome], `a ferramenta ${nome} tem verbo e etapa`)
   assert.doesNotThrow(() => new Function(SCRIPT_SUGESTOES), 'o script de sugestões continua válido')
   assert.ok(SCRIPT_SUGESTOES.includes('sugestaoDoContexto') && SCRIPT_SUGESTOES.includes('sfProximaEtapa'), 'o campo de texto usa a etapa da conversa')
+  assert.equal(SCRIPT_SUGESTOES.includes('.innerText'), false, 'lê o texto da mensagem por textContent: innerText vem vazio quando o Studio adia o desenho (falhou só no build de produção)')
 }
 
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat

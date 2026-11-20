@@ -96,9 +96,14 @@ ${CODIGO_PROXIMA_ETAPA}
     var completo = ultima.textContent || ''
     var chave = (ultima.getAttribute('data-message-id') || '') + ':' + completo.length
     if (cacheContexto.chave === chave) return cacheContexto.valor
+    if (!completo.trim()) return ''
     var corpo = ultima.querySelector('[data-slot="message-content"]')
+    // textContent, e não innerText: o Studio adia o desenho das mensagens fora da tela e o innerText vem vazio.
+    // Cada parágrafo, item ou citação vira uma linha.
+    var blocos = corpo ? corpo.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, blockquote') : []
+    var texto = blocos.length ? Array.prototype.map.call(blocos, function (b) { return b.textContent }).join('\n') : (corpo ? corpo.textContent : completo)
     var valor = ''
-    try { valor = sfProximaEtapa(corpo ? corpo.innerText : completo, completo, DADOS.etapas) } catch (e) { valor = '' }
+    try { valor = sfProximaEtapa(texto, completo, DADOS.etapas) } catch (e) { valor = '' }
     cacheContexto = { chave: chave, valor: valor }
     return valor
   }
