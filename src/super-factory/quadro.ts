@@ -3,6 +3,7 @@
 
 import crypto from 'node:crypto'
 
+import { calcularMetricas, type Metricas } from '../factory/metricas.ts'
 import { lerEstado } from '../factory/store.ts'
 import type { Card, Estado } from '../factory/schemas.ts'
 import { resposta } from './protecao.ts'
@@ -38,6 +39,7 @@ export type QuadroCompleto = {
   colunas: Array<{ coluna: (typeof COLUNAS)[number]; titulo: string; cards: CartaoDoQuadro[] }>
   total: number
   resumo: string
+  metricas: Metricas
 }
 
 function enderecoSeguro(url: string | null | undefined): string | null {
@@ -89,6 +91,7 @@ export function montarQuadro(cards: Card[], runs: Record<string, Estado> = {}): 
     colunas,
     total,
     resumo: `${total} card(s): ${andamento} em andamento, ${feitos} concluído(s), ${bloqueados} bloqueado(s).`,
+    metricas: calcularMetricas(runs),
   }
 }
 
@@ -123,6 +126,10 @@ export function paginaQuadro(opcoes: { embed: boolean; tema: 'dark' | 'light' | 
   header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
   h1 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -.02em; }
   .resumo { color: var(--muted); font-size: 13px; }
+  .metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .metrica { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--card); }
+  .metrica b { display: block; font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
+  .metrica span { color: var(--muted); font-size: 11.5px; }
   .grade { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px; }
   .coluna { min-width: 0; border: 1px solid var(--line); border-radius: 14px; padding: 8px; background: color-mix(in srgb, var(--card) 55%, transparent); }
   .coluna h2 { margin: 2px 4px 8px; font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
@@ -146,12 +153,14 @@ export function paginaQuadro(opcoes: { embed: boolean; tema: 'dark' | 'light' | 
 <body>
 <main>
   <header><h1>Quadro</h1><span class="resumo" id="resumo" aria-live="polite">Carregando…</span></header>
+  <div class="metricas" id="metricas" role="group" aria-label="Métricas de entrega"></div>
   <div class="grade" id="grade" role="list" aria-label="Colunas do quadro"></div>
 </main>
 <script nonce="${nonce}">
 (function () {
   var grade = document.getElementById('grade')
   var resumo = document.getElementById('resumo')
+  var faixa = document.getElementById('metricas')
   var ultimaAltura = 0
   function tag(nome, classe, texto) {
     var e = document.createElement(nome)
@@ -179,8 +188,27 @@ export function paginaQuadro(opcoes: { embed: boolean; tema: 'dark' | 'light' | 
     }
     return d
   }
+  function numero(n) { return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + ' mil' : String(n) }
+  function metrica(valor, rotulo) {
+    var m = tag('div', 'metrica')
+    m.appendChild(tag('b', '', valor))
+    m.appendChild(tag('span', '', rotulo))
+    faixa.appendChild(m)
+  }
+  function desenharMetricas(x) {
+    faixa.textContent = ''
+    if (!x || !x.execucoes) { faixa.hidden = true; return }
+    faixa.hidden = false
+    metrica(String(x.execucoes), 'execuções (' + x.ultimos7Dias + ' em 7 dias)')
+    metrica(String(x.pullRequests), 'pull requests abertos')
+    metrica(x.taxaDeEntrega === null ? '–' : Math.round(x.taxaDeEntrega * 100) + '%', 'chegam ao PR')
+    metrica(x.tempoMedianoMin === null ? '–' : x.tempoMedianoMin + ' min', 'tempo mediano até o PR')
+    metrica(String(x.bloqueadas), 'bloqueadas')
+    metrica(x.tokens.porCard === null ? 'não medido' : numero(x.tokens.porCard), 'tokens por card (entrada + saída)')
+  }
   function desenhar(q) {
     resumo.textContent = q.resumo
+    desenharMetricas(q.metricas)
     grade.textContent = ''
     q.colunas.forEach(function (col) {
       var s = tag('section', 'coluna')
