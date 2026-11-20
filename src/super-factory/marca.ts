@@ -13,6 +13,7 @@ import { lerConfig, porteiro } from './auth.ts'
 import { SCRIPT_MENU, tratarMenu } from './menu.ts'
 import { respostaLlms, respostaRobots, respostaSitemap } from './seo.ts'
 import { paginaQuadro, SCRIPT_QUADRO, tratarQuadro } from './quadro.ts'
+import { SCRIPT_TEMPO } from './tempo.ts'
 import { SCRIPT_TIME } from './time-animado.ts'
 
 // Marca: tile claro (text-main-white) com a sigla no preto da página (surface-bg), em Greed.
@@ -572,7 +573,7 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   const marcado = html
     .replaceAll('<title>Mastra Studio</title>', '<title>Super Factory</title>')
     .replaceAll('href="./mastra-dark-tile.svg"', 'href="./sf.svg"')
-    .replace('</body>', `<script>${SCRIPT}</script><script>${SCRIPT_SUGESTOES}</script><script>${SCRIPT_TIME}</script><script>${SCRIPT_QUADRO}</script>${menuLigado() ? `<script>${SCRIPT_MENU}</script>` : ''}</body>`)
+    .replace('</body>', `<script>${SCRIPT}</script><script>${SCRIPT_SUGESTOES}</script><script>${SCRIPT_TIME}</script><script>${SCRIPT_QUADRO}</script><script>${SCRIPT_TEMPO}</script>${menuLigado() ? `<script>${SCRIPT_MENU}</script>` : ''}</body>`)
   const headers = new Headers(c.res.headers)
   headers.delete('content-length')
   c.res = new Response(marcado, { status: c.res.status, headers })

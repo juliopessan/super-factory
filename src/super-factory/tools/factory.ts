@@ -7,7 +7,7 @@ import { lintarCriterios as avaliarCriterios, planejarOnda as montarOnda, quadro
 import { listarIssuesGithub, criarIssueGithub as abrirIssueGithub } from '../../factory/github.ts'
 import { listarWorkItemsAzure, criarWorkItemAzure as abrirWorkItemAzure, modoAzure } from '../../factory/azure.ts'
 import { validarManifesto as checarManifesto } from '../../factory/manifest.ts'
-import { lerProjeto, lerReferenciaDoProjeto, organizarProjeto, MAXIMO_DE_ACOES } from '../../factory/projeto.ts'
+import { criarProjeto, lerProjeto, lerReferenciaDoProjeto, organizarProjeto, MAXIMO_DE_ACOES } from '../../factory/projeto.ts'
 import { listarArquivosGithub as buscarArquivosGithub, listarBranchesGithub as buscarBranchesGithub, lerArquivoGithub as buscarArquivoGithub, compararBranchesGithub as buscarComparacaoDeBranches, MAXIMO_DE_BRANCHES } from '../../factory/repositorio.ts'
 import { avaliarMerge, iniciar } from '../../factory/pipeline.ts'
 import { comentarPullRequestGithub as postarRevisao, lerPullRequestGithub as buscarPullRequest, MAXIMO_DE_ACHADOS } from '../../factory/revisao.ts'
@@ -443,6 +443,36 @@ export const lerProjetoGithub = createTool({
       }))
     const resumo = `${lido.nota}\n${colunas.map((coluna) => `${coluna.status}: ${coluna.itens.length}`).join(' · ')}`
     return { ok: true, titulo: p.titulo, url: p.url, campo: p.campo ? { nome: p.campo.nome, opcoes: nomes } : null, colunas, totalDeItens: p.totalDeItens, truncado: p.truncado, resumo }
+  },
+})
+
+export const criarProjetoGithub = createTool({
+  id: 'criar-projeto-github',
+  description:
+    'Cria um GitHub Project (v2) vazio na conta de um usuário ou organização, com o campo Status (Todo, In Progress, Done). Se já existir um Project aberto com o mesmo título, devolve esse e não cria outro. Não adiciona itens: depois de criar, use organizarProjetoGithub para adicionar as issues e ordenar. A visão em colunas (Board) a pessoa escolhe na tela do Project: a API do GitHub não define layout. Precisa de token clássico com os escopos project e repo para Project de usuário.',
+  inputSchema: z.object({
+    dono: z.string().min(1).max(39).describe('Usuário ou organização do GitHub, sem @. Ex.: juliopessan.'),
+    titulo: z.string().min(3).max(120).describe('Nome do Project.'),
+    repositorio: z.string().optional().describe('owner/repo para ligar o Project a um repositório. Opcional.'),
+  }),
+  outputSchema: z.object({
+    ok: z.boolean(),
+    jaExistia: z.boolean(),
+    ligadoAoRepositorio: z.boolean(),
+    projeto: z.object({ numero: z.number(), titulo: z.string(), url: z.string(), referencia: z.string() }).nullable(),
+    resumo: z.string(),
+  }),
+  execute: async ({ dono, titulo, repositorio }, contexto) => {
+    const inicio = Date.now()
+    const r = await criarProjeto(dono.replace(/^@/, ''), titulo, { repositorio })
+    contexto?.loggerVNext?.info(r.ok ? 'Project criado' : 'Project não criado', { dono, jaExistia: r.jaExistia, duracaoMs: Date.now() - inicio })
+    return {
+      ok: r.ok,
+      jaExistia: r.jaExistia,
+      ligadoAoRepositorio: r.ligadoAoRepositorio,
+      projeto: r.projeto ? { numero: r.projeto.numero, titulo: r.projeto.titulo, url: r.projeto.url, referencia: `${dono.replace(/^@/, '')}/${r.projeto.numero}` } : null,
+      resumo: r.nota,
+    }
   },
 })
 

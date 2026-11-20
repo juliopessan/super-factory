@@ -556,7 +556,7 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   await marcaSuperFactory(contexto, async () => {})
   const html = await contexto.res.text()
   const injetados = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? '')
-  assert.equal(injetados.length, 5, 'o Studio recebe cinco scripts: a marca, as sugestões, o time, o quadro e o menu')
+  assert.equal(injetados.length, 6, 'o Studio recebe seis scripts: a marca, as sugestões, o time, o quadro, o tempo do chat e o menu')
   for (const [i, codigo] of injetados.entries()) assert.doesNotThrow(() => new Function(codigo), `o script ${i + 1} injetado no Studio tem sintaxe válida`)
   assert.ok(injetados.some((codigo) => codigo.includes('popupDeChaves')), 'o script do Studio traz o botão de chaves')
   assert.ok(injetados.some((codigo) => codigo.includes('sf-sugestoes') && codigo.includes('Tab')), 'o script de sugestões com Tab está no Studio')
@@ -729,6 +729,116 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.equal(de_novo.importados.length, 0, 'a mesma issue não vira dois cards')
   assert.equal(de_novo.jaExistiam, 3)
   assert.equal(lerEstado().cards.length, antes + 3)
+}
+
+// --- Chat com verbos do projeto e segundos: vocabulário completo e script válido
+{
+  const { VERBOS_POR_AGENTE, VERBOS_PADRAO, VERBOS_POR_FERRAMENTA, SCRIPT_TEMPO } = await import('../super-factory/tempo.ts')
+  const { chiefOfStaff, architect, frontend, backend, integrations, qa, security, reviewer, docs } = await import('../super-factory/agents/factory.ts')
+  for (const agente of [chiefOfStaff, architect, frontend, backend, integrations, qa, security, reviewer, docs]) {
+    const verbos = VERBOS_POR_AGENTE[agente.id]
+    assert.ok(verbos && verbos.length >= 3, `o agente ${agente.id} tem verbos próprios`)
+  }
+  for (const verbo of [...VERBOS_PADRAO, ...Object.values(VERBOS_POR_AGENTE).flat(), ...Object.values(VERBOS_POR_FERRAMENTA)]) {
+    assert.match(verbo, /^[A-ZÀ-Ú][^…]+…$/, `verbo bem formado: ${verbo}`)
+  }
+  const ferramentasDoChief = Object.keys(await chiefOfStaff.listTools())
+  for (const ferramenta of ferramentasDoChief) {
+    if (['abrirCard', 'iniciarOnda', 'organizarProjetoGithub'].includes(ferramenta)) assert.ok(VERBOS_POR_FERRAMENTA[ferramenta], `a ferramenta ${ferramenta} tem verbo`)
+  }
+  assert.doesNotThrow(() => new Function(SCRIPT_TEMPO), 'o script do tempo tem sintaxe válida')
+  assert.ok(SCRIPT_TEMPO.includes('aria-label="Cancel"') && SCRIPT_TEMPO.includes('Trabalhou por'), 'detecta a resposta em andamento e marca o tempo')
+}
+
+// --- Criar o GitHub Project v2: cria uma vez, não duplica, não repete escrita, explica o escopo do token
+{
+  const { criarProjeto } = await import('../factory/projeto.ts')
+  const json = (corpo: unknown, status = 200) => new Response(JSON.stringify(corpo), { status })
+  const montar = (opcoes: { existentes?: Array<{ id: string; number: number; title: string; url: string; closed: boolean }>; semDono?: boolean; erro?: string; falhaNaCriacao?: boolean; semRepositorio?: boolean } = {}) => {
+    const projetos = [...(opcoes.existentes ?? [])]
+    const estado = { criacoes: 0, ligacoes: 0, leituras: 0, auth: new Set<string | null>() }
+    const buscar = (async (url: string, init?: RequestInit) => {
+      assert.equal(String(url), 'https://api.github.com/graphql')
+      estado.auth.add(new Headers(init?.headers).get('authorization'))
+      const corpo = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, string> }
+      if (opcoes.erro) return json({ errors: [{ message: opcoes.erro }] })
+      if (corpo.query.includes('createProjectV2')) {
+        estado.criacoes++
+        if (opcoes.falhaNaCriacao) return new Response('instável', { status: 502 })
+        const novo = { id: `PVT_novo${projetos.length}`, number: projetos.length + 7, title: corpo.variables.titulo as string, url: `https://github.com/users/juliopessan/projects/${projetos.length + 7}`, closed: false }
+        projetos.push(novo)
+        return json({ data: { createProjectV2: { projectV2: novo } } })
+      }
+      if (corpo.query.includes('linkProjectV2ToRepository')) {
+        estado.ligacoes++
+        return json({ data: { linkProjectV2ToRepository: { repository: { id: 'R_1' } } } })
+      }
+      if (corpo.query.includes('repository(owner')) return json({ data: { repository: opcoes.semRepositorio ? null : { id: 'R_1' } } })
+      estado.leituras++
+      if (opcoes.semDono) return json({ data: { repositoryOwner: null } })
+      return json({ data: { repositoryOwner: { id: 'U_dono1', __typename: 'User', projectsV2: { nodes: projetos } } } })
+    }) as unknown as typeof fetch
+    return { buscar, estado, projetos }
+  }
+  const deps = (f: ReturnType<typeof montar>) => ({ fetch: f.buscar, token: 'tok-de-teste-123456', esperar: async () => {} })
+
+  let f = montar()
+  const novo = await criarProjeto('juliopessan', '  Backlog   Super Factory ', {}, deps(f))
+  assert.equal(novo.ok, true, novo.nota)
+  assert.equal(f.estado.criacoes, 1)
+  assert.equal(novo.projeto?.titulo, 'Backlog Super Factory', 'espaços do título são normalizados')
+  assert.equal(novo.projeto?.numero, 7)
+  assert.match(novo.nota, /juliopessan\/7/)
+  assert.match(novo.nota, /Board/, 'avisa que o layout em colunas é escolhido na tela')
+  assert.ok(novo.nota.includes('https://github.com/users/juliopessan/projects/7'))
+  assert.equal(novo.jaExistia, false)
+
+  f = montar({ existentes: [{ id: 'PVT_a', number: 3, title: 'backlog super factory', url: 'https://github.com/users/juliopessan/projects/3', closed: false }] })
+  const repetido = await criarProjeto('juliopessan', 'Backlog Super Factory', {}, deps(f))
+  assert.equal(repetido.ok && repetido.jaExistia, true, 'título que já existe devolve o mesmo Project')
+  assert.equal(f.estado.criacoes, 0, 'e não cria outro')
+  assert.equal(repetido.projeto?.numero, 3)
+
+  f = montar({ existentes: [{ id: 'PVT_a', number: 3, title: 'Backlog', url: 'https://github.com/users/juliopessan/projects/3', closed: true }] })
+  assert.equal((await criarProjeto('juliopessan', 'Backlog', {}, deps(f))).jaExistia, false, 'Project fechado não conta como existente')
+
+  f = montar()
+  const [a, b] = await Promise.all([criarProjeto('juliopessan', 'Mesmo nome', {}, deps(f)), criarProjeto('juliopessan', 'Mesmo nome', {}, deps(f))])
+  assert.equal(f.estado.criacoes, 1, 'dois pedidos ao mesmo tempo criam um Project só')
+  assert.ok(a.ok && b.ok && (a.jaExistia || b.jaExistia))
+
+  f = montar({ falhaNaCriacao: true })
+  const instavel = await criarProjeto('juliopessan', 'Backlog', {}, deps(f))
+  assert.equal(instavel.ok, false)
+  assert.equal(f.estado.criacoes, 1, 'escrita nunca é repetida: repetir poderia criar dois')
+
+  f = montar({ erro: 'Resource not accessible by personal access token' })
+  assert.match((await criarProjeto('juliopessan', 'Backlog', {}, deps(f))).nota, /escopo "project"/, 'sem escopo: explica o que o token precisa')
+
+  f = montar({ semDono: true })
+  assert.match((await criarProjeto('ninguem', 'Backlog', {}, deps(f))).nota, /Não achei o usuário ou a organização/)
+
+  f = montar()
+  const ligado = await criarProjeto('juliopessan', 'Com repositório', { repositorio: 'juliopessan/super-factory' }, deps(f))
+  assert.equal(ligado.ligadoAoRepositorio, true)
+  assert.equal(f.estado.ligacoes, 1)
+  f = montar({ semRepositorio: true })
+  const semRepo = await criarProjeto('juliopessan', 'Sem repo', { repositorio: 'juliopessan/nao-existe' }, deps(f))
+  assert.equal(semRepo.ok, true, 'falhar em ligar ao repositório não desfaz o Project criado')
+  assert.match(semRepo.nota, /Não consegui ligar/)
+
+  f = montar()
+  for (const [dono, titulo, repo] of [['jul io', 'Backlog', undefined], ['juliopessan', 'ab', undefined], ['juliopessan', 'x'.repeat(121), undefined], ['juliopessan', 'Backlog', 'sem-barra']] as const) {
+    assert.equal((await criarProjeto(dono, titulo, { repositorio: repo }, deps(f))).ok, false, `${dono}|${titulo.slice(0, 8)}|${repo}`)
+  }
+  assert.equal(f.estado.leituras + f.estado.criacoes, 0, 'entrada inválida não chega ao GitHub')
+  assert.equal([...f.estado.auth].length, 0)
+  const semToken = await criarProjeto('juliopessan', 'Backlog', {}, { fetch: f.buscar, token: '', esperar: async () => {} })
+  assert.equal(semToken.ok, false)
+  const { criarProjetoGithub } = await import('../super-factory/tools/factory.ts')
+  assert.notEqual(criarProjetoGithub.requireApproval, true, 'criar o Project não pede aprovação: só o merge é decisão humana')
+  const mcp = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'super-factory', 'mcp.ts'), 'utf8')
+  assert.equal(/^\s+criarProjetoGithub,$/m.test(mcp), false, 'o MCP da Factory não expõe a criação do Project')
 }
 
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat

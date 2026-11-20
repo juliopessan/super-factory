@@ -456,6 +456,43 @@ async function testarNavegador(): Promise<void> {
     conferir('quadro: sai de cena fora da tela de agentes', (await visao.locator('#sf-quadro').count()) === 0)
     await visao.close()
 
+    // Chat no estilo do Claude Code: verbo do projeto e segundos enquanto o agente trabalha; tempo na mensagem pronta
+    const chat = await navegador.newPage({ viewport: { width: 1280, height: 900 } })
+    await chat.route('**/api/agents/*/send-message', () => {})
+    await chat.goto(BASE + '/studio/agents/qa/threads/new')
+    const campoChat = chat.locator('textarea').first()
+    await campoChat.waitFor()
+    await campoChat.fill('confere a evidência')
+    await campoChat.press('Enter')
+    await chat.locator('#sf-status').waitFor({ timeout: 8000 })
+    const verbosQa = ['Conferindo evidência…', 'Lendo a trilha do card…', 'Separando PASS de NOT_RUN…']
+    const primeiro = await chat.locator('#sf-status .sf-v').innerText()
+    conferir('chat: enquanto o agente trabalha, a linha mostra um verbo do QA', verbosQa.includes(primeiro), primeiro)
+    await chat.waitForFunction(() => /\((\d+)s\)/.test(document.querySelector('#sf-status .sf-s')?.textContent ?? '') && Number(/\((\d+)s\)/.exec(document.querySelector('#sf-status .sf-s')?.textContent ?? '')?.[1]) >= 3, null, { timeout: 12000 }).catch(() => {})
+    const segundos = Number(/\((\d+)s\)/.exec((await chat.locator('#sf-status .sf-s').innerText()) ?? '')?.[1] ?? -1)
+    conferir('chat: os segundos contam enquanto espera', segundos >= 3, `${segundos}s`)
+    conferir('chat: a linha fica acima do campo de texto', await chat.evaluate(() => (document.getElementById('sf-status')?.getBoundingClientRect().bottom ?? 99999) <= (document.querySelector('form')?.getBoundingClientRect().top ?? 0) + 1))
+    const verbosVistos = new Set<string>()
+    for (let i = 0; i < 4; i++) {
+      verbosVistos.add(await chat.locator('#sf-status .sf-v').innerText())
+      await chat.waitForTimeout(2800)
+    }
+    conferir('chat: o verbo troca com o tempo, só com palavras do QA', verbosVistos.size >= 2 && [...verbosVistos].every((v) => verbosQa.includes(v)), [...verbosVistos].join(' / '))
+    await chat.close()
+    // Mensagem pronta: o tempo guardado aparece, no formato do Claude Code
+    const conversaTempo = (await (await fetch(`${BASE}/api/memory/threads?agentId=chief-of-staff`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resourceId: 'chief-of-staff', title: 'e2e-tempo', metadata: {} }) })).json()) as { id: string }
+    const msg = (role: string, texto: string, em: string) => ({ role, threadId: conversaTempo.id, resourceId: 'chief-of-staff', createdAt: em, content: { format: 2, parts: [{ type: 'text', text: texto }], content: texto } })
+    const salvas = (await (await fetch(`${BASE}/api/memory/save-messages?agentId=chief-of-staff`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [msg('user', 'pergunta', '2026-01-01T10:00:00.000Z'), msg('assistant', 'resposta', '2026-01-01T10:00:05.000Z')] }) })).json()) as { messages: Array<{ id: string; role: string }> }
+    const idResposta = salvas.messages.find((m) => m.role === 'assistant')?.id ?? ''
+    const antigo = await navegador.newPage({ viewport: { width: 1280, height: 800 } })
+    await antigo.addInitScript((args: string[]) => localStorage.setItem('sf-tempo', JSON.stringify({ [args[0] as string]: 75.4 })), [idResposta])
+    await antigo.goto(`${BASE}/studio/agents/chief-of-staff/threads/${conversaTempo.id}`)
+    await antigo.locator('[data-sf-tempo]').waitFor({ timeout: 8000 }).catch(() => {})
+    conferir('chat: a mensagem pronta mostra o tempo, no formato do Claude Code', ((await antigo.locator('[data-sf-tempo]').first().innerText().catch(() => '')) ?? '').includes('Trabalhou por 1m 15s'))
+    conferir('chat: formato da duração (7s, 59s, 1m 05s, 12m 34s)', (await antigo.evaluate(() => [7, 59, 65, 754].map((n) => (window as unknown as { sfTempoFormatar: (s: number) => string }).sfTempoFormatar(n)).join(','))) === '7s,59s,1m 05s,12m 34s')
+    await antigo.close()
+    await fetch(`${BASE}/api/memory/threads/${conversaTempo.id}?agentId=chief-of-staff`, { method: 'DELETE' }).catch(() => {})
+
     // Sugestões com Tab, no estilo do Claude Code: campo vazio mostra a sugestão e Tab preenche
     const sug = await navegador.newPage({ viewport: { width: 1440, height: 900 } })
     await sug.addInitScript(() => localStorage.setItem('sf-sugestoes', JSON.stringify({ repositorio: 'acme/pedidos', amostra: 0 })))
