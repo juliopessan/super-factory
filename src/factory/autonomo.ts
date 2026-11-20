@@ -116,13 +116,34 @@ export async function descobrirVerificacao(executor: Executor): Promise<Verifica
   if (tem('go.mod')) return { instalar: 'go mod download', verificar: 'go test ./...', origem: 'go.mod' }
   if (tem('pyproject.toml') || tem('requirements.txt')) {
     const instalar = tem('requirements.txt') ? 'pip install -r requirements.txt' : 'pip install -e .'
-    return { instalar, verificar: 'python -m pytest -q', origem: 'Python' }
+    // pytest só quando o projeto o declara. Sem sinal, vale o unittest, que já vem com o Python.
+    const sinais = await executor.executar("{ grep -qiE 'pytest' requirements*.txt pyproject.toml setup.cfg tox.ini 2>/dev/null && echo pytest; ls pytest.ini conftest.py 2>/dev/null | head -1; } || true")
+    const usaPytest = sinais.saida.trim().length > 0
+    return usaPytest
+      ? { instalar, verificar: 'python -m pytest -q', origem: 'Python (pytest)' }
+      : { instalar, verificar: 'python -m unittest discover', origem: 'Python (unittest)' }
   }
   if (tem('Makefile')) {
     const make = await executor.executar("grep -E '^test:' Makefile || true")
     return { instalar: null, verificar: make.saida.trim() ? 'make test' : null, origem: 'Makefile' }
   }
   return { instalar: null, verificar: null, origem: 'nenhum comando de teste encontrado' }
+}
+
+/**
+ * Falta de ferramenta no container (pip, python, ffmpeg…) é problema da imagem do sandbox, que é do operador, e não
+ * do card nem do código. Diz isso e o que fazer, em vez de deixar só "command not found".
+ */
+export function dicaDoSandbox(execucao: Execucao): string | null {
+  const texto = `${execucao.saida}\n${execucao.erro}`
+  if (/externally-managed-environment/i.test(texto)) {
+    return 'O Python da imagem do sandbox é gerenciado pelo sistema (PEP 668) e recusa o pip. Isso é do ambiente, não do card: use a imagem de deploy/sandbox.Dockerfile (sudo bash /opt/super-factory/deploy/construir-sandbox.sh), que já libera o pip.'
+  }
+  const achou = /(?:bash|sh): (?:line \d+: )?([A-Za-z0-9_.+-]{1,40}): (?:command )?not found/.exec(texto)
+  if (!achou && execucao.codigo !== 127) return null
+  const ferramenta = achou?.[1] ?? 'um comando'
+  const extra = /^(ffmpeg|ffprobe)$/.test(ferramenta) ? ' Para ffmpeg, rode o script com --com-ffmpeg.' : ''
+  return `A imagem do sandbox não tem "${ferramenta}". Isso é do ambiente, não do card: o operador constrói a imagem com Python e git (sudo bash /opt/super-factory/deploy/construir-sandbox.sh) e aponta SUPER_FACTORY_SANDBOX_IMAGE para ela.${extra}`
 }
 
 function rabo(execucao: Execucao, linhas = 30): string {
@@ -140,7 +161,7 @@ function checkDoSandbox(execucao: Execucao | null, verificacao: Verificacao): Es
     nome: 'testes-no-sandbox',
     resultado,
     comando: execucao.comando,
-    evidencia: `Observado no sandbox: ${status}, ${execucao.ms} ms.\n${rabo(execucao)}`.slice(0, 3000),
+    evidencia: `Observado no sandbox: ${status}, ${execucao.ms} ms.\n${resultado === 'FAIL' && dicaDoSandbox(execucao) ? `${dicaDoSandbox(execucao)}\n` : ''}${rabo(execucao)}`.slice(0, 3000),
   }
 }
 
@@ -235,7 +256,7 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       if (verificacao.instalar) {
         const instalacao = await executor.executar(verificacao.instalar, { timeoutMs: 15 * 60_000 })
         estado = anotarAuto(estado, 'implementation', `Dependências: ${verificacao.instalar} → código ${instalacao.codigo}.`)
-        if (instalacao.codigo !== 0) return { ...contexto, verificacao, estado: parar(estado, `A instalação falhou: ${rabo(instalacao, 5)}`) }
+        if (instalacao.codigo !== 0) return { ...contexto, verificacao, estado: parar(estado, `A instalação falhou: ${rabo(instalacao, 5)}${dicaDoSandbox(instalacao) ? ` ${dicaDoSandbox(instalacao)}` : ''}`) }
       }
       return { ...contexto, estado, verificacao }
     },

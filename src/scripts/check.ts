@@ -2595,6 +2595,55 @@ assert.equal(
   (await descobrirVerificacao(criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'package.json\npnpm-lock.yaml' } : c === 'cat package.json' ? { saida: '{"scripts":{"check":"tsc"}}' } : {})))).verificar,
   'pnpm run check',
 )
+// --- Python no sandbox: unittest por padrão, pytest quando o projeto declara; falta de ferramenta vira dica ao operador
+{
+  const { dicaDoSandbox } = await import('../factory/autonomo.ts')
+  const python = (arquivos: string, sinaisDePytest: string) => criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: arquivos } : c.includes("grep -qiE 'pytest'") ? { saida: sinaisDePytest } : {}))
+  const unit = await descobrirVerificacao(python('.\n..\nrequirements.txt\nclipper\ntests', ''))
+  assert.equal(unit.instalar, 'pip install -r requirements.txt')
+  assert.equal(unit.verificar, 'python -m unittest discover', 'sem sinal de pytest, vale o unittest (o caso do Clipper)')
+  assert.equal(unit.origem, 'Python (unittest)')
+  assert.equal((await descobrirVerificacao(python('pyproject.toml\nsrc', 'pytest'))).verificar, 'python -m pytest -q', 'projeto que declara pytest usa pytest')
+  assert.equal((await descobrirVerificacao(python('pyproject.toml\nsrc', ''))).instalar, 'pip install -e .')
+  const exec = (codigo: number, erro: string, saida = '') => ({ comando: 'x', codigo, saida, erro, ms: 1, estourou: false })
+  assert.match(dicaDoSandbox(exec(127, 'bash: line 1: pip: command not found')) ?? '', /não tem "pip".*construir-sandbox\.sh.*SUPER_FACTORY_SANDBOX_IMAGE/s)
+  assert.match(dicaDoSandbox(exec(127, '/bin/bash: line 1: ffmpeg: command not found')) ?? '', /--com-ffmpeg/)
+  assert.match(dicaDoSandbox(exec(1, 'error: externally-managed-environment\n× This environment is externally managed')) ?? '', /PEP 668.*sandbox\.Dockerfile/s)
+  assert.match(dicaDoSandbox(exec(127, '')) ?? '', /não tem "um comando"/, 'código 127 sem nome também avisa')
+  assert.equal(dicaDoSandbox(exec(1, 'FAILED tests/test_a.py::test_x - AssertionError')), null, 'teste que falhou não é problema de imagem')
+  assert.equal(dicaDoSandbox(exec(0, '')), null)
+  // o card para com o motivo certo quando a imagem não tem pip, em vez de só "command not found"
+  const semPip = await executarAutonomo(pedidoAuto, {
+    criarExecutor: async () => criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'requirements.txt\ntests' } : c.startsWith('pip install') ? { codigo: 127, erro: 'bash: line 1: pip: command not found' } : undefined)),
+    implementador: async () => ({ resumo: 'não deveria rodar' }),
+    credenciais: { githubToken: TOKEN_TESTE },
+    github: githubFalso().deps,
+  })
+  assert.equal(semPip.estado.parado, true)
+  assert.match(semPip.estado.motivo ?? '', /A instalação falhou.*não tem "pip".*construir-sandbox\.sh/s, 'o motivo diz que a imagem é que precisa de Python')
+  // teste que falha por falta de ferramenta: a evidência traz a dica antes do rabo da saída
+  const semFfmpeg = await executarAutonomo(pedidoAuto, {
+    criarExecutor: async () => criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'requirements.txt' } : c.includes('grep -qiE') ? { saida: '' } : c === 'python -m unittest discover' ? { codigo: 127, erro: 'bash: line 1: ffmpeg: command not found' } : undefined)),
+    implementador: async () => ({ resumo: 'ok' }),
+    credenciais: { githubToken: TOKEN_TESTE },
+    github: githubFalso().deps,
+  })
+  const checkFalho = semFfmpeg.estado.checks.find((item) => item.nome === 'testes-no-sandbox')
+  assert.equal(checkFalho?.resultado, 'FAIL')
+  assert.match(checkFalho?.evidencia ?? '', /não tem "ffmpeg".*--com-ffmpeg/s)
+
+  // a imagem e o script: o que o operador roda na VPS
+  const raizDeploy = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'deploy')
+  const dockerfile = fs.readFileSync(path.join(raizDeploy, 'sandbox.Dockerfile'), 'utf8')
+  for (const trecho of ['FROM node:22-bookworm', 'python3-pip', 'python3-venv', 'python-is-python3', 'PIP_BREAK_SYSTEM_PACKAGES=1', 'ARG COM_FFMPEG=0']) assert.ok(dockerfile.includes(trecho), `sandbox.Dockerfile tem ${trecho}`)
+  assert.ok(!/ffmpeg/.test(dockerfile.replace(/COM_FFMPEG|ffmpeg; fi/g, '')) || dockerfile.includes('COM_FFMPEG" = "1"'), 'FFmpeg só entra sob a opção')
+  const script = fs.readFileSync(path.join(raizDeploy, 'construir-sandbox.sh'), 'utf8')
+  const { spawnSync } = await import('node:child_process')
+  assert.equal(spawnSync('bash', ['-n', path.join(raizDeploy, 'construir-sandbox.sh')]).status, 0, 'o script tem sintaxe válida')
+  for (const trecho of ['set -euo pipefail', '--com-ffmpeg', 'SUPER_FACTORY_SANDBOX_IMAGE', 'cp -p .env', 'docker compose -f "$COMPOSE" up -d --force-recreate', 'python3 --version', 'pip --version']) assert.ok(script.includes(trecho), `construir-sandbox.sh tem ${trecho}`)
+  for (const perigo of ['docker system prune', 'docker rm ', 'docker stop', 'compose down', 'docker volume', 'rm -rf']) assert.ok(!script.includes(perigo), `construir-sandbox.sh não faz ${perigo}: não toca nos outros projetos da VPS`)
+  assert.ok(!/(TOKEN|SECRET|PASSWORD|SENHA)\w*=/.test(script.replace(/SUPER_FACTORY_SANDBOX_IMAGE=/g, '')), 'o script não lida com segredo')
+}
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(
