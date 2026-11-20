@@ -282,6 +282,13 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
     .video-quadro { margin: 0 auto; max-width: 1120px; aspect-ratio: 16 / 9; border-radius: 28px; overflow: hidden; border: 1.5px solid var(--line-2); background: #050505; transition: opacity .7s cubic-bezier(.4,0,.2,1), transform .7s cubic-bezier(.4,0,.2,1); }
     .video-quadro.espera { opacity: 0; transform: translateY(18px); }
     .video-quadro video { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .video-quadro { position: relative; }
+    .som { position: absolute; right: 16px; bottom: 16px; z-index: 2; display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px 9px 13px; border-radius: 999px; border: 1px solid rgba(255,255,255,.32); background: rgba(8,8,8,.62); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: #f4f4f2; font: 500 13px/1 var(--mono); letter-spacing: .02em; cursor: pointer; transition: background .15s, border-color .15s; }
+    .som:hover { background: rgba(8,8,8,.82); border-color: rgba(255,255,255,.55); }
+    .som:focus-visible { outline: 2px solid #f4f4f2; outline-offset: 3px; }
+    .som svg { width: 18px; height: 18px; flex: none; }
+    .som .on { display: none; } .som[aria-pressed="true"] .on { display: block; } .som[aria-pressed="true"] .off { display: none; }
+    .som[hidden] { display: none; }
     .video-legenda { margin: 14px 0 0; text-align: center; font-family: var(--mono); font-size: 13px; letter-spacing: .04em; color: var(--muted); }
     /* guia */
     .guia-alvo { position: relative; z-index: 40; outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 28px; }
@@ -429,21 +436,42 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
 
     <div class="wrap video-apresentacao" id="apresentacao">
       <figure class="video-quadro" id="video-quadro" style="margin-left:auto;margin-right:auto">
-        <video id="video-hero" muted playsinline loop preload="metadata" poster="/motion/super-factory-hero.jpg" aria-label="Apresentação da Super Factory, 45 segundos, em inglês, sem som">
+        <video id="video-hero" muted playsinline loop preload="metadata" poster="/motion/super-factory-hero.jpg" aria-label="Apresentação da Super Factory, 45 segundos, em inglês">
           <source src="/motion/super-factory-hero.mp4" type="video/mp4">
         </video>
+        <button type="button" class="som" id="video-som" aria-pressed="false" aria-label="Ativar o som do vídeo" data-ligar="Ativar o som do vídeo" data-desligar="Desligar o som do vídeo"><svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6M21 9l-5 6"/></svg><svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg><span class="som-texto" data-ligar="Ativar som" data-desligar="Som ligado">Ativar som</span></button>
       </figure>
       <p class="video-legenda">Do card ao pull request, com o merge nas mãos de uma pessoa.</p>
     </div>
     <script>
     (function () {
-      var quadro = document.getElementById('video-quadro'), video = document.getElementById('video-hero')
+      var quadro = document.getElementById('video-quadro'), video = document.getElementById('video-hero'), som = document.getElementById('video-som')
       if (!quadro || !video) return
       var reduz = false
       try { reduz = matchMedia('(prefers-reduced-motion: reduce)').matches } catch (e) {}
-      if (reduz) { quadro.classList.remove('espera'); video.loop = false; video.controls = true; return }
+      // Quem pede menos movimento recebe os controles nativos do navegador, que já têm o volume.
+      if (reduz) { quadro.classList.remove('espera'); video.loop = false; video.controls = true; if (som) som.hidden = true; return }
       quadro.classList.add('espera')
-      setTimeout(function () { quadro.classList.remove('espera'); video.play().catch(function () {}) }, 3000)
+      function iniciar() { quadro.classList.remove('espera'); video.play().catch(function () {}) }
+      var espera = setTimeout(iniciar, 3000)
+      // O navegador só toca com som depois de um gesto da pessoa: o vídeo começa mudo e este botão liga o som.
+      function rotulos() {
+        if (!som) return
+        var ligado = !video.muted
+        som.setAttribute('aria-pressed', ligado ? 'true' : 'false')
+        var chave = ligado ? 'desligar' : 'ligar'
+        som.setAttribute('aria-label', som.getAttribute('data-' + chave))
+        var texto = som.querySelector('.som-texto')
+        if (texto) texto.textContent = texto.getAttribute('data-' + (ligado ? 'desligar' : 'ligar'))
+      }
+      if (som) som.addEventListener('click', function () {
+        clearTimeout(espera)
+        video.muted = !video.muted
+        if (!video.muted) video.volume = 1
+        if (video.paused) iniciar()
+        rotulos()
+      })
+      video.addEventListener('volumechange', rotulos)
     })()
     </script>
 

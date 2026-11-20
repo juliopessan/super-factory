@@ -881,6 +881,24 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.equal(SCRIPT_SUGESTOES.includes('.innerText'), false, 'lê o texto da mensagem por textContent: innerText vem vazio quando o Studio adia o desenho (falhou só no build de produção)')
 }
 
+// --- Vídeo da landing: tem faixa de áudio e a página oferece ligar o som (já ficou mudo por esquecimento)
+{
+  const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+  for (const arquivo of ['src/super-factory/public/super-factory-hero.mp4', 'docs/motion/super-factory-hero.mp4']) {
+    const bytes = fs.readFileSync(path.join(raiz, arquivo))
+    // Cada faixa de um MP4 declara o tipo no átomo "hdlr": "vide" para imagem, "soun" para som.
+    assert.ok(bytes.includes('vide') && bytes.includes('soun'), `${arquivo} tem faixa de vídeo e de áudio`)
+  }
+  const { paginaInicial } = await import('../super-factory/landing.ts')
+  for (const [idioma, ligar, ligado] of [['pt', 'Ativar som', 'Som ligado'], ['en', 'Turn sound on', 'Sound on']] as const) {
+    const html = paginaInicial(idioma)
+    assert.ok(html.includes('id="video-som"') && html.includes('aria-pressed="false"'), `${idioma}: o botão de som existe`)
+    assert.ok(html.includes(`data-ligar="${ligar}"`) && html.includes(`data-desligar="${ligado}"`), `${idioma}: os rótulos do botão estão no idioma da página`)
+    assert.ok(!/sem som|no sound/i.test(html), `${idioma}: a página não diz mais que o vídeo é sem som`)
+    assert.ok(/<video id="video-hero" muted/.test(html), `${idioma}: o vídeo continua começando mudo (o navegador bloqueia autoplay com som)`)
+  }
+}
+
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
 {
   const { AMOSTRAS, CONVERSAS, PADROES, SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
