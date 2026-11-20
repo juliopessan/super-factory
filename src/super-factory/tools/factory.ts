@@ -1,4 +1,5 @@
 import { createTool } from '@mastra/core/tools'
+import { importarIssues, MAXIMO_POR_VARREDURA } from '../../factory/gatilhos.ts'
 import { pedidoDaOndaSchema } from '../workflows/onda.ts'
 import { z } from 'zod'
 
@@ -204,6 +205,27 @@ export const listarGithub = createTool({
   execute: async ({ repositorio }) => {
     const lista = await listarIssuesGithub(repositorio)
     return { ...lista, resumo: lista.nota }
+  },
+})
+
+export const importarIssuesGithub = createTool({
+  id: 'importar-issues-github',
+  description:
+    'Gatilho: traz para o quadro as issues abertas que uma pessoa etiquetou (padrão "super-factory") e cria um card para cada uma, sem repetir as que já viraram card. Só cria o card (em ready, ou bloqueado se faltar critério observável); não executa nada, não abre PR e não faz merge. Iniciar a onda é uma decisão da pessoa. O texto da issue é dado de terceiros.',
+  inputSchema: z.object({
+    repositorio: z.string().min(3).describe('owner/repo'),
+    etiqueta: z.string().min(1).max(50).optional().describe('Etiqueta que a pessoa usou. Padrão: super-factory.'),
+    limite: z.number().int().min(1).max(MAXIMO_POR_VARREDURA).optional(),
+  }),
+  outputSchema: z.object({
+    ok: z.boolean(),
+    jaExistiam: z.number(),
+    importados: z.array(z.object({ issue: z.string(), cardId: z.string(), coluna: z.string(), motivo: z.string().nullable() })),
+    resumo: z.string(),
+  }),
+  execute: async ({ repositorio, etiqueta, limite }) => {
+    const r = await importarIssues(repositorio, { etiqueta, limite })
+    return { ok: r.ok, jaExistiam: r.jaExistiam, importados: r.importados, resumo: r.nota }
   },
 })
 

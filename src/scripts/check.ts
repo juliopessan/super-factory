@@ -683,6 +683,54 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   await assert.rejects(() => implementar({ ...contexto, executor: quebrado } as Parameters<typeof implementar>[0]), /Não consegui gravar o pedido/)
 }
 
+// --- Gatilho de issues: só o que uma pessoa etiquetou vira card, sem duplicar, sem rodar nada
+{
+  const { importarIssues, criteriosDoCorpo, chaveDaIssue } = await import('../factory/gatilhos.ts')
+  const { lerEstado } = await import('../factory/store.ts')
+  assert.deepEqual(
+    criteriosDoCorpo('Texto\n\n## Critérios de aceite\n- [ ] O endpoint devolve 400 quando o fim vem antes do início.\n- O filtro aplica hora e minuto.\n\n## Notas\n- não é critério'),
+    ['O endpoint devolve 400 quando o fim vem antes do início.', 'O filtro aplica hora e minuto.'],
+    'lê a seção de critérios e para no próximo título',
+  )
+  assert.deepEqual(criteriosDoCorpo('Resumo\n- [ ] Mostrar o total na tela de pedidos.\n- [x] Já feito: cobrir com teste.'), ['Mostrar o total na tela de pedidos.', 'Já feito: cobrir com teste.'], 'sem seção, vale a lista de tarefas')
+  assert.deepEqual(criteriosDoCorpo('só texto, sem lista'), [])
+  const urls: string[] = []
+  const issues = [
+    { number: 501, title: 'Filtro de datas só com dia', body: 'O filtro de pedidos falha quando a data vem sem hora.\n\n## Critérios\n- O endpoint devolve 400 quando o fim do intervalo é anterior ao início.\n\nchamar @dono-do-repo', html_url: 'https://github.com/acme/pedidos/issues/501', user: { login: 'maria' } },
+    { number: 502, title: 'Melhorar a tela', body: 'Está feio.', html_url: 'https://github.com/acme/pedidos/issues/502', user: { login: 'joao' } },
+    { number: 503, title: 'PR disfarçado', body: 'x', pull_request: {}, user: { login: 'z' } },
+    { number: 504, title: 'Vaza chave', body: `Usei ${'ghp_' + 'a'.repeat(36)} no teste.\n- [ ] O endpoint devolve 200 com o token revogado.`, html_url: 'https://github.com/acme/pedidos/issues/504', user: { login: 'ana' } },
+  ]
+  const fetchFalso = (async (url: string) => {
+    urls.push(String(url))
+    return new Response(JSON.stringify(issues), { status: 200 })
+  }) as unknown as typeof fetch
+  const antes = lerEstado().cards.length
+  const sem = await importarIssues('acme/pedidos', {}, { token: '', fetch: fetchFalso })
+  assert.equal(sem.ok, false, 'sem token nada é importado')
+  assert.equal(lerEstado().cards.length, antes, 'sem token não cria card')
+  const ruim = await importarIssues('acme/pedidos', { etiqueta: 'x&per_page=100' }, { token: 'tk', fetch: fetchFalso })
+  assert.equal(ruim.ok, false, 'etiqueta com caracteres de consulta é recusada')
+  const r = await importarIssues('acme/pedidos', {}, { token: 'tk', fetch: fetchFalso })
+  assert.equal(r.ok, true)
+  assert.ok(urls[0]?.includes('labels=super-factory') && urls[0].includes('state=open'), 'só pede as issues com a etiqueta')
+  assert.equal(r.importados.length, 3, 'a issue que é pull request fica de fora')
+  const cartoes = lerEstado().cards
+  const c1 = cartoes.find((c) => c.itemExterno === chaveDaIssue('acme/pedidos', 501))
+  const c2 = cartoes.find((c) => c.itemExterno === chaveDaIssue('acme/pedidos', 502))
+  const c4 = cartoes.find((c) => c.itemExterno === chaveDaIssue('acme/pedidos', 504))
+  assert.equal(c1?.coluna, 'ready', 'issue com critério observável vai para ready')
+  assert.equal(c2?.coluna, 'blocked', 'issue sem critério fica bloqueada, com o motivo')
+  assert.ok(c4 && !JSON.stringify(c4).includes('ghp_'), 'segredo da issue é redigido no card')
+  assert.ok(!c1?.descricao.includes('@dono-do-repo') && c1?.descricao.includes('texto de terceiros'), 'menção é neutralizada e a origem fica marcada')
+  assert.equal(c1?.onda, null, 'importar não inicia onda')
+  assert.equal(Object.values(lerEstado().runs).some((run) => run.card.id === c1?.id && run.estagio !== 'triage'), false, 'o gatilho só triou: nada rodou')
+  const de_novo = await importarIssues('acme/pedidos', {}, { token: 'tk', fetch: fetchFalso })
+  assert.equal(de_novo.importados.length, 0, 'a mesma issue não vira dois cards')
+  assert.equal(de_novo.jaExistiam, 3)
+  assert.equal(lerEstado().cards.length, antes + 3)
+}
+
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
 {
   const { AMOSTRAS, CONVERSAS, PADROES, SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
