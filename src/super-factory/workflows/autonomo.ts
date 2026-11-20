@@ -15,14 +15,17 @@ import { parar } from '../../factory/pipeline.ts'
 import { criarExecutorDocker } from '../../factory/sandbox.ts'
 import { estadoSchema, pedidoSchema } from '../../factory/schemas.ts'
 import { persistir } from '../../factory/store.ts'
+import { implementadorDeComando, lerConfigDoImplementador } from '../../factory/implementadores.ts'
 import { implementadorComAgente } from '../agents/construtor.ts'
 import { depsDeEnsaio } from './ensaio.ts'
 
 /** Dependências de verdade: Docker local, agente construtor e credenciais do ambiente. */
 export function depsDoAmbiente(): DepsAutonomo {
+  // Config inválida lança aqui, com a mensagem do que corrigir no .env: o card não roda com o implementador errado.
+  const config = lerConfigDoImplementador()
   return {
     criarExecutor: (cardId) => criarExecutorDocker({ cardId }),
-    implementador: implementadorComAgente,
+    implementador: config.id === 'comando' ? implementadorDeComando(config) : implementadorComAgente,
     credenciais: {
       githubToken: process.env.GITHUB_TOKEN,
       azureOrg: process.env.AZURE_DEVOPS_ORG,

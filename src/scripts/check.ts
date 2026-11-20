@@ -633,6 +633,56 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.doesNotThrow(() => new Function(script), 'o script da página tem sintaxe válida')
 }
 
+// --- Implementador neutro: o operador escolhe pelo .env; o pedido vai por arquivo e as chaves de escrita nunca saem
+{
+  const { lerConfigDoImplementador, implementadorDeComando, pedidoEmTexto, ARQUIVO_DO_PEDIDO } = await import('../factory/implementadores.ts')
+  const { criarExecutorFalso } = await import('../factory/sandbox.ts')
+  assert.deepEqual(lerConfigDoImplementador({}), { id: 'agente', comando: null, envEncaminhado: [] }, 'sem configuração, vale o agente construtor')
+  assert.throws(() => lerConfigDoImplementador({ SUPER_FACTORY_IMPLEMENTADOR: 'outro' }), /não existe/, 'id desconhecido não cai no padrão em silêncio')
+  assert.throws(() => lerConfigDoImplementador({ SUPER_FACTORY_IMPLEMENTADOR: 'comando' }), /pede o comando/)
+  assert.throws(() => lerConfigDoImplementador({ SUPER_FACTORY_IMPLEMENTADOR: 'comando', SUPER_FACTORY_IMPLEMENTADOR_COMANDO: 'a\nb' }), /uma linha/)
+  for (const proibida of ['GITHUB_TOKEN', 'AZURE_DEVOPS_PAT', 'SUPER_FACTORY_MASTER', 'FACTORY_GIT_AUTH']) {
+    assert.throws(
+      () => lerConfigDoImplementador({ SUPER_FACTORY_IMPLEMENTADOR: 'comando', SUPER_FACTORY_IMPLEMENTADOR_COMANDO: 'x', SUPER_FACTORY_IMPLEMENTADOR_ENV: proibida, [proibida]: 'valor-secreto' }),
+      /não pode ir para o container/,
+      `${proibida} não vai para o implementador externo`,
+    )
+  }
+  assert.throws(() => lerConfigDoImplementador({ SUPER_FACTORY_IMPLEMENTADOR: 'comando', SUPER_FACTORY_IMPLEMENTADOR_COMANDO: 'x', SUPER_FACTORY_IMPLEMENTADOR_ENV: 'MINHA_CHAVE' }), /não está definida/)
+  assert.throws(() => lerConfigDoImplementador({ SUPER_FACTORY_IMPLEMENTADOR: 'comando', SUPER_FACTORY_IMPLEMENTADOR_COMANDO: 'x', SUPER_FACTORY_IMPLEMENTADOR_ENV: 'minha chave' }), /nome de variável válido/)
+  const env = { SUPER_FACTORY_IMPLEMENTADOR: 'comando', SUPER_FACTORY_IMPLEMENTADOR_COMANDO: 'meu-agente --pedido "$SF_PEDIDO"', SUPER_FACTORY_IMPLEMENTADOR_ENV: 'MINHA_CHAVE', MINHA_CHAVE: 'chave-do-agente-123456' }
+  const config = lerConfigDoImplementador(env)
+  assert.deepEqual(config.envEncaminhado, ['MINHA_CHAVE'])
+  const executor = criarExecutorFalso(
+    (comando) => (comando.startsWith('meu-agente') ? { codigo: 0, saida: 'Mudei src/api.ts. A chave chave-do-agente-123456 apareceu na saída.' } : undefined),
+  )
+  const implementar = implementadorDeComando(config, env)
+  const hostil = "Título'; rm -rf / #"
+  const contexto = {
+    estado: { card: { id: 'C-9', titulo: hostil, descricao: 'Faça X $(whoami)', criterios: ['O endpoint devolve 400.'] } },
+    executor,
+    verificacao: { verificar: 'npm test', instalar: null, origem: 'package.json' },
+    tentativa: 2,
+    falhaAnterior: { codigo: 1, saida: 'falhou', erro: '', comando: 'npm test', ms: 1, estourou: false },
+  } as unknown as Parameters<typeof implementar>[0]
+  const resultado = await implementar(contexto)
+  assert.equal(executor.comandos.length, 2, 'um comando grava o pedido e outro roda o agente externo')
+  assert.ok(executor.comandos[0]?.includes(ARQUIVO_DO_PEDIDO) && executor.comandos[0].includes('base64 -d'), 'o pedido vai por arquivo, em base64')
+  assert.ok(!executor.comandos[0]?.includes('rm -rf') && !executor.comandos[0]?.includes('whoami'), 'texto do card nunca aparece no comando de shell')
+  assert.equal(executor.comandos[1], 'meu-agente --pedido "$SF_PEDIDO"')
+  assert.equal(executor.envs[1]?.SF_PEDIDO, ARQUIVO_DO_PEDIDO)
+  assert.equal(executor.envs[1]?.MINHA_CHAVE, 'chave-do-agente-123456', 'só a variável pedida vai para o container')
+  assert.ok(!('GITHUB_TOKEN' in (executor.envs[1] ?? {})))
+  assert.ok(!resultado.resumo.includes('chave-do-agente-123456'), 'a chave não aparece no resumo')
+  assert.match(resultado.resumo, /Comando externo \(código 0\)/)
+  assert.equal((resultado as { uso?: unknown }).uso, undefined, 'o gasto do agente externo não é medido')
+  const texto = pedidoEmTexto(contexto)
+  assert.ok(texto.includes(hostil) && texto.includes('O endpoint devolve 400.') && texto.includes('Tentativa 2') && texto.includes('falhou'), 'o arquivo traz o card e a falha anterior')
+  assert.match(texto, /Não faça commit, push, merge nem deploy/)
+  const quebrado = criarExecutorFalso((c) => (c.startsWith('printf') ? { codigo: 1, erro: 'disco cheio' } : undefined))
+  await assert.rejects(() => implementar({ ...contexto, executor: quebrado } as Parameters<typeof implementar>[0]), /Não consegui gravar o pedido/)
+}
+
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
 {
   const { AMOSTRAS, CONVERSAS, PADROES, SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
