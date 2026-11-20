@@ -288,6 +288,12 @@ O instalador antigo põe um login básico do Traefik na frente de tudo, o que es
 
 Por que GitHub e não Composio: o Composio guarda credenciais de agentes em apps de terceiros (agir no GitHub ou no Gmail em nome de alguém); não é um provedor de login do seu produto. Para empresas que não usam GitHub, o próximo provedor natural é Microsoft Entra ou Google.
 
+## Gatilho de issues
+
+No chat do Chief: "importe as issues etiquetadas de acme/pedidos". A ferramenta `importarIssuesGithub` traz as issues abertas com a etiqueta `super-factory` (ou outra, se você pedir) e cria um card para cada uma, sem repetir as que já viraram card. Os critérios saem da seção "Critérios" da issue ou da lista de tarefas (`- [ ] ...`); sem critério observável o card nasce **bloqueado**, com o motivo, e uma pessoa completa.
+
+Duas travas de segurança: só entra issue **etiquetada** (etiquetar exige permissão de triagem no repositório: é a decisão da pessoa; quem só abriu a issue não faz a Factory trabalhar), e importar **só cria o card**. Iniciar a onda continua sendo um pedido seu, porque o texto da issue é dado de terceiros. Segredo na issue é redigido, @menção é neutralizada e a origem fica marcada no card. Precisa de `GITHUB_TOKEN`; sem ele nada é importado. A varredura é sob demanda (até 10 issues por vez): ainda não há agendamento automático.
+
 ## Quadro no Studio
 
 Na tela **Agents** do Studio, logo abaixo do desenho do time, aparece o **Quadro**: as sete colunas (backlog, pronto, construindo, QA, revisão, bloqueado, concluído) com os cards, a onda, o desfecho e o link do pull request. Card de um épico em pilha mostra "sobre C-1". A tela atualiza sozinha a cada 8 s e também abre em tela cheia em `/quadro`. É somente leitura (`GET /factory/quadro`) e fica atrás do mesmo login do Studio.
