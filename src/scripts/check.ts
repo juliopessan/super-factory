@@ -573,9 +573,9 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
     { ...base, id: 'C-3', titulo: 'Preso', coluna: 'blocked', branchBase: 'main', branchHead: null, onda: 1 },
   ] as unknown as Parameters<typeof montarQuadro>[0]
   const runs = {
-    r1: { runId: 'r1', card: cards[0], desfecho: 'aceito-com-ressalvas', atualizadoEm: '2026-01-01T00:00:00Z', entrega: { pullRequestUrl: 'https://github.com/acme/x/pull/1' } },
-    r0: { runId: 'r0', card: cards[0], desfecho: 'bloqueado', atualizadoEm: '2025-01-01T00:00:00Z', entrega: { pullRequestUrl: 'https://velho' } },
-    r2: { runId: 'r2', card: cards[1], desfecho: 'em-andamento', atualizadoEm: '2026-01-02T00:00:00Z', entrega: { pullRequestUrl: 'javascript:alert(1)' } },
+    r1: { runId: 'r1', card: cards[0], desfecho: 'aceito-com-ressalvas', atualizadoEm: '2026-01-01T00:00:00Z', checks: [], trilha: [], entrega: { pullRequestUrl: 'https://github.com/acme/x/pull/1' } },
+    r0: { runId: 'r0', card: cards[0], desfecho: 'bloqueado', atualizadoEm: '2025-01-01T00:00:00Z', checks: [], trilha: [], entrega: { pullRequestUrl: 'https://velho' } },
+    r2: { runId: 'r2', card: cards[1], desfecho: 'em-andamento', atualizadoEm: '2026-01-02T00:00:00Z', checks: [], trilha: [], entrega: { pullRequestUrl: 'javascript:alert(1)' } },
   } as unknown as Parameters<typeof montarQuadro>[1]
   const q = montarQuadro(cards, runs)
   assert.deepEqual(q.colunas.map((c) => c.coluna), [...COLUNAS], 'as sete colunas, na ordem do fluxo')
@@ -586,6 +586,41 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.equal(achar('C-2')?.pullRequest, null, 'endereço que não é https não vira link')
   assert.equal(q.total, 3)
   assert.match(q.resumo, /1 em andamento, 1 concluído\(s\), 1 bloqueado\(s\)/)
+  assert.equal(q.metricas.execucoes, 3)
+  assert.equal(q.metricas.pullRequests, 0, 'sem entrega ok, ninguém conta como PR aberto')
+  {
+    const { calcularMetricas } = await import('../factory/metricas.ts')
+    const ev = (em: string) => ({ sequencia: 1, runId: 'x', em, estagio: 'delivery', tipo: 'observed', resumo: 'r', ator: 'a' })
+    const entregue = (id: string, fim: string, uso?: { entrada: number; saida: number }) => ({
+      runId: id,
+      card: cards[0],
+      desfecho: 'aceito-com-ressalvas',
+      atualizadoEm: fim,
+      trilha: [ev('2026-01-01T10:00:00Z'), ev(fim)],
+      checks: [{ nome: 'testes-no-sandbox', resultado: 'PASS', comando: 'npm test', evidencia: 'saiu com código 0' }],
+      entrega: { ok: true, pullRequestUrl: 'https://github.com/a/b/pull/1' },
+      uso,
+    })
+    const m = calcularMetricas(
+      {
+        a: entregue('a', '2026-01-01T10:10:00Z', { entrada: 1000, saida: 200 }),
+        b: entregue('b', '2026-01-01T10:30:00Z', { entrada: 3000, saida: 800 }),
+        c: { runId: 'c', card: cards[2], desfecho: 'bloqueado', atualizadoEm: '2026-01-01T10:00:00Z', trilha: [], checks: [], entrega: null },
+      } as unknown as Parameters<typeof calcularMetricas>[0],
+      Date.parse('2026-01-02T00:00:00Z'),
+    )
+    assert.equal(m.execucoes, 3)
+    assert.equal(m.pullRequests, 2)
+    assert.equal(m.taxaDeEntrega, 0.67)
+    assert.equal(m.tempoMedianoMin, 20, 'mediana de 10 e 30 minutos')
+    assert.equal(m.bloqueadas, 1)
+    assert.equal(m.testesVerdes, 2)
+    assert.deepEqual(m.tokens, { entrada: 4000, saida: 1000, porCard: 2500 })
+    assert.equal(m.ultimos7Dias, 3)
+    const vazio = calcularMetricas({})
+    assert.equal(vazio.taxaDeEntrega, null)
+    assert.equal(vazio.tokens.porCard, null, 'sem uso registrado, o custo aparece como não medido')
+  }
   assert.equal(tratarQuadro(new Request('http://x/factory/quadro', { method: 'POST' })).status, 405, 'o quadro é somente leitura')
   const pagina = paginaQuadro({ embed: true, tema: 'dark' })
   const csp = pagina.headers.get('content-security-policy') ?? ''
@@ -2248,6 +2283,16 @@ function githubFalso() {
   assert.doesNotMatch(String(gh2.chamadas[0]?.corpo.body), /em pilha/, 'sem pai, o corpo não fala de pilha')
 }
 {
+  // Tokens do construtor somam entre as tentativas e ficam no estado
+  const comUso = await executarAutonomo(pedidoAuto, {
+    criarExecutor: async () => criarExecutorFalso(roteiroNode({ teste: [1, 0] })),
+    implementador: async () => ({ resumo: 'tentativa', uso: { entrada: 100, saida: 40 } }),
+    credenciais: { githubToken: TOKEN_TESTE },
+    github: githubFalso().deps,
+  })
+  assert.deepEqual(comUso.estado.uso, { entrada: 200, saida: 80 }, 'duas tentativas somam o uso do modelo')
+  const semUso = await executarAutonomo(pedidoAuto, { criarExecutor: async () => criarExecutorFalso(roteiroNode()), implementador: async () => ({ resumo: 'ok' }), credenciais: { githubToken: TOKEN_TESTE }, github: githubFalso().deps })
+  assert.equal(semUso.estado.uso, undefined, 'sem medição, o campo não existe: não inventa zero')
   const executor = criarExecutorFalso(roteiroNode({ teste: [1, 1] }))
   const gh = githubFalso()
   const falhas: Array<number | null> = []

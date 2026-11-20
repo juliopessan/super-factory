@@ -28,7 +28,7 @@ export type Implementador = (contexto: {
   verificacao: Verificacao
   tentativa: number
   falhaAnterior: Execucao | null
-}) => Promise<{ resumo: string }>
+}) => Promise<{ resumo: string; uso?: { entrada: number; saida: number } }>
 
 export type DepsAutonomo = {
   criarExecutor: (cardId: string) => Promise<Executor>
@@ -252,8 +252,9 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       const tentativas = Math.max(1, deps.tentativas ?? 2)
       let teste: Execucao | null = null
       for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
-        const { resumo } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste })
+        const { resumo, uso } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste })
         estado = anotarAuto(estado, 'implementation', `Tentativa ${tentativa}: ${resumo}`, 'reported')
+        if (uso) estado = { ...estado, uso: { entrada: (estado.uso?.entrada ?? 0) + uso.entrada, saida: (estado.uso?.saida ?? 0) + uso.saida } }
         teste = verificacao.verificar ? await executor.executar(verificacao.verificar, { timeoutMs: 20 * 60_000 }) : null
         estado = anotarAuto(estado, 'verification', teste ? `${verificacao.verificar} → código ${teste.codigo}.` : 'Sem comando de teste no repositório.')
         if (!teste || teste.codigo === 0) break

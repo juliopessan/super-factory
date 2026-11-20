@@ -99,6 +99,8 @@ export const estadoSchema = z.object({
   evidencia: evidenciaSchema,
   trilha: z.array(trilhaSchema),
   relatorio: z.string(),
+  /** Tokens do modelo gastos pelo agente construtor neste card. Ausente em execuções antigas ou em ensaio. */
+  uso: z.object({ entrada: z.number(), saida: z.number() }).optional(),
   atualizadoEm: z.string(),
 })
 

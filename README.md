@@ -292,6 +292,8 @@ Por que GitHub e não Composio: o Composio guarda credenciais de agentes em apps
 
 Na tela **Agents** do Studio, logo abaixo do desenho do time, aparece o **Quadro**: as sete colunas (backlog, pronto, construindo, QA, revisão, bloqueado, concluído) com os cards, a onda, o desfecho e o link do pull request. Card de um épico em pilha mostra "sobre C-1". A tela atualiza sozinha a cada 8 s e também abre em tela cheia em `/quadro`. É somente leitura (`GET /factory/quadro`) e fica atrás do mesmo login do Studio.
 
+Acima das colunas fica a faixa de **métricas de entrega**, calculada do que a Factory já guarda: execuções (e as dos últimos 7 dias), pull requests abertos, parte das execuções que chega ao PR, tempo mediano até o PR e bloqueadas. O agente construtor também registra os **tokens** gastos (entrada e saída, somados entre as tentativas): a faixa mostra tokens por card, ou "não medido" quando não há registro (ensaio e execuções antigas). **Dinheiro não é calculado**: o preço depende do modelo e do contrato; use os tokens com a sua tabela.
+
 ## Revisão automática de pull request
 
 O agente **PR Review** (`reviewer`) lê o PR (título, corpo com os critérios e a evidência do sandbox, arquivos e trechos do diff) e deixa **uma revisão como comentário**: resumo, achados por severidade (com comentário na linha, quando a linha está no diff) e a situação de cada critério de aceite. Converse com ele no Studio ("revise o PR 12 de acme/app") ou peça na onda: `revisar: true` faz o revisor comentar em cada PR que a onda abrir.

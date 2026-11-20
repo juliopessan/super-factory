@@ -129,5 +129,8 @@ export const implementadorComAgente: Implementador = async ({ estado, executor, 
       : '',
   ].join('\n')
   const resposta = await construtor.generate(pedido, { requestContext: contexto, maxSteps: 60 })
-  return { resumo: resposta.text.slice(0, 1500) || 'O construtor terminou sem resumo.' }
+  const entrada = Number(resposta.usage?.inputTokens)
+  const saida = Number(resposta.usage?.outputTokens)
+  const uso = Number.isFinite(entrada) && Number.isFinite(saida) ? { entrada, saida } : undefined
+  return { resumo: resposta.text.slice(0, 1500) || 'O construtor terminou sem resumo.', uso }
 }
