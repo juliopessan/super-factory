@@ -288,6 +288,10 @@ O instalador antigo põe um login básico do Traefik na frente de tudo, o que es
 
 Por que GitHub e não Composio: o Composio guarda credenciais de agentes em apps de terceiros (agir no GitHub ou no Gmail em nome de alguém); não é um provedor de login do seu produto. Para empresas que não usam GitHub, o próximo provedor natural é Microsoft Entra ou Google.
 
+## Quadro no Studio
+
+Na tela **Agents** do Studio, logo abaixo do desenho do time, aparece o **Quadro**: as sete colunas (backlog, pronto, construindo, QA, revisão, bloqueado, concluído) com os cards, a onda, o desfecho e o link do pull request. Card de um épico em pilha mostra "sobre C-1". A tela atualiza sozinha a cada 8 s e também abre em tela cheia em `/quadro`. É somente leitura (`GET /factory/quadro`) e fica atrás do mesmo login do Studio.
+
 ## Revisão automática de pull request
 
 O agente **PR Review** (`reviewer`) lê o PR (título, corpo com os critérios e a evidência do sandbox, arquivos e trechos do diff) e deixa **uma revisão como comentário**: resumo, achados por severidade (com comentário na linha, quando a linha está no diff) e a situação de cada critério de aceite. Converse com ele no Studio ("revise o PR 12 de acme/app") ou peça na onda: `revisar: true` faz o revisor comentar em cada PR que a onda abrir.

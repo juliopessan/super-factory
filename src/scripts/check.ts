@@ -556,11 +556,46 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   await marcaSuperFactory(contexto, async () => {})
   const html = await contexto.res.text()
   const injetados = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? '')
-  assert.equal(injetados.length, 4, 'o Studio recebe quatro scripts: a marca, as sugestões, o time e o menu')
+  assert.equal(injetados.length, 5, 'o Studio recebe cinco scripts: a marca, as sugestões, o time, o quadro e o menu')
   for (const [i, codigo] of injetados.entries()) assert.doesNotThrow(() => new Function(codigo), `o script ${i + 1} injetado no Studio tem sintaxe válida`)
   assert.ok(injetados.some((codigo) => codigo.includes('popupDeChaves')), 'o script do Studio traz o botão de chaves')
   assert.ok(injetados.some((codigo) => codigo.includes('sf-sugestoes') && codigo.includes('Tab')), 'o script de sugestões com Tab está no Studio')
   assert.match(html, /<title>Super Factory<\/title>/)
+}
+
+// --- Quadro: dados do estado, pilha derivada da branch, endereço só https, página com CSP e somente leitura
+{
+  const { montarQuadro, paginaQuadro, tratarQuadro, COLUNAS } = await import('../super-factory/quadro.ts')
+  const base = { descricao: 'x', criterios: ['a'], rota: 'bug', grau: 'easy', provedor: 'github', repositorio: 'acme/x', itemExterno: null }
+  const cards = [
+    { ...base, id: 'C-1', titulo: 'Pai', coluna: 'done', branchBase: 'main', branchHead: 'factory/c-1-pai', onda: 1 },
+    { ...base, id: 'C-2', titulo: 'Filho', coluna: 'build', branchBase: 'factory/c-1-pai', branchHead: 'factory/c-2-filho', onda: 1 },
+    { ...base, id: 'C-3', titulo: 'Preso', coluna: 'blocked', branchBase: 'main', branchHead: null, onda: 1 },
+  ] as unknown as Parameters<typeof montarQuadro>[0]
+  const runs = {
+    r1: { runId: 'r1', card: cards[0], desfecho: 'aceito-com-ressalvas', atualizadoEm: '2026-01-01T00:00:00Z', entrega: { pullRequestUrl: 'https://github.com/acme/x/pull/1' } },
+    r0: { runId: 'r0', card: cards[0], desfecho: 'bloqueado', atualizadoEm: '2025-01-01T00:00:00Z', entrega: { pullRequestUrl: 'https://velho' } },
+    r2: { runId: 'r2', card: cards[1], desfecho: 'em-andamento', atualizadoEm: '2026-01-02T00:00:00Z', entrega: { pullRequestUrl: 'javascript:alert(1)' } },
+  } as unknown as Parameters<typeof montarQuadro>[1]
+  const q = montarQuadro(cards, runs)
+  assert.deepEqual(q.colunas.map((c) => c.coluna), [...COLUNAS], 'as sete colunas, na ordem do fluxo')
+  const achar = (id: string) => q.colunas.flatMap((c) => c.cards).find((c) => c.id === id)
+  assert.equal(achar('C-2')?.empilhadoSobre, 'C-1', 'o filho aparece empilhado sobre o pai')
+  assert.equal(achar('C-1')?.empilhadoSobre, null)
+  assert.equal(achar('C-1')?.pullRequest, 'https://github.com/acme/x/pull/1', 'vale a execução mais recente')
+  assert.equal(achar('C-2')?.pullRequest, null, 'endereço que não é https não vira link')
+  assert.equal(q.total, 3)
+  assert.match(q.resumo, /1 em andamento, 1 concluído\(s\), 1 bloqueado\(s\)/)
+  assert.equal(tratarQuadro(new Request('http://x/factory/quadro', { method: 'POST' })).status, 405, 'o quadro é somente leitura')
+  const pagina = paginaQuadro({ embed: true, tema: 'dark' })
+  const csp = pagina.headers.get('content-security-policy') ?? ''
+  assert.match(csp, /default-src 'none'/)
+  assert.match(csp, /frame-ancestors 'self'/)
+  const html = await pagina.text()
+  assert.ok(!html.includes('innerHTML'), 'a página monta tudo com textContent: título de card é dado de terceiros')
+  assert.ok(html.includes('data-embed="1"') && html.includes('data-tema="dark"'))
+  const script = html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)?.[1] ?? ''
+  assert.doesNotThrow(() => new Function(script), 'o script da página tem sintaxe válida')
 }
 
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
