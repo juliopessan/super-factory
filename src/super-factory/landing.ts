@@ -427,7 +427,7 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
 
     <div class="wrap video-apresentacao" id="apresentacao">
       <figure class="video-quadro" id="video-quadro" style="margin-left:auto;margin-right:auto">
-        <video id="video-hero" muted playsinline loop preload="metadata" poster="/motion/super-factory-hero.jpg" aria-label="Apresentação da Super Factory, 20 segundos, em inglês, sem som">
+        <video id="video-hero" muted playsinline loop preload="metadata" poster="/motion/super-factory-hero.jpg" aria-label="Apresentação da Super Factory, 45 segundos, em inglês, sem som">
           <source src="/motion/super-factory-hero.mp4" type="video/mp4">
         </video>
       </figure>
