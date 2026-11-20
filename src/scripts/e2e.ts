@@ -437,6 +437,12 @@ async function testarNavegador(): Promise<void> {
     conferir('time: no fim do ciclo todos os agentes estão acesos', (await visao.locator('#sf-time .no .ponto').evaluateAll((pontos: Element[]) => pontos.every((p: Element) => (p as SVGElement).style.fill !== ''))) === true)
     const abaixo = await visao.evaluate(() => (document.getElementById('sf-time')?.getBoundingClientRect().top ?? 0) > (document.querySelector('ul.grid a[href$="/threads/new"]')?.getBoundingClientRect().bottom ?? 99999))
     conferir('time: fica depois dos cartões, não no menu lateral', abaixo)
+    // Quadro: seção logo abaixo do time, com as sete colunas
+    await visao.locator('#sf-quadro iframe').waitFor({ timeout: 8000 })
+    const quadroFrame = visao.frameLocator('#sf-quadro iframe')
+    await quadroFrame.locator('.coluna').first().waitFor({ timeout: 8000 })
+    conferir('quadro: aparece na tela de agentes com as sete colunas', (await quadroFrame.locator('.coluna').count()) === 7)
+    conferir('quadro: fica depois do time', await visao.evaluate(() => document.getElementById('sf-quadro')?.previousElementSibling?.id === 'sf-time'))
     await visao.getByRole('button', { name: 'List view' }).click()
     await visao.locator('#sf-time').waitFor({ timeout: 8000 })
     conferir('time: também aparece na visão em lista', await visao.locator('#sf-time').isVisible())
@@ -447,6 +453,7 @@ async function testarNavegador(): Promise<void> {
     await visao.goto(BASE + '/studio/workflows')
     await visao.waitForTimeout(800)
     conferir('time: sai de cena fora da tela de agentes', (await visao.locator('#sf-time').count()) === 0)
+    conferir('quadro: sai de cena fora da tela de agentes', (await visao.locator('#sf-quadro').count()) === 0)
     await visao.close()
 
     // Sugestões com Tab, no estilo do Claude Code: campo vazio mostra a sugestão e Tab preenche
