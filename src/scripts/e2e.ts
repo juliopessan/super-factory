@@ -249,6 +249,26 @@ async function testarNavegador(): Promise<void> {
     const tamanhoVideo = Number((video.headers.get('content-range') ?? '').split('/')[1] ?? 0)
     conferir('landing: o vídeo do hero é o teaser novo (45 s, mais de 9 MB) e o poster responde', tamanhoVideo > 9_000_000 && (await fetch(BASE + '/motion/super-factory-hero.jpg')).status === 200, `bytes=${tamanhoVideo}`)
     conferir('landing: o bloco do vídeo começa escondido e aparece depois de 3 s', (await (await fetch(BASE + '/')).text()).includes('video-quadro'))
+    // O vídeo tem áudio e a página oferece o botão para ligar o som (o navegador só toca com som depois de um gesto)
+    for (const [rota, ligar, ligado] of [['/', 'Ativar som', 'Som ligado'], ['/en', 'Turn sound on', 'Sound on']] as const) {
+      const som = await navegador.newPage({ viewport: { width: 1280, height: 900 } })
+      await som.addInitScript(() => localStorage.setItem('sf-guia', 'visto'))
+      await som.goto(BASE + rota)
+      await som.waitForFunction(() => !document.getElementById('video-quadro')?.classList.contains('espera'), null, { timeout: 8000 }).catch(() => {})
+      const botao = som.locator('#video-som')
+      const inicio = await som.evaluate(() => ({ mudo: (document.getElementById('video-hero') as HTMLVideoElement).muted, texto: document.querySelector('#video-som .som-texto')?.textContent ?? '', pressionado: document.getElementById('video-som')?.getAttribute('aria-pressed') }))
+      conferir(`som (${rota}): o vídeo começa mudo e o botão oferece ligar o som`, inicio.mudo && inicio.texto === ligar && inicio.pressionado === 'false', JSON.stringify(inicio))
+      await botao.click()
+      await som.waitForTimeout(1500)
+      const fim = await som.evaluate(() => {
+        const v = document.getElementById('video-hero') as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }
+        return { mudo: v.muted, volume: v.volume, tocando: !v.paused, texto: document.querySelector('#video-som .som-texto')?.textContent ?? '', pressionado: document.getElementById('video-som')?.getAttribute('aria-pressed'), audio: v.webkitAudioDecodedByteCount ?? -1 }
+      })
+      conferir(`som (${rota}): clicar liga o som, o vídeo toca e o áudio é decodificado`, !fim.mudo && fim.volume === 1 && fim.tocando && fim.texto === ligado && fim.pressionado === 'true' && fim.audio !== 0, JSON.stringify(fim))
+      await botao.click()
+      conferir(`som (${rota}): clicar de novo silencia`, await som.evaluate(() => (document.getElementById('video-hero') as HTMLVideoElement).muted))
+      await som.close()
+    }
     const texto = (await pagina.textContent('body')) ?? ''
     conferir('landing: fala em Factory', /Factory/.test(texto))
     conferir('landing: sem a palavra mesa', !/\bmesa\b/i.test(texto))

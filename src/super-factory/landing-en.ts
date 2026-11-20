@@ -27,7 +27,9 @@ export const PARES_EN: Array<[string, string]> = [
   ['<span class="linha" aria-hidden="true">A programação morreu.</span> <span class="linha" aria-hidden="true">A <span class="sub">engenharia</span> não.</span>', '<span class="linha" aria-hidden="true">Programming is dead.</span> <span class="linha" aria-hidden="true"><span class="sub">Engineering</span> is not.</span>'],
   ['Agentes escrevem o código. Engenharia é decidir o que entra. A Super Factory lê a demanda no Azure DevOps ou no GitHub, implementa e testa num container e abre o pull request. Você decide o merge.', 'Agents write the code. Engineering is deciding what ships. Super Factory reads the request from Azure DevOps or GitHub, builds and tests it in a container, and opens the pull request. You decide the merge.'],
   ['<a class="primario" href="/studio">Abrir a Factory', '<a class="primario" href="/studio">Open the Factory'],
-  ['aria-label="Apresentação da Super Factory, 45 segundos, em inglês, sem som"', 'aria-label="Super Factory presentation, 45 seconds, no sound"'],
+  ['aria-label="Apresentação da Super Factory, 45 segundos, em inglês"', 'aria-label="Super Factory presentation, 45 seconds"'],
+  ['aria-label="Ativar o som do vídeo" data-ligar="Ativar o som do vídeo" data-desligar="Desligar o som do vídeo"', 'aria-label="Turn on the video sound" data-ligar="Turn on the video sound" data-desligar="Turn off the video sound"'],
+  ['<span class="som-texto" data-ligar="Ativar som" data-desligar="Som ligado">Ativar som</span>', '<span class="som-texto" data-ligar="Turn sound on" data-desligar="Sound on">Turn sound on</span>'],
   ['<a class="seta" href="/waitlist">Lista de espera ↗</a>', '<a class="seta" href="/waitlist">Join the waitlist ↗</a>'],
   ['href="#instalar">Instalar ↗</a>', 'href="#instalar">Install ↗</a>'],
 
