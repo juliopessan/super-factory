@@ -18,7 +18,7 @@ if [ -f "$COMPOSE" ]; then
   docker compose -f "$COMPOSE" up -d --build
   for _ in $(seq 1 60); do
     if docker exec super-factory curl -fsS -o /dev/null http://127.0.0.1:4721/ 2>/dev/null; then
-      echo "✓ Atualizada: $(git log --oneline -1)"
+      echo "✓ Atualizada: $(git -c safe.directory="$PASTA" log --oneline -1)"
       exit 0
     fi
     sleep 3
@@ -35,7 +35,7 @@ systemctl daemon-reload
 systemctl restart super-factory
 sleep 3
 if systemctl is-active --quiet super-factory; then
-  echo "✓ Atualizada: $(git log --oneline -1)"
+  echo "✓ Atualizada: $(git -c safe.directory="$PASTA" log --oneline -1)"
 else
   echo "✗ Não subiu. Veja: journalctl -u super-factory -n 80"
   exit 1
