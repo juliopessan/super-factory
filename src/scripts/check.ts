@@ -841,6 +841,46 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   assert.equal(/^\s+criarProjetoGithub,$/m.test(mcp), false, 'o MCP da Factory não expõe a criação do Project')
 }
 
+// --- Próxima etapa no campo de texto: a oferta do agente vira a resposta; sem oferta, o passo seguinte do ciclo
+{
+  const { CODIGO_FERRAMENTAS_NO_CHAT, CODIGO_PROXIMA_ETAPA, ETAPAS_POR_FERRAMENTA } = await import('../super-factory/ferramentas-no-chat.ts')
+  const { VERBOS_POR_FERRAMENTA } = await import('../super-factory/tempo.ts')
+  const { SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
+  const { proxima, achar } = new Function(`${CODIGO_FERRAMENTAS_NO_CHAT}\n${CODIGO_PROXIMA_ETAPA}\nreturn { proxima: sfProximaEtapa, achar: sfFerramentasNoTexto }`)() as {
+    proxima: (texto: string, completo: string, etapas: typeof ETAPAS_POR_FERRAMENTA) => string
+    achar: (texto: string, nomes: string[]) => Array<{ nome: string; pos: number }>
+  }
+  const p = (texto: string, completo = texto) => proxima(texto, completo, ETAPAS_POR_FERRAMENTA)
+  // o caso do print: o Chief oferece iniciar a onda
+  assert.equal(p('Issues #2, #3 e #4 estão em ready.\n\nVocê quer que eu inicie a onda com #2, #3 e #4?'), 'Sim, inicie a onda com #2, #3 e #4.')
+  assert.equal(p('Plano pronto.\n\n**Você quer que eu crie o Project "Backlog" em juliopessan?**\n\n*Factory local, sem provedor de modelo.*'), 'Sim, crie o Project "Backlog" em juliopessan.', 'markdown e rodapé em itálico não atrapalham')
+  assert.equal(p('Quer que eu abra os cards? Digo antes o que mudaria.'), 'Sim, abra os cards.', 'pergunta seguida de outra frase ainda vale')
+  assert.equal(p('Quer que eu rode o NOT_RUN de novo na #4?'), 'Sim, rode o NOT_RUN de novo na #4.', 'não apaga # nem _ do texto')
+  assert.equal(p('## Próximo passo\n> Quer que eu importe as issues?'), 'Sim, importe as issues.', 'título e citação em markdown saem')
+  assert.equal(p('Posso criar o Project em juliopessan?'), 'Sim, pode criar o Project em juliopessan.')
+  assert.equal(p('Devo iniciar a onda?'), 'Sim, pode iniciar a onda.')
+  assert.equal(p('Podemos seguir com a #4 em paralelo?'), 'Sim, vamos seguir com a #4 em paralelo.')
+  assert.equal(p('Você confirma o repositório?'), 'Sim, pode seguir.')
+  assert.equal(p('Qual é o repositório?'), '', 'pergunta aberta não ganha um "sim"')
+  assert.equal(p('Tudo certo, nada a fazer.'), '', 'sem oferta e sem ferramenta, vale a lista fixa do agente')
+  // sem oferta: o passo seguinte, pela ferramenta mais adiantada (o Studio escreve com maiúscula)
+  assert.equal(p('Onda iniciada.', 'Onda iniciada. IniciarOnda StatusQuadro LerLedger LerLedger'), 'Como está o quadro agora?', 'iniciar a onda pesa mais que ler o quadro')
+  assert.equal(p('ok', 'ok CriarProjetoGithub'), 'Adicione as issues abertas ao Project e ordene por prioridade')
+  assert.equal(p('ok', 'ok importar-issues-github'), 'Inicie a onda com os cards novos que não estão bloqueados', 'aceita a forma com hífen')
+  assert.equal(p('ok', 'ok StatusQuadro'), 'Planeje a próxima onda de cards')
+  assert.ok(p('x'.repeat(10) + ' Você quer que eu ' + 'a'.repeat(400) + '?').length <= 200, 'sugestão longa é cortada')
+  assert.ok(!/[\u0000-\u001f]/.test(p('Você quer que eu faça\u0007 isso?')), 'caracteres de controle saem')
+  // o detector de ferramentas ignora maiúsculas (o defeito do print: "IniciarOnda" não achava "iniciarOnda")
+  assert.deepEqual(achar('IniciarOnda e STATUSQUADRO', ['iniciarOnda', 'statusQuadro', 'lerLedger']).map((a) => a.nome).sort(), ['iniciarOnda', 'statusQuadro'])
+  assert.equal(achar('iniciar-onda', ['iniciarOnda']).length, 1)
+  assert.equal(achar('nada aqui', ['iniciarOnda']).length, 0)
+  // toda etapa cita uma ferramenta que existe e tem verbo do projeto
+  for (const nome of Object.keys(ETAPAS_POR_FERRAMENTA)) assert.ok(VERBOS_POR_FERRAMENTA[nome], `a ferramenta ${nome} tem verbo e etapa`)
+  assert.doesNotThrow(() => new Function(SCRIPT_SUGESTOES), 'o script de sugestões continua válido')
+  assert.ok(SCRIPT_SUGESTOES.includes('sugestaoDoContexto') && SCRIPT_SUGESTOES.includes('sfProximaEtapa'), 'o campo de texto usa a etapa da conversa')
+  assert.equal(SCRIPT_SUGESTOES.includes('.innerText'), false, 'lê o texto da mensagem por textContent: innerText vem vazio quando o Studio adia o desenho (falhou só no build de produção)')
+}
+
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
 {
   const { AMOSTRAS, CONVERSAS, PADROES, SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
@@ -1969,7 +2009,8 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   const seg = cfg.segredo
   const sessaoAssinada = auth.assinar({ u: 'x', exp: Math.floor(Date.now() / 1000) + 60 }, seg)
   assert.equal(auth.verificar(sessaoAssinada, seg)?.u, 'x')
-  assert.equal(auth.verificar(sessaoAssinada.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')), seg), null, 'assinatura adulterada')
+  // Adultera o primeiro caractere: o último de um HMAC em base64 só usa 4 dos 6 bits, e trocar A por B deixava os bytes iguais (teste instável, 1 em 16).
+  assert.equal(auth.verificar(sessaoAssinada.replace(/^./, (c) => (c === 'A' ? 'B' : 'A')), seg), null, 'assinatura adulterada')
   assert.equal(auth.verificar(sessaoAssinada, Buffer.from('outro-segredo-outro-segredo-outro-1')), null, 'outro segredo')
   assert.equal(auth.verificar(auth.assinar({ u: 'x', exp: 1 }, seg), seg), null, 'expirada')
   assert.equal(auth.verificar('lixo', seg), null)

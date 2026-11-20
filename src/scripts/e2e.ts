@@ -493,6 +493,31 @@ async function testarNavegador(): Promise<void> {
     await antigo.close()
     await fetch(`${BASE}/api/memory/threads/${conversaTempo.id}?agentId=chief-of-staff`, { method: 'DELETE' }).catch(() => {})
 
+    // Próxima etapa no campo de texto: a oferta do agente vira a resposta sugerida, e Tab preenche
+    const semearConversa = async (titulo: string, textoDoAgente: string) => {
+      const conversa = (await (await fetch(`${BASE}/api/memory/threads?agentId=chief-of-staff`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resourceId: 'chief-of-staff', title: titulo, metadata: {} }) })).json()) as { id: string }
+      const mensagem = (role: string, texto: string, em: string) => ({ role, threadId: conversa.id, resourceId: 'chief-of-staff', createdAt: em, content: { format: 2, parts: [{ type: 'text', text: texto }], content: texto } })
+      await fetch(`${BASE}/api/memory/save-messages?agentId=chief-of-staff`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [mensagem('user', 'o que tem no quadro?', '2026-01-01T10:00:00.000Z'), mensagem('assistant', textoDoAgente, '2026-01-01T10:00:05.000Z')] }) })
+      return conversa.id
+    }
+    const idOferta = await semearConversa('e2e-etapa-oferta', 'As issues #2, #3 e #4 estão em ready.\n\nVocê quer que eu inicie a onda com #2, #3 e #4?')
+    const idSemOferta = await semearConversa('e2e-etapa-sem-oferta', 'Tudo certo por aqui, nada a fazer.')
+    const etapa = await navegador.newPage({ viewport: { width: 1280, height: 800 } })
+    await etapa.goto(`${BASE}/studio/agents/chief-of-staff/threads/${idOferta}`)
+    const campoEtapa = etapa.locator('textarea').first()
+    await campoEtapa.waitFor()
+    await etapa.waitForFunction(() => document.querySelector('textarea')?.getAttribute('data-sf-sug') === '1' && /^Sim,/.test(document.querySelector('textarea')?.placeholder ?? ''), null, { timeout: 10000 }).catch(() => {})
+    conferir('etapa: depois da oferta do agente, o campo sugere a resposta', (await campoEtapa.getAttribute('placeholder')) === 'Sim, inicie a onda com #2, #3 e #4.', String(await campoEtapa.getAttribute('placeholder')))
+    await campoEtapa.click()
+    await etapa.keyboard.press('Tab')
+    conferir('etapa: Tab preenche a sugestão e não envia', (await campoEtapa.inputValue()) === 'Sim, inicie a onda com #2, #3 e #4.' && (await etapa.locator('[data-slot=message][data-from=user]').count()) === 1)
+    await etapa.goto(`${BASE}/studio/agents/chief-of-staff/threads/${idSemOferta}`)
+    await campoEtapa.waitFor()
+    await etapa.waitForFunction(() => document.querySelector('textarea')?.getAttribute('data-sf-sug') === '1', null, { timeout: 10000 }).catch(() => {})
+    conferir('etapa: sem oferta, vale a sugestão fixa do agente', (await campoEtapa.getAttribute('placeholder')) === 'Como está o quadro agora?', String(await campoEtapa.getAttribute('placeholder')))
+    await etapa.close()
+    for (const id of [idOferta, idSemOferta]) await fetch(`${BASE}/api/memory/threads/${id}?agentId=chief-of-staff`, { method: 'DELETE' }).catch(() => {})
+
     // Sugestões com Tab, no estilo do Claude Code: campo vazio mostra a sugestão e Tab preenche
     const sug = await navegador.newPage({ viewport: { width: 1440, height: 900 } })
     await sug.addInitScript(() => localStorage.setItem('sf-sugestoes', JSON.stringify({ repositorio: 'acme/pedidos', amostra: 0 })))
