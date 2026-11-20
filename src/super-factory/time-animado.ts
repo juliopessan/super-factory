@@ -10,24 +10,25 @@ export const SCRIPT_TIME = String.raw`
   if (window.__sfTime) return
   window.__sfTime = true
   var NS = 'http://www.w3.org/2000/svg'
-  var W = 152, H = 40, CICLO = 12
+  var W = 140, H = 40, CICLO = 12
   // t: quando o agente acende. O pulso de cada linha dura 0,9 s e termina quando o filho acende.
   var NOS = [
-    { id: 'chief-of-staff', agente: true, nome: 'Chief of Staff', papel: 'abre o card e delega', x: 650, y: 8, t: 0.2, dica: 'Único papel que abre card e dispara o ciclo. Executa o que não muda código e organiza o quadro.' },
-    { id: 'architect', agente: true, nome: 'Architect', papel: 'divide em fatias', x: 75, y: 100, t: 1.4, dica: 'Lê o manifesto, a onda e os critérios. Se duas fatias cobrem o mesmo caminho, o card para.' },
-    { id: 'frontend', agente: true, nome: 'Frontend', papel: 'lê e opina: UI', x: 239, y: 100, t: 2.4, dica: 'Só lê e opina sobre a fatia de UI: arquivos, riscos e critérios.' },
-    { id: 'backend', agente: true, nome: 'Backend', papel: 'lê e opina: API', x: 403, y: 100, t: 2.6, dica: 'Só lê e opina sobre a fatia de API: arquivos, riscos e critérios.' },
-    { id: 'construtor', nome: 'Construtor', papel: 'escreve e testa', x: 567, y: 100, t: 3.0, dica: 'O agente do modo autônomo: escreve o código e roda os testes num container isolado, um por card.' },
-    { id: 'qa', agente: true, nome: 'QA', papel: 'evidência dos testes', x: 731, y: 100, t: 4.8, dica: 'Lê a evidência. PASS só existe com resultado observado; NOT_RUN e BLOCKED são válidos.' },
-    { id: 'security', agente: true, nome: 'Security', papel: 'somente leitura', x: 895, y: 100, t: 5.0, dica: 'Procura segredo, push protegido e aprovação de merge ausente. Não altera nada.' },
-    { id: 'docs', agente: true, nome: 'Docs', papel: 'relatório do ciclo', x: 1059, y: 100, t: 5.2, dica: 'Escreve o relatório: o que foi observado e o que ficou de fora.' },
-    { id: 'integrations', agente: true, nome: 'Integrations', papel: 'GitHub, Azure, Project', x: 1223, y: 100, t: 1.6, dica: 'Lê o repositório, organiza o GitHub Project e abre issue ou work item. Não faz merge.' },
-    { id: 'merge', nome: 'Merge', papel: 'uma pessoa decide', x: 895, y: 192, t: 7.0, humano: true, dica: 'A única decisão humana. A Factory abre o pull request e para: merge e deploy são de uma pessoa.' }
+    { id: 'chief-of-staff', agente: true, nome: 'Chief of Staff', papel: 'abre o card e delega', x: 675, y: 8, t: 0.2, dica: 'Único papel que abre card e dispara o ciclo. Executa o que não muda código e organiza o quadro.' },
+    { id: 'architect', agente: true, nome: 'Architect', papel: 'divide em fatias', x: 70, y: 100, t: 1.4, dica: 'Lê o manifesto, a onda e os critérios. Se duas fatias cobrem o mesmo caminho, o card para.' },
+    { id: 'frontend', agente: true, nome: 'Frontend', papel: 'lê e opina: UI', x: 220, y: 100, t: 2.4, dica: 'Só lê e opina sobre a fatia de UI: arquivos, riscos e critérios.' },
+    { id: 'backend', agente: true, nome: 'Backend', papel: 'lê e opina: API', x: 370, y: 100, t: 2.6, dica: 'Só lê e opina sobre a fatia de API: arquivos, riscos e critérios.' },
+    { id: 'construtor', nome: 'Construtor', papel: 'escreve e testa', x: 520, y: 100, t: 3.0, dica: 'O agente do modo autônomo: escreve o código e roda os testes num container isolado, um por card.' },
+    { id: 'qa', agente: true, nome: 'QA', papel: 'evidência', x: 670, y: 100, t: 4.8, dica: 'Lê a evidência. PASS só existe com resultado observado; NOT_RUN e BLOCKED são válidos.' },
+    { id: 'security', agente: true, nome: 'Security', papel: 'somente leitura', x: 820, y: 100, t: 5.0, dica: 'Procura segredo, push protegido e aprovação de merge ausente. Não altera nada.' },
+    { id: 'reviewer', agente: true, nome: 'PR Review', papel: 'comenta o PR', x: 970, y: 100, t: 5.1, dica: 'Lê o pull request, o diff e a evidência e deixa uma revisão como comentário. Nunca aprova nem trava o merge: isso é de uma pessoa.' },
+    { id: 'docs', agente: true, nome: 'Docs', papel: 'relatório do ciclo', x: 1120, y: 100, t: 5.2, dica: 'Escreve o relatório: o que foi observado e o que ficou de fora.' },
+    { id: 'integrations', agente: true, nome: 'Integrations', papel: 'GitHub e Azure', x: 1270, y: 100, t: 1.6, dica: 'Lê o repositório, organiza o GitHub Project e abre issue ou work item. Não faz merge.' },
+    { id: 'merge', nome: 'Merge', papel: 'uma pessoa decide', x: 970, y: 192, t: 7.0, humano: true, dica: 'A única decisão humana. A Factory abre o pull request e para: merge e deploy são de uma pessoa.' }
   ]
   var ARESTAS = [
     ['chief-of-staff', 'architect'], ['chief-of-staff', 'frontend'], ['chief-of-staff', 'backend'], ['chief-of-staff', 'construtor'],
-    ['chief-of-staff', 'qa'], ['chief-of-staff', 'security'], ['chief-of-staff', 'docs'], ['chief-of-staff', 'integrations'],
-    ['qa', 'merge'], ['security', 'merge'], ['docs', 'merge']
+    ['chief-of-staff', 'qa'], ['chief-of-staff', 'security'], ['chief-of-staff', 'reviewer'], ['chief-of-staff', 'docs'], ['chief-of-staff', 'integrations'],
+    ['qa', 'merge'], ['security', 'merge'], ['reviewer', 'merge'], ['docs', 'merge']
   ]
   var porId = {}
   NOS.forEach(function (n) { porId[n.id] = n })
@@ -84,7 +85,7 @@ export const SCRIPT_TIME = String.raw`
     var cab = html('header'); var h = html('h2', '', 'Como o time trabalha'); h.id = 'sf-time-t'
     cab.appendChild(h); cab.appendChild(html('span', 'sub', 'Do pedido ao pull request. A única decisão humana é o merge.'))
     secao.appendChild(cab)
-    svg = el('svg', { viewBox: '0 0 1300 236', role: 'group', 'aria-label': 'Hierarquia do time de agentes: o Chief of Staff delega para o time; o merge é de uma pessoa.' })
+    svg = el('svg', { viewBox: '0 0 1350 236', role: 'group', 'aria-label': 'Hierarquia do time de agentes: o Chief of Staff delega para o time; o merge é de uma pessoa.' })
     secao.appendChild(svg)
     var leg = html('div', 'legenda')
     var a = html('span'); var ia = html('i'); ia.style.background = 'var(--sf-ok)'; a.appendChild(ia); a.appendChild(document.createTextNode('trabalhando')); leg.appendChild(a)
@@ -133,7 +134,7 @@ export const SCRIPT_TIME = String.raw`
     dica.textContent = ''
     var b = html('b', '', n.nome), s = html('span', '', n.dica)
     dica.appendChild(b); dica.appendChild(s)
-    var r = svg.getBoundingClientRect(), c = secao.getBoundingClientRect(), escala = r.width / 1300
+    var r = svg.getBoundingClientRect(), c = secao.getBoundingClientRect(), escala = r.width / 1350
     dica.style.left = Math.max(0, Math.min(c.width - 270, (n.x + W / 2 + 8) * escala + (r.left - c.left))) + 'px'
     dica.style.top = (n.y * escala + (r.top - c.top) + H * escala + 6) + 'px'
     dica.setAttribute('data-ver', '1')
