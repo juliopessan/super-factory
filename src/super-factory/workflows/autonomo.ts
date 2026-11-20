@@ -47,6 +47,7 @@ const contextoSchema = z.object({
   branch: z.string().nullable(),
   verificacao: z.object({ instalar: z.string().nullable(), verificar: z.string().nullable(), origem: z.string() }).nullable(),
   estatistica: z.string().nullable(),
+  pilha: z.string().nullable().optional(),
 })
 
 function passo(fase: FaseAutonomo, ultima: boolean) {
@@ -83,6 +84,7 @@ function passo(fase: FaseAutonomo, ultima: boolean) {
 }
 
 const entradaSchema = pedidoSchema.extend({
+  empilhadoSobre: z.string().min(1).max(120).optional().describe('Uso interno da onda: branch do card pai. O PR deste card avisa que está empilhado sobre ela.'),
   ensaio: z
     .boolean()
     .optional()
@@ -95,7 +97,7 @@ const preparar = createStep({
   inputSchema: entradaSchema,
   outputSchema: contextoSchema,
   execute: async ({ inputData }) => {
-    const { ensaio = false, ...pedido } = inputData
+    const { ensaio = false, empilhadoSobre, ...pedido } = inputData
     // O card do ensaio entra no quadro de verdade; o prefixo evita confundir com trabalho real.
     const contexto = contextoInicial(ensaio ? { ...pedido, titulo: `[ENSAIO] ${pedido.titulo}`.slice(0, 120) } : pedido)
     const temModelo = ensaio || process.env.ANTHROPIC_API_KEY || process.env.SUPER_FACTORY_BUILDER_MODEL
@@ -103,7 +105,7 @@ const preparar = createStep({
       const estado = persistir(parar(contexto.estado, 'O modo autônomo precisa de ANTHROPIC_API_KEY para o agente construtor escrever código. Cole a chave em Settings → Chaves e acessos, no Studio, ou marque ensaio para conhecer o fluxo.'))
       throw new Error(`Parou em Receber o pedido: ${estado.motivo}`)
     }
-    return { ...contexto, ensaio }
+    return { ...contexto, ensaio, pilha: empilhadoSobre ?? null }
   },
 })
 

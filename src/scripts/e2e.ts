@@ -170,6 +170,28 @@ async function testarWorkflow(): Promise<void> {
   conferir('onda: três cards em ensaio terminam, cada um no seu run', onda.corpo?.status === 'success' && cartoes.length === 3 && cartoes.every((c) => c.ok), `${onda.corpo?.status} ${JSON.stringify(cartoes)}`)
   conferir('onda: rodam em paralelo (menos de 2x o tempo de um card sozinho)', duracaoOnda < 2 * Math.max(duracaoEnsaio, 1000), `onda ${duracaoOnda} ms, um card ${duracaoEnsaio} ms`)
   conferir('onda: o resumo lembra que o merge é de uma pessoa', /Merge e deploy ficam com uma pessoa/.test(String(onda.corpo?.result?.resumo)))
+  // Épico: api -> ui -> docs em cadeia (PRs em pilha) e um card solto que roda junto
+  const card = (titulo: string, extra: Record<string, unknown> = {}) => ({ ...pedido, titulo, ...extra })
+  const { corpo: criadoPilha } = await api('/api/workflows/onda/create-run', {})
+  const pilha = await api(`/api/workflows/onda/start-async?runId=${criadoPilha.runId}`, {
+    inputData: { ensaio: true, pedidos: [card('Épico API', { chave: 'api' }), card('Épico UI', { chave: 'ui', dependeDe: 'api' }), card('Épico docs', { dependeDe: 'ui' }), card('Épico solto')] },
+  })
+  const doEpico = (pilha.corpo?.result?.cartoes ?? []) as Array<{ titulo: string; ok: boolean; chave: string | null; branch: string | null; base: string | null; pai: string | null }>
+  const porTitulo = (t: string) => doEpico.find((c) => c.titulo === t)
+  conferir('pilha: a onda com dependências termina e todos os cards chegam ao PR', pilha.corpo?.status === 'success' && doEpico.length === 4 && doEpico.every((c) => c.ok), JSON.stringify(doEpico).slice(0, 300))
+  conferir('pilha: o filho nasce da branch do pai (base = branch do pai)', Boolean(porTitulo('Épico API')?.branch) && porTitulo('Épico UI')?.base === porTitulo('Épico API')?.branch && porTitulo('Épico UI')?.pai === 'api')
+  conferir('pilha: o neto empilha sobre o filho, e o card solto continua sobre a branch normal', porTitulo('Épico docs')?.base === porTitulo('Épico UI')?.branch && porTitulo('Épico solto')?.pai === null && porTitulo('Épico solto')?.base !== porTitulo('Épico API')?.branch)
+  const ordemMerge = (pilha.corpo?.result?.ordemDeMerge ?? []) as string[]
+  conferir('pilha: o resumo dá a ordem de merge, de baixo para cima', ordemMerge.indexOf('Épico API') < ordemMerge.indexOf('Épico UI') && ordemMerge.indexOf('Épico UI') < ordemMerge.indexOf('Épico docs') && /de baixo para cima/.test(String(pilha.corpo?.result?.resumo)), ordemMerge.join(' > '))
+  const { corpo: criadoBloq } = await api('/api/workflows/onda/create-run', {})
+  const bloqueio = await api(`/api/workflows/onda/start-async?runId=${criadoBloq.runId}`, {
+    inputData: { ensaio: true, pedidos: [card('Pai que para', { chave: 'pai', criterios: 'Funciona bem' }), card('Filho do pai que para', { dependeDe: 'pai' }), card('Independente do bloqueio')] },
+  })
+  const bloq = (bloqueio.corpo?.result?.cartoes ?? []) as Array<{ titulo: string; ok: boolean; desfecho: string; motivo: string | null }>
+  conferir('pilha: se o pai para na triagem, o filho fica bloqueado e nunca roda; o independente segue', bloq.find((c) => c.titulo === 'Pai que para')?.ok === false && bloq.find((c) => c.titulo === 'Filho do pai que para')?.desfecho === 'bloqueado' && /Bloqueado/.test(bloq.find((c) => c.titulo === 'Filho do pai que para')?.motivo ?? '') && bloq.find((c) => c.titulo === 'Independente do bloqueio')?.ok === true, JSON.stringify(bloq).slice(0, 300))
+  const { corpo: criadoRuim } = await api('/api/workflows/onda/create-run', {})
+  const ruim = await api(`/api/workflows/onda/start-async?runId=${criadoRuim.runId}`, { inputData: { ensaio: true, pedidos: [card('Órfão', { chave: 'a', dependeDe: 'nao-existe' })] } })
+  conferir('pilha: dependência para uma chave que não existe é recusada antes de rodar qualquer coisa', ruim.corpo?.status === 'failed' && /não é a chave de nenhum card/.test(JSON.stringify(ruim.corpo)), String(ruim.corpo?.status))
   await new Promise((resolve) => setTimeout(resolve, 1500))
   const logsDaFactory = (await (await fetch(`${BASE}/api/observability/logs?perPage=20`)).json()) as { logs?: Array<{ message?: string }> }
   conferir('logs: as fases do autônomo aparecem nos Logs do Studio', (logsDaFactory.logs ?? []).some((l) => /^Fase .* concluída$/.test(l.message ?? '')), JSON.stringify((logsDaFactory.logs ?? []).map((l) => l.message)))
@@ -504,6 +526,26 @@ async function testarNavegador(): Promise<void> {
     const login = await (await fetch(BASE + '/login')).text()
     conferir('login: com o login desligado a página diz isso e não oferece o botão', /não está ligado/.test(login) && !/id="entrar"/.test(login))
     conferir('login: sem login ligado a página de admin não existe (nenhum dado exposto)', (await fetch(BASE + '/admin/waitlist/dados')).status === 404)
+    // SEO: dados estruturados, FAQ visível, robots, sitemap e llms.txt
+    const robotsTxt = await fetch(BASE + '/robots.txt')
+    conferir('seo: robots.txt libera a landing e bloqueia o Studio e a API', robotsTxt.status === 200 && /Disallow: \/studio/.test(await robotsTxt.text()))
+    conferir('seo: sem endereço público configurado, o sitemap não existe (URL absoluta não se inventa)', (await fetch(BASE + '/sitemap.xml')).status === 404)
+    const llmsTxt = await fetch(BASE + '/llms.txt')
+    conferir('seo: llms.txt responde com o resumo da Factory', llmsTxt.status === 200 && /Super Factory/.test(await llmsTxt.text()))
+    const og = await fetch(BASE + '/motion/super-factory-og.jpg')
+    conferir('seo: a imagem Open Graph responde como JPEG', og.status === 200 && (og.headers.get('content-type') ?? '') === 'image/jpeg')
+    for (const [rota, idioma, lingua] of [['/', 'pt', 'pt-BR'], ['/en', 'en', 'en-US']] as const) {
+      const html = await (await fetch(BASE + rota)).text()
+      const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)?.[1] ?? '{}') as { '@graph'?: Array<{ '@type': string; inLanguage?: string; mainEntity?: unknown[] }> }
+      const faq = ld['@graph']?.find((n) => n['@type'] === 'FAQPage')
+      conferir(`seo: a landing ${idioma} tem JSON-LD válido com o FAQPage e o idioma ${lingua}`, (faq?.mainEntity?.length ?? 0) >= 6 && ld['@graph']?.find((n) => n['@type'] === 'WebSite')?.inLanguage === lingua)
+    }
+    const faqPagina = await navegador.newPage({ viewport: { width: 1280, height: 900 } })
+    await faqPagina.goto(BASE + '/')
+    conferir('seo: o FAQ aparece na página, uma pergunta por item, e abre e fecha', (await faqPagina.locator('#perguntas details').count()) >= 6)
+    await faqPagina.locator('#perguntas summary').first().click()
+    conferir('seo: clicar na pergunta mostra a resposta', await faqPagina.locator('#perguntas details').first().evaluate((d: Element) => (d as HTMLDetailsElement).open))
+    await faqPagina.close()
     conferir('landing: tem o caminho para a lista de espera', /href="\/waitlist"/.test(await (await fetch(BASE + '/')).text()))
     await wl.close()
 

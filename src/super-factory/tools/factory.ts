@@ -1,4 +1,5 @@
 import { createTool } from '@mastra/core/tools'
+import { pedidoDaOndaSchema } from '../workflows/onda.ts'
 import { z } from 'zod'
 
 import { lintarCriterios as avaliarCriterios, planejarOnda as montarOnda, quadro } from '../../factory/board.ts'
@@ -8,6 +9,7 @@ import { validarManifesto as checarManifesto } from '../../factory/manifest.ts'
 import { lerProjeto, lerReferenciaDoProjeto, organizarProjeto, MAXIMO_DE_ACOES } from '../../factory/projeto.ts'
 import { listarArquivosGithub as buscarArquivosGithub, listarBranchesGithub as buscarBranchesGithub, lerArquivoGithub as buscarArquivoGithub, compararBranchesGithub as buscarComparacaoDeBranches, MAXIMO_DE_BRANCHES } from '../../factory/repositorio.ts'
 import { avaliarMerge, iniciar } from '../../factory/pipeline.ts'
+import { MAXIMO_DE_CARDS_POR_ONDA, validarOnda } from '../../factory/dependencias.ts'
 import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/paralelo.ts'
 import { pedidoSchema } from '../../factory/schemas.ts'
 import { lerEstado, lerRun } from '../../factory/store.ts'
@@ -413,22 +415,29 @@ export const organizarProjetoGithub = createTool({
 
 export const iniciarOnda = createTool({
   id: 'iniciar-onda',
-  description: `Dispara o modo autônomo para 1 a ${PARALELISMO_MAXIMO} cards independentes ao mesmo tempo: cada um ganha sandbox, branch e pull request próprios. Devolve na hora, com o id da execução; o trabalho segue em segundo plano. Não faz merge nem deploy. Acompanhe com statusQuadro e lerLedger.`,
+  description: `Dispara o modo autônomo para 1 a ${MAXIMO_DE_CARDS_POR_ONDA} cards, até ${PARALELISMO_MAXIMO} ao mesmo tempo: cada um ganha sandbox, branch e pull request próprios. Para tarefas que dependem uma da outra (um épico), dê "chave" a cada card e "dependeDe" (a chave do pai, uma só) ao que vem depois: o filho espera o pai, nasce da branch dele e abre um PR em pilha. Se o pai falha, o filho fica bloqueado. Devolve na hora, com o id da execução; o trabalho segue em segundo plano. Não faz merge nem deploy. Acompanhe com statusQuadro e lerLedger.`,
   inputSchema: z.object({
-    pedidos: z.array(pedidoSchema).min(1).max(PARALELISMO_MAXIMO),
+    pedidos: z.array(pedidoDaOndaSchema).min(1).max(MAXIMO_DE_CARDS_POR_ONDA),
     ensaio: z.boolean().optional().describe('Só para demonstrar o fluxo: nada é clonado, escrito ou enviado.'),
   }),
   outputSchema: z.object({ ok: z.boolean(), runId: z.string().nullable(), nota: z.string() }),
   execute: async (entrada, contexto) => {
+    // Erro de chave ou de dependência volta agora, para o agente corrigir, e não depois de a onda já ter começado.
+    try {
+      validarOnda(entrada.pedidos.map((p) => ({ chave: p.chave ?? null, dependeDe: p.dependeDe ?? null })))
+    } catch (erro) {
+      return { ok: false, runId: null, nota: erro instanceof Error ? erro.message : 'Onda inválida.' }
+    }
     const fluxo = contexto?.mastra?.getWorkflow('onda')
     if (!fluxo) return { ok: false, runId: null, nota: 'O workflow onda não está registrado neste servidor.' }
     const execucao = await fluxo.createRun()
     const { runId } = await execucao.startAsync({ inputData: entrada })
     const simultaneos = Math.min(paralelismoConfigurado(), entrada.pedidos.length)
+    const empilhados = entrada.pedidos.filter((p) => p.dependeDe).length
     return {
       ok: true,
       runId,
-      nota: `Onda iniciada com ${entrada.pedidos.length} card(s), ${simultaneos} por vez${entrada.ensaio ? ' (ensaio)' : ''}. Execução ${runId} em Workflows → onda. Cada card termina em pull request aguardando revisão humana.`,
+      nota: `Onda iniciada com ${entrada.pedidos.length} card(s), ${simultaneos} por vez${entrada.ensaio ? ' (ensaio)' : ''}${empilhados ? `, ${empilhados} deles empilhado(s) sobre outro (PRs em pilha: o merge segue de baixo para cima)` : ''}. Execução ${runId} em Workflows → onda. Cada card termina em pull request aguardando revisão humana.`,
     }
   },
 })

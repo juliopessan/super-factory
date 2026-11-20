@@ -11,6 +11,7 @@ import { SCRIPT_SUGESTOES } from './sugestoes.ts'
 import { tratarAcesso, ehPublico, PAGINAS } from './acesso.ts'
 import { lerConfig, porteiro } from './auth.ts'
 import { SCRIPT_MENU, tratarMenu } from './menu.ts'
+import { respostaLlms, respostaRobots, respostaSitemap } from './seo.ts'
 import { SCRIPT_TIME } from './time-animado.ts'
 
 // Marca: tile claro (text-main-white) com a sigla no preto da página (surface-bg), em Greed.
@@ -427,6 +428,7 @@ function motionJs(): Response {
 const ARQUIVOS_PUBLICOS: Record<string, string> = {
   '/motion/super-factory-hero.mp4': 'video/mp4',
   '/motion/super-factory-hero.jpg': 'image/jpeg',
+  '/motion/super-factory-og.jpg': 'image/jpeg',
 }
 
 function arquivoPublico(caminho: string, cabecalhoRange: string | null): Response {
@@ -526,6 +528,9 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   if (acesso) return acesso
   await limparEntrada(c.req)
   if (caminho === '/motion.js') return motionJs()
+  if (caminho === '/robots.txt') return respostaRobots()
+  if (caminho === '/sitemap.xml') return respostaSitemap()
+  if (caminho === '/llms.txt') return respostaLlms()
   if (caminho in ARQUIVOS_PUBLICOS) return arquivoPublico(caminho, c.req.raw.headers.get('range'))
   if (caminho === '/configuracoes' || caminho === '/configuracoes/') {
     const consulta = new URL(c.req.raw.url).searchParams
