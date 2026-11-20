@@ -553,6 +553,8 @@ async function testarNavegador(): Promise<void> {
       conferir(`seo: a landing ${idioma} tem JSON-LD válido com o FAQPage e o idioma ${lingua}`, (faq?.mainEntity?.length ?? 0) >= 6 && ld['@graph']?.find((n) => n['@type'] === 'WebSite')?.inLanguage === lingua)
     }
     const faqPagina = await navegador.newPage({ viewport: { width: 1280, height: 900 } })
+    // O guia abre sozinho na primeira visita e cobre a página: marca como visto, como os outros testes.
+    await faqPagina.addInitScript(() => localStorage.setItem('sf-guia', 'visto'))
     await faqPagina.goto(BASE + '/')
     conferir('seo: o FAQ aparece na página, uma pergunta por item, e abre e fecha', (await faqPagina.locator('#perguntas details').count()) >= 6)
     await faqPagina.locator('#perguntas summary').first().click()
