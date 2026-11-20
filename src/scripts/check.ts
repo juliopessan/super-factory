@@ -1930,6 +1930,68 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
 
 }
 
+// --- SEO e FAQ da landing: uma fonte só para a página e para o JSON-LD, URLs absolutas só com endereço público
+{
+  const seo = await import('../super-factory/seo.ts')
+  const { paginaInicial } = await import('../super-factory/landing.ts')
+  assert.equal(seo.FAQ.pt.length, seo.FAQ.en.length, 'o FAQ tem as mesmas perguntas nos dois idiomas')
+  assert.ok(seo.FAQ.pt.length >= 6)
+  const base = 'https://factory.exemplo.com'
+  for (const idioma of ['pt', 'en'] as const) {
+    const bloco = seo.blocoSeo(idioma, base)
+    const json = /<script type="application\/ld\+json">(.*)<\/script>/s.exec(bloco)?.[1] ?? ''
+    const dados = JSON.parse(json.replace(/\\u003c/g, '<')) as { '@graph': Array<Record<string, unknown>> }
+    const faq = dados['@graph'].find((n) => n['@type'] === 'FAQPage') as { mainEntity: Array<{ name: string; acceptedAnswer: { text: string } }> }
+    assert.deepEqual(faq.mainEntity.map((q) => [q.name, q.acceptedAnswer.text]), seo.FAQ[idioma].map((q) => [q.p, q.r]), `${idioma}: o FAQPage é exatamente o FAQ da página`)
+    assert.ok(dados['@graph'].some((n) => n['@type'] === 'SoftwareApplication') && dados['@graph'].some((n) => n['@type'] === 'WebSite'))
+    assert.match(bloco, /rel="canonical" href="https:\/\/factory\.exemplo\.com\/(en)?"/)
+    assert.match(bloco, /hreflang="pt-BR" href="https:\/\/factory\.exemplo\.com\/"/)
+    assert.match(bloco, /hreflang="en" href="https:\/\/factory\.exemplo\.com\/en"/)
+    assert.match(bloco, /og:image" content="https:\/\/factory\.exemplo\.com\/motion\/super-factory-og\.jpg"/)
+    assert.match(bloco, /twitter:card" content="summary_large_image"/)
+    const sem = seo.blocoSeo(idioma, null)
+    assert.doesNotMatch(sem, /canonical|hreflang|og:image|https:\/\/factory/, `${idioma}: sem endereço público não sai nenhuma URL absoluta inventada`)
+    assert.match(sem, /twitter:card" content="summary"/)
+    assert.match(sem, /application\/ld\+json/, 'o JSON-LD sai mesmo sem endereço público')
+  }
+  assert.doesNotMatch(seo.blocoSeo('pt', base), /<\/script><script|<\/script>[^<]*<script/, 'um bloco só de JSON-LD')
+  // um texto com </script> não fecha a tag
+  const hostil = JSON.stringify({ x: '</script><script>alert(1)' }).replace(/</g, '\\u003c')
+  assert.ok(!hostil.includes('</script>'))
+  // urlPublica: https ou localhost; o resto é ignorado
+  assert.equal(seo.urlPublica({ SUPER_FACTORY_PUBLIC_URL: 'https://factory.exemplo.com/studio?x=1' }), 'https://factory.exemplo.com')
+  assert.equal(seo.urlPublica({ SUPER_FACTORY_PUBLIC_URL: 'http://localhost:4721' }), 'http://localhost:4721')
+  assert.equal(seo.urlPublica({ SUPER_FACTORY_PUBLIC_URL: 'http://factory.exemplo.com' }), null, 'http fora de localhost não vale')
+  assert.equal(seo.urlPublica({ SUPER_FACTORY_PUBLIC_URL: 'javascript:alert(1)' }), null)
+  assert.equal(seo.urlPublica({}), null)
+  // a página: FAQ visível no idioma certo, sem marcador sobrando e sem seção com id (o menu lista só as com id)
+  const pt = paginaInicial('pt')
+  const en = paginaInicial('en')
+  for (const [html, idioma] of [[pt, 'pt'], [en, 'en']] as const) {
+    assert.ok(!html.includes('<!--SF-'), `${idioma}: nenhum marcador sobrou`)
+    assert.equal((html.match(/<details>/g) ?? []).length, seo.FAQ[idioma].length, `${idioma}: uma pergunta visível por item do FAQ`)
+    assert.match(html, /application\/ld\+json/)
+    assert.doesNotMatch(html, /<section id="perguntas"/)
+  }
+  assert.ok(pt.includes(seo.FAQ.pt[0]!.p) && !pt.includes(seo.FAQ.en[0]!.p), 'a página em português tem o FAQ em português')
+  assert.ok(en.includes(seo.FAQ.en[0]!.p.replace("'", '&#39;')) && !en.includes(seo.FAQ.pt[0]!.p), 'a página em inglês tem o FAQ em inglês (a tradução não pega o FAQ)')
+  // robots, sitemap, llms
+  const robots = await seo.respostaRobots(null).text()
+  assert.match(robots, /Disallow: \/studio/)
+  assert.match(robots, /Disallow: \/api/)
+  assert.doesNotMatch(robots, /Sitemap:/, 'sem endereço público, sem linha de sitemap')
+  assert.match(await seo.respostaRobots(base).text(), /Sitemap: https:\/\/factory\.exemplo\.com\/sitemap\.xml/)
+  assert.equal(seo.respostaSitemap(null).status, 404)
+  const mapa = await seo.respostaSitemap(base).text()
+  assert.match(mapa, /<loc>https:\/\/factory\.exemplo\.com\/en<\/loc>/)
+  assert.match(mapa, /<loc>https:\/\/factory\.exemplo\.com\/waitlist<\/loc>/)
+  assert.ok(!/\/studio|\/admin|\/api/.test(mapa), 'o sitemap só lista páginas públicas')
+  const llms = await seo.respostaLlms(base).text()
+  assert.match(llms, /^# Super Factory/)
+  assert.ok(llms.includes(seo.FAQ.pt[1]!.p))
+  assert.ok(fs.statSync(new URL('../super-factory/public/super-factory-og.jpg', import.meta.url)).size > 5_000, 'a imagem OG existe')
+}
+
 // --- Repositório: aceita o endereço copiado do navegador ou do git
 {
   const { normalizarRepositorio, dividirRepositorio, dividirAzure } = await import('../factory/guards.ts')

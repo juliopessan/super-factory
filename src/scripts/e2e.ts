@@ -526,6 +526,26 @@ async function testarNavegador(): Promise<void> {
     const login = await (await fetch(BASE + '/login')).text()
     conferir('login: com o login desligado a página diz isso e não oferece o botão', /não está ligado/.test(login) && !/id="entrar"/.test(login))
     conferir('login: sem login ligado a página de admin não existe (nenhum dado exposto)', (await fetch(BASE + '/admin/waitlist/dados')).status === 404)
+    // SEO: dados estruturados, FAQ visível, robots, sitemap e llms.txt
+    const robotsTxt = await fetch(BASE + '/robots.txt')
+    conferir('seo: robots.txt libera a landing e bloqueia o Studio e a API', robotsTxt.status === 200 && /Disallow: \/studio/.test(await robotsTxt.text()))
+    conferir('seo: sem endereço público configurado, o sitemap não existe (URL absoluta não se inventa)', (await fetch(BASE + '/sitemap.xml')).status === 404)
+    const llmsTxt = await fetch(BASE + '/llms.txt')
+    conferir('seo: llms.txt responde com o resumo da Factory', llmsTxt.status === 200 && /Super Factory/.test(await llmsTxt.text()))
+    const og = await fetch(BASE + '/motion/super-factory-og.jpg')
+    conferir('seo: a imagem Open Graph responde como JPEG', og.status === 200 && (og.headers.get('content-type') ?? '') === 'image/jpeg')
+    for (const [rota, idioma, lingua] of [['/', 'pt', 'pt-BR'], ['/en', 'en', 'en-US']] as const) {
+      const html = await (await fetch(BASE + rota)).text()
+      const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)?.[1] ?? '{}') as { '@graph'?: Array<{ '@type': string; inLanguage?: string; mainEntity?: unknown[] }> }
+      const faq = ld['@graph']?.find((n) => n['@type'] === 'FAQPage')
+      conferir(`seo: a landing ${idioma} tem JSON-LD válido com o FAQPage e o idioma ${lingua}`, (faq?.mainEntity?.length ?? 0) >= 6 && ld['@graph']?.find((n) => n['@type'] === 'WebSite')?.inLanguage === lingua)
+    }
+    const faqPagina = await navegador.newPage({ viewport: { width: 1280, height: 900 } })
+    await faqPagina.goto(BASE + '/')
+    conferir('seo: o FAQ aparece na página, uma pergunta por item, e abre e fecha', (await faqPagina.locator('#perguntas details').count()) >= 6)
+    await faqPagina.locator('#perguntas summary').first().click()
+    conferir('seo: clicar na pergunta mostra a resposta', await faqPagina.locator('#perguntas details').first().evaluate((d: Element) => (d as HTMLDetailsElement).open))
+    await faqPagina.close()
     conferir('landing: tem o caminho para a lista de espera', /href="\/waitlist"/.test(await (await fetch(BASE + '/')).text()))
     await wl.close()
 

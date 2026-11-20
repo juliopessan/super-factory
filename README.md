@@ -288,6 +288,27 @@ O instalador antigo põe um login básico do Traefik na frente de tudo, o que es
 
 Por que GitHub e não Composio: o Composio guarda credenciais de agentes em apps de terceiros (agir no GitHub ou no Gmail em nome de alguém); não é um provedor de login do seu produto. Para empresas que não usam GitHub, o próximo provedor natural é Microsoft Entra ou Google.
 
+## Épicos e PRs em pilha
+
+Tarefas que dependem uma da outra rodam na mesma **onda** (workflow `onda` ou a ferramenta `iniciarOnda` do Chief of Staff). Dê uma `chave` a cada card e `dependeDe` (a chave de **um** pai) ao que vem depois:
+
+```json
+{ "pedidos": [
+  { "chave": "api", "titulo": "API de filtro por data", "...": "..." },
+  { "chave": "ui",  "titulo": "Tela do filtro", "dependeDe": "api", "...": "..." },
+  { "titulo": "Documentação do filtro", "dependeDe": "ui", "...": "..." }
+] }
+```
+
+- O filho **espera o pai**, clona a **branch que o pai enviou** e abre o pull request **contra ela**: PRs em pilha, em vez de um diff gigante.
+- O corpo do PR do filho avisa que está empilhado. O resumo da onda traz a **ordem de merge**: de baixo para cima (primeiro o PR da base; depois confira se o próximo passou a apontar para a branch principal).
+- Se o pai não chega ao pull request, o filho e os netos ficam **bloqueados** e nunca rodam. Os cards independentes seguem.
+- Até 8 cards por onda, 5 ao mesmo tempo (`SUPER_FACTORY_PARALELISMO`). Chave repetida, pai que não existe e ciclo são recusados **antes** de rodar qualquer coisa. Um só pai por card: juntar duas branches de pais diferentes seria um merge escondido, e o merge é de uma pessoa.
+
+## SEO e perguntas frequentes
+
+A landing traz o FAQ visível, dados estruturados (schema.org: `WebSite`, `SoftwareApplication` e `FAQPage`, com o mesmo texto da página), Open Graph/Twitter, `robots.txt`, `sitemap.xml` e `llms.txt`. Canonical, hreflang, `og:image` e o sitemap só saem com `SUPER_FACTORY_PUBLIC_URL` definida (a Factory não inventa endereço). O FAQ vive em `src/super-factory/seo.ts`.
+
 ## Menu `/` e `@` no chat
 
 No chat de qualquer agente, digite **`/`** no começo da mensagem para ver workflows, atalhos e skills, ou **`@`** em qualquer ponto para referenciar um card, um pull request ou o repositório usado por último. Setas navegam, **Enter** ou **Tab** escolhem, **Esc** fecha.

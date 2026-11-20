@@ -1,4 +1,5 @@
 import { traduzirParaIngles } from './landing-en.ts'
+import { blocoSeo, secaoFaq } from './seo.ts'
 
 export type Idioma = 'pt' | 'en'
 
@@ -11,6 +12,7 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
   <title>Super Factory</title>
   <meta name="description" content="A programação morreu. A engenharia não. A Super Factory lê a demanda no Azure DevOps ou no GitHub, implementa e testa num container e abre o pull request. Você decide o merge." />
   <link rel="icon" href="/sf.svg" type="image/svg+xml" />
+  <!--SF-SEO-->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -706,6 +708,8 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
       </div>
     </section>
 
+    <!--SF-FAQ-->
+
     <div class="wrap fim" data-revela>
       <h2>A programação morreu. A engenharia está só começando.</h2>
       <p>O pedido chega, o pull request sai e você decide o merge. Abra a Factory e conduza o primeiro card.</p>
@@ -1393,5 +1397,7 @@ export function paginaInicial(idioma: Idioma = 'pt'): string {
   </script>
 </body>
 </html>`
-  return idioma === 'en' ? traduzirParaIngles(html) : html
+  // Os blocos de SEO e de FAQ já saem no idioma certo: entram depois da tradução, para os pares não mexerem neles.
+  const pronto = idioma === 'en' ? traduzirParaIngles(html) : html
+  return pronto.replace('<!--SF-SEO-->', blocoSeo(idioma)).replace('<!--SF-FAQ-->', secaoFaq(idioma))
 }
