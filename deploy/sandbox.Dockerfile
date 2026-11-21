@@ -6,11 +6,20 @@
 FROM node:22-bookworm
 
 ARG COM_FFMPEG=0
+# Navegador para a Factory abrir o app do card e ler o console (Playwright + Chromium). Pesa cerca de 600 MB: só com --com-browser.
+ARG COM_BROWSER=0
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-pip python3-venv python-is-python3 \
  && if [ "$COM_FFMPEG" = "1" ]; then apt-get install -y --no-install-recommends ffmpeg; fi \
  && rm -rf /var/lib/apt/lists/*
+
+RUN if [ "$COM_BROWSER" = "1" ]; then \
+      npm install -g playwright@1.49.1 \
+   && PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npx playwright install --with-deps chromium \
+   && rm -rf /var/lib/apt/lists/*; \
+    fi
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # O Debian 12 marca o Python como "gerenciado pelo sistema" (PEP 668) e o pip recusa instalar. Este container é
 # descartável (um por card, apagado no fim), então liberar o pip aqui não suja nada que dure.

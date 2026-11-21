@@ -3528,6 +3528,204 @@ assert.equal(
   }
 }
 
+// --- Lote B: mapa do repositório, prontidão e verificação do app no navegador do sandbox
+{
+  const m = await import('../factory/mapa.ts')
+  const art = await import('../factory/artefatos.ts')
+  const { depsDoAmbiente } = await import('../super-factory/workflows/autonomo.ts')
+
+  // mapa: só dos caminhos
+  const caminhos = ['package.json', 'app/(site)/page.tsx', 'app/(site)/blog/[id]/page.tsx', 'app/api/pedidos/route.ts', 'pages/sobre.tsx', 'pages/_app.tsx', 'pages/api/saude.ts', 'src/util.ts', 'src/util.test.ts', 'README.md', 'docs/guia.md', 'node_modules/x/index.js', 'Dockerfile']
+  const texto = m.mapaDeCaminhos(caminhos, { main: 'src/util.ts', scripts: { dev: 'next dev', test: `node --test --token ${TOKEN_TESTE}` } })
+  assert.match(texto, /## Telas[\s\S]*- \/\n[\s\S]*- \/blog\/\[id\][\s\S]*- \/sobre/, 'telas do Next, sem o grupo (site) e sem _app')
+  assert.ok(!/\/_app/.test(texto), '_app não é tela')
+  assert.match(texto, /## Rotas de API[\s\S]*- \/api\/pedidos[\s\S]*- \/api\/saude/)
+  assert.match(texto, /## Testes\n- 1 arquivo\(s\), em: src/)
+  assert.match(texto, /## Entradas e scripts[\s\S]*main: src\/util\.ts[\s\S]*script dev: next dev[\s\S]*Dockerfile/)
+  assert.match(texto, /## Documentação[\s\S]*README\.md[\s\S]*docs\/guia\.md/)
+  assert.ok(!texto.includes('node_modules'), 'sem ruído')
+  assert.ok(!texto.includes(TOKEN_TESTE), 'segredo num script sai redigido')
+  assert.match(m.mapaDeCaminhos(['a.py'], null), /nenhum arquivo de teste encontrado/)
+  assert.ok(m.mapaDeCaminhos(Array.from({ length: 4000 }, (_, i) => `pasta${i}/arquivo${i}.ts`), null).length <= 6100, 'o mapa tem teto de tamanho')
+  const gerado = await m.gerarMapaDoRepositorio(criarExecutorFalso((c) => (c === 'git ls-files' ? { saida: caminhos.join('\n') } : c === 'cat package.json' ? { saida: '{"scripts":{"dev":"next dev"}}' } : {})))
+  const gerado2 = await m.gerarMapaDoRepositorio(criarExecutorFalso((c) => (c === 'git ls-files' ? { saida: [...caminhos].reverse().join('\n') } : {})))
+  assert.ok(gerado && gerado2 && gerado.hash === gerado2.hash && /^[0-9a-f]{12}$/.test(gerado.hash), 'o hash não depende da ordem')
+  assert.equal(await m.gerarMapaDoRepositorio(criarExecutorFalso(() => ({ codigo: 128 }))), null, 'sem git, sem mapa')
+
+  // mapa guardado: só reescreve quando o repositório muda
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-art-'))
+  const dadosAntes = process.env.FACTORY_DATA_DIR
+  process.env.FACTORY_DATA_DIR = pasta
+  try {
+    assert.equal(art.lerMapaGuardado('acme/pedidos'), null)
+    assert.equal(art.guardarMapaDoRepositorio('acme/pedidos', gerado!), true)
+    assert.equal(art.guardarMapaDoRepositorio('acme/pedidos', gerado!), false, 'mesmo hash: não reescreve')
+    assert.equal(art.guardarMapaDoRepositorio('acme/pedidos', { ...gerado!, hash: 'aaaaaaaaaaaa' }), true, 'o repositório mudou: reescreve')
+    assert.match(art.lerMapaGuardado('acme/pedidos') ?? '', /^<!-- hash:aaaaaaaaaaaa repositorio:acme\/pedidos -->\n# Mapa de acme\/pedidos/)
+    assert.equal(art.lerMapaGuardado('../../etc/passwd'), null, 'o nome do repositório não escapa da pasta')
+    art.guardarMapaDoRepositorio('../../fora', gerado!)
+    assert.ok(fs.readdirSync(path.join(pasta, 'mapas')).every((f) => !f.includes('/') && !f.startsWith('.')), 'nome seguro no disco')
+    // captura: só PNG de verdade
+    const png = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(200, 1)]).toString('base64')
+    assert.match(art.guardarCapturaDoApp('C-1', png) ?? '', /capturas\/C-1-app\.png$/)
+    assert.equal(art.guardarCapturaDoApp('../x', png), null, 'id de card inseguro')
+    assert.equal(art.guardarCapturaDoApp('C-1', Buffer.from('não sou png'.repeat(20)).toString('base64')), null, 'não é PNG')
+    assert.equal(art.guardarCapturaDoApp('C-1', 'a b c'), null)
+  } finally {
+    if (dadosAntes === undefined) delete process.env.FACTORY_DATA_DIR
+    else process.env.FACTORY_DATA_DIR = dadosAntes
+    fs.rmSync(pasta, { recursive: true, force: true })
+  }
+
+  // prontidão
+  const cheio = m.avaliarProntidao({ arquivos: ['README.md', 'AGENTS.md', 'package-lock.json', '.github/workflows/ci.yml', 'src/a.test.ts', 'src/a.ts'], comandoDeTeste: 'npm run test', extras: ['lint', 'typecheck', 'build'] })
+  assert.deepEqual([cheio.pontos, cheio.total, cheio.nivel], [9, 9, 'pronto'])
+  const vazio = m.avaliarProntidao({ arquivos: ['src/a.ts'], comandoDeTeste: null, extras: [] })
+  assert.deepEqual([vazio.pontos, vazio.nivel], [0, 'fragil'])
+  assert.equal(m.avaliarProntidao({ arquivos: ['README.md', 'src/a.test.ts', 'package-lock.json', 'AGENTS.md'], comandoDeTeste: 'npm test', extras: ['lint'] }).nivel, 'parcial')
+  assert.match(m.prontidaoEmTexto(vazio), /0\/9 \(fragil\)\. Falta: Comando de teste/)
+  assert.equal(m.atencaoDeProntidao(cheio).length, 0)
+  assert.equal(m.atencaoDeProntidao(vazio).length, 3, 'só teste, arquivos de teste e CI entram no PR')
+  const lida = await m.diagnosticarProntidao(criarExecutorFalso((c) => (c === 'git ls-files' ? { saida: 'README.md\nsrc/a.ts' } : {})), 'npm run test', [{ nome: 'lint' }])
+  assert.equal(lida?.pontos, 3)
+
+  // como subir o app
+  assert.deepEqual(m.comandoParaSubir({ dev: 'vite' }, 'pnpm'), { comando: 'pnpm run dev', porta: 5173 })
+  assert.deepEqual(m.comandoParaSubir({ start: 'node server.js --port 8080', dev: 'x' }, 'npm'), { comando: 'npm run start', porta: 8080 })
+  assert.deepEqual(m.comandoParaSubir({ preview: 'astro preview' }, 'npm'), { comando: 'npm run preview', porta: 4321 })
+  assert.equal(m.comandoParaSubir({ test: 'x', build: 'y' }, 'npm'), null)
+
+  // app no navegador, com o sandbox simulado
+  type Rel = { status: number | null; titulo: string; erros: string[]; falhas: string[] }
+  const app = (o: { scripts?: Record<string, string>; playwright?: boolean; porta?: boolean; rel?: Rel | (() => Rel) } = {}) => {
+    const rel = o.rel ?? { status: 200, titulo: 'Meu app', erros: [], falhas: [] }
+    return criarExecutorFalso((c) => {
+      if (c === 'cat package.json') return { saida: JSON.stringify({ scripts: o.scripts ?? { start: 'node server.js' } }) }
+      if (c.includes("require('playwright')")) return { codigo: o.playwright === false ? 1 : 0 }
+      if (c.includes('setsid nohup')) return o.porta === false ? { codigo: 1, saida: 'SEM_PORTA\nError: EADDRINUSE' } : { saida: 'PORTA=3000' }
+      if (c.endsWith('/relatorio.json') && c.startsWith('cat')) return { saida: JSON.stringify(typeof rel === 'function' ? rel() : rel) }
+      if (c.includes('base64 -w0')) return { saida: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(300, 7)]).toString('base64') }
+      return {}
+    })
+  }
+  let r = await m.verificarAppNoNavegador(app(), 'npm', true)
+  assert.equal(r.check.resultado, 'PASS')
+  assert.match(r.check.evidencia, /GET \/ → 200, título "Meu app"\. Sem erro no console/)
+  assert.ok(r.captura.png, 'a captura de tela volta')
+  r = await m.verificarAppNoNavegador(app(), 'npm', false)
+  assert.equal(r.captura.png, null, 'sem pedir a tela, não leva a tela')
+  r = await m.verificarAppNoNavegador(app({ rel: { status: 200, titulo: '', erros: ['console: TypeError: x is undefined'], falhas: [] } }), 'npm', false)
+  assert.equal(r.check.resultado, 'FAIL')
+  assert.match(r.check.evidencia, /TypeError: x is undefined/)
+  r = await m.verificarAppNoNavegador(app({ rel: { status: 500, titulo: '', erros: [], falhas: [] } }), 'npm', false)
+  assert.equal(r.check.resultado, 'FAIL', 'página com 500 não passa')
+  r = await m.verificarAppNoNavegador(app({ porta: false }), 'npm', false)
+  assert.equal(r.check.resultado, 'FAIL')
+  assert.match(r.check.evidencia, /não respondeu em 60 s[\s\S]*EADDRINUSE/)
+  r = await m.verificarAppNoNavegador(app({ scripts: { test: 'x' } }), 'npm', false)
+  assert.equal(r.check.resultado, 'NOT_RUN', 'repositório sem app web não é falha')
+  assert.match(r.check.evidencia, /não há app para abrir/)
+  r = await m.verificarAppNoNavegador(app({ playwright: false }), 'npm', false)
+  assert.equal(r.check.resultado, 'NOT_RUN')
+  assert.match(r.check.evidencia, /--com-browser/, 'diz como construir a imagem com navegador')
+  const exec = app()
+  await m.verificarAppNoNavegador(exec, 'pnpm', false)
+  assert.ok(exec.comandos.some((c) => c.includes('pnpm run start')), 'usa o gerenciador do projeto')
+  assert.ok(exec.comandos.at(-1)?.includes('kill'), 'o app é parado ao fim')
+  assert.ok(exec.comandos.filter((c) => c.includes('kill')).length >= 2, 'e antes de subir, para não sobrar um antigo')
+
+  // veredito: regressão do app
+  const ck = (nome: string, resultado: 'PASS' | 'FAIL' | 'NOT_RUN') => ({ nome, resultado, comando: 'x', evidencia: 'e' })
+  const vv = await import('../factory/verificacao.ts')
+  assert.match(vv.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('app-no-navegador', 'FAIL'), ck('baseline:app', 'PASS')] }).motivos[0] ?? '', /abria sem erro no navegador antes da mudança e agora não/)
+  const semBase = vv.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('app-no-navegador', 'FAIL')] })
+  assert.equal(semBase.passou, true, 'sem baseline do app, o erro é nota')
+  assert.match(semBase.notas[0] ?? '', /app no navegador tem erro/)
+  assert.equal(vv.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('app-no-navegador', 'FAIL'), ck('baseline:app', 'FAIL')] }).passou, true, 'já quebrado antes: não é regressão')
+
+  // fluxo completo
+  const pedidoBug = { ...pedidoAuto, descricao: 'Bug: o filtro da API de pedidos falha quando a data vem só com o dia. Precisa aceitar intervalo com hora e recusar fim anterior ao início.' }
+  const fluxo = async (rel: () => Rel, extra: Partial<Parameters<typeof executarAutonomo>[1]> = {}) => {
+    const g = githubFalso()
+    const base = roteiroNode()
+    const lote: string[] = []
+    const capturas: string[] = []
+    const mapas: string[] = []
+    const exec = criarExecutorFalso((c) => {
+      if (c === 'cat package.json') return { saida: JSON.stringify({ scripts: { test: 'node --test', start: 'node server.js' } }) }
+      if (c === 'git ls-files') return { saida: caminhos.join('\n') }
+      if (c.includes("require('playwright')")) return { codigo: 0 }
+      if (c.includes('setsid nohup')) return { saida: 'PORTA=3000' }
+      if (c.endsWith('/relatorio.json') && c.startsWith('cat')) return { saida: JSON.stringify(rel()) }
+      if (c.includes('base64 -w0')) return { saida: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(300, 7)]).toString('base64') }
+      if (c === 'git ls-files -m -o --exclude-standard') return { saida: 'src/filtro.js\ntests/filtro.test.js' }
+      if (c.startsWith('git stash push')) return { codigo: 1, saida: 'FAIL sem a correção' }
+      return base(c)
+    })
+    const r = await executarAutonomo(pedidoBug, {
+      criarExecutor: async () => exec,
+      implementador: async ({ mapa }) => { lote.push(mapa ?? ''); return { resumo: 'ok' } },
+      credenciais: { githubToken: TOKEN_TESTE },
+      github: g.deps,
+      verificacaoCompleta: true,
+      navegador: true,
+      guardarMapa: (repo, mapa) => void mapas.push(`${repo}:${mapa.hash}`),
+      guardarCaptura: (id, png) => { capturas.push(`${id}:${png.length}`); return `data/capturas/${id}-app.png` },
+      ...extra,
+    })
+    return { r, g, exec, lote, capturas, mapas, corpo: String(g.chamadas[0]?.corpo.body ?? ''), rascunho: g.chamadas[0]?.corpo.draft }
+  }
+  const limpo = () => ({ status: 200, titulo: 'Meu app', erros: [], falhas: [] })
+  let f = await fluxo(limpo)
+  assert.equal(f.r.estado.parado, false, f.r.estado.motivo ?? '')
+  assert.ok(f.r.estado.checks.some((c) => c.nome === 'baseline:app' && c.resultado === 'PASS'))
+  assert.ok(f.r.estado.checks.some((c) => c.nome === 'app-no-navegador' && c.resultado === 'PASS'))
+  assert.equal(f.rascunho, false)
+  assert.match(f.corpo, /App no navegador \(`npm run start`\) → \*\*PASS\*\* \(antes da mudança: PASS\)/)
+  assert.match(f.lote[0] ?? '', /## Telas|Telas/, 'o mapa chega ao construtor')
+  assert.equal(f.mapas.length, 1, 'o mapa é guardado')
+  assert.match(f.mapas[0] ?? '', /^acme\/pedidos:[0-9a-f]{12}$/)
+  assert.equal(f.capturas.length, 1, 'a captura de tela é guardada, uma vez')
+  assert.match(f.r.estado.checks.find((c) => c.nome === 'app-no-navegador')?.evidencia ?? '', /Captura de tela guardada na Factory: data\/capturas\/C-\d+-app\.png/)
+  assert.ok(f.r.estado.trilha.some((e) => /Mapa do repositório gerado \(\d+ arquivos/.test(e.resumo)))
+  assert.ok(f.r.estado.trilha.some((e) => /Prontidão do repositório para a Factory: \d\/9/.test(e.resumo)))
+  assert.ok(f.r.estado.trilha.some((e) => /Baseline do app no navegador: PASS/.test(e.resumo)))
+  assert.match(f.corpo, /### Pontos de atenção[\s\S]*Prontidão: falta ci no repositório/i, 'o que falta de prontidão aparece no PR')
+  // o app abria antes e agora dá erro: regressão, PR em rascunho
+  let chamada = 0
+  f = await fluxo(() => (++chamada === 1 ? limpo() : { status: 200, titulo: '', erros: ['console: ReferenceError: tela is not defined'], falhas: [] }))
+  assert.equal(f.rascunho, true)
+  assert.match(f.corpo, /Aberto como rascunho: o app abria sem erro no navegador antes da mudança e agora não/)
+  assert.match(f.corpo, /ReferenceError: tela is not defined/)
+  // navegador desligado: nada disso roda
+  f = await fluxo(limpo, { navegador: false })
+  assert.ok(!f.r.estado.checks.some((c) => c.nome.includes('app')) && !f.exec.comandos.some((c) => c.includes('setsid')), 'sem --com-browser, nenhum app sobe')
+  assert.equal(f.capturas.length, 0)
+  // mapa e prontidão são só leitura: um erro ao guardar não derruba o card
+  f = await fluxo(limpo, { guardarMapa: () => { throw new Error('disco cheio') } })
+  assert.equal(f.r.estado.parado, false, 'falha ao guardar o mapa não para o card')
+
+  // ligação ao ambiente e à imagem do sandbox
+  const antes = process.env.SUPER_FACTORY_NAVEGADOR
+  try {
+    delete process.env.SUPER_FACTORY_NAVEGADOR
+    assert.equal(depsDoAmbiente().navegador, false, 'o navegador vem desligado')
+    process.env.SUPER_FACTORY_NAVEGADOR = 'sim'
+    assert.equal(depsDoAmbiente().navegador, true)
+  } finally {
+    if (antes === undefined) delete process.env.SUPER_FACTORY_NAVEGADOR
+    else process.env.SUPER_FACTORY_NAVEGADOR = antes
+  }
+  const dockerfile = fs.readFileSync(new URL('../../deploy/sandbox.Dockerfile', import.meta.url), 'utf8')
+  assert.match(dockerfile, /ARG COM_BROWSER=0/)
+  assert.match(dockerfile, /playwright install --with-deps chromium/)
+  const construir = fs.readFileSync(new URL('../../deploy/construir-sandbox.sh', import.meta.url), 'utf8')
+  assert.match(construir, /--com-browser\) COM_BROWSER=1/)
+  assert.match(construir, /SUPER_FACTORY_NAVEGADOR=sim/)
+  const fonteAg = fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8')
+  assert.ok(fonteAg.includes('diagnosticarProntidaoGithub') && fonteAg.includes('lerMapaDoRepositorio'), 'o Chief tem as ferramentas do Lote B')
+}
+
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(

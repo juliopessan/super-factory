@@ -14,9 +14,9 @@ Decisões da pessoa que opera a Factory (21/11/2026): navegador no sandbox, **si
 | Convenções do projeto (AGENTS.md) como restrição | Lote A: o repositório clonado é lido e entra no pedido do construtor |
 | "Todo modo de falha vira skill": o agente afirma sem ter lido | Lote A: trilha do construtor (o que leu, escreveu e rodou) e auditoria "afirmou sem ler" |
 | Juiz de outro modelo | Lote A: o revisor usa `claude-opus-5-5` (ou `SUPER_FACTORY_REVIEWER_MODEL`) |
-| Control glass: skill que dirige o app e captura traces e screenshots | Lote B |
-| Feature map: o agente aprende a chegar em cada funcionalidade | Lote B |
-| Prontidão do repositório: guarda-corpos antes de ligar a autonomia | Lote B |
+| Control glass: skill que dirige o app e captura traces e screenshots | Lote B: sobe o app no sandbox, abre no Chromium, lê status/console/requisições e guarda a captura de tela. Ainda não grava trace nem navega por fluxos |
+| Feature map: o agente aprende a chegar em cada funcionalidade | Lote B: mapa de pastas, telas, rotas e testes, guardado por repositório e atualizado quando os arquivos mudam. Ainda estático (não aprende com o uso) |
+| Prontidão do repositório: guarda-corpos antes de ligar a autonomia | Lote B: `diagnosticarProntidaoGithub` e pontos de atenção no PR |
 | Evals com rubrica, juiz de outro modelo e matriz de modelos | Lote C |
 | "Comentou duas vezes? Vire regra dura" | Lote C |
 | Resultado do PR como sinal; custo por PR aceito | Lote C |
@@ -29,6 +29,6 @@ Decisões da pessoa que opera a Factory (21/11/2026): navegador no sandbox, **si
 | Lote | Entrega | Estado |
 |---|---|---|
 | A | Baseline, extras, vermelho→verde, convenções, trilha e ancoragem, revisor com modelo próprio | feito |
-| B | Control glass, feature map, prontidão do repositório | a fazer |
+| B | Control glass (navegador no sandbox), feature map, prontidão do repositório | feito |
 | C | Evals, minerador de regras, resultado do PR | a fazer |
 | D | Webhook, triagem automática de bug, orçamento de PR | a fazer |

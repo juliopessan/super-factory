@@ -12,6 +12,7 @@ import { PASTA_DO_REPOSITORIO, type Execucao, type Executor } from './sandbox.ts
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
 import { auditarAcoes, extrasDoNode, lerConvencoes, rodarBaseline, rodarExtras, verificarVermelhoVerde, veredito, type AcaoDoConstrutor, type Verificacao } from './verificacao.ts'
 import { persistir } from './store.ts'
+import { atencaoDeProntidao, diagnosticarProntidao, gerarMapaDoRepositorio, prontidaoEmTexto, verificarAppNoNavegador, type MapaDoRepositorio } from './mapa.ts'
 
 export type { Verificacao } from './verificacao.ts'
 
@@ -30,6 +31,8 @@ export type Implementador = (contexto: {
   falhaAnterior: Execucao | null
   /** O que o próprio repositório pede de quem contribui (AGENTS.md, CLAUDE.md, CONTRIBUTING). Texto do projeto, não ordem da Factory. */
   convencoes?: string | null
+  /** Mapa do repositório (pastas, telas, rotas, entradas, testes), gerado do que foi clonado. */
+  mapa?: string | null
 }) => Promise<{ resumo: string; uso?: { entrada: number; saida: number }; acoes?: AcaoDoConstrutor[] }>
 
 export type DepsAutonomo = {
@@ -43,6 +46,12 @@ export type DepsAutonomo = {
   comentarNaDemanda?: boolean
   /** Verificação completa: baseline antes da mudança, lint, typecheck e build como checks, e vermelho→verde em bug. Mais tempo por card; padrão: desligada aqui, ligada no ambiente real. */
   verificacaoCompleta?: boolean
+  /** Abre o app no Chromium do sandbox antes e depois da mudança. Precisa da imagem construída com --com-browser. */
+  navegador?: boolean
+  /** Guarda o mapa do repositório (a Factory só reescreve quando o repositório mudou). */
+  guardarMapa?: (repositorio: string, mapa: MapaDoRepositorio) => void
+  /** Guarda a captura de tela do app e devolve onde ficou. */
+  guardarCaptura?: (cardId: string, pngBase64: string) => string | null
 }
 
 const AUTOR = 'Super Factory <factory@super-factory.local>'
@@ -94,6 +103,11 @@ export function alvoDoClone(estado: Estado, credenciais: Credenciais): { url: st
     url: `https://dev.azure.com/${org}/${project}/_git/${repository}`,
     env: { FACTORY_GIT_AUTH: `Authorization: Basic ${Buffer.from(`:${pat}`).toString('base64')}` },
   }
+}
+
+/** O gerenciador de pacotes que descobrirVerificacao escolheu (npm, pnpm ou yarn). */
+function gerenciadorDe(v: Verificacao): string {
+  return /\((pnpm|yarn)\)/.exec(v.origem)?.[1] ?? 'npm'
 }
 
 /** Descobre como instalar e testar o projeto, só pelo que está no repositório. */
@@ -185,6 +199,10 @@ export type ContextoAutonomo = ResultadoAutonomo & {
   pilha?: string | null
   /** Convenções lidas do repositório clonado. */
   convencoes?: string | null
+  /** Mapa de funcionalidades do repositório clonado. */
+  mapa?: string | null
+  /** Pontos de atenção da prontidão do repositório, para o PR. */
+  atencao?: string[]
 }
 
 /** O que vive só na memória durante a execução: o container do card. */
@@ -276,7 +294,31 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         estado = { ...estado, checks: [...estado.checks.filter((c) => !c.nome.startsWith('baseline:')), ...baseline] }
         if (baseline.length > 0) estado = anotarAuto(estado, 'verification', `Baseline antes da mudança: ${baseline.map((c) => `${c.nome.replace('baseline:', '')} ${c.resultado}`).join(', ')}.`)
       }
-      return { ...contexto, estado, verificacao, convencoes }
+      // Mapa e prontidão: o que há no repositório e o que falta para provar uma mudança nele.
+      let mapa: string | null = null
+      let atencao: string[] = []
+      const mapaGerado = await gerarMapaDoRepositorio(executor).catch(() => null)
+      if (mapaGerado) {
+        mapa = mapaGerado.texto
+        estado = anotarAuto(estado, 'implementation', `Mapa do repositório gerado (${mapaGerado.arquivos} arquivos, ${mapaGerado.hash}).`)
+        try {
+          deps.guardarMapa?.(contexto.estado.card.repositorio, mapaGerado)
+        } catch {}
+      }
+      const prontidao = await diagnosticarProntidao(executor, verificacao.verificar, verificacao.extras ?? []).catch(() => null)
+      if (prontidao) {
+        estado = anotarAuto(estado, 'implementation', prontidaoEmTexto(prontidao))
+        atencao = atencaoDeProntidao(prontidao)
+      }
+      // O app abria no navegador antes da mudança? Sem isso, não dá para chamar de regressão o que ele faz depois.
+      if (deps.navegador && deps.verificacaoCompleta) {
+        const antes = await verificarAppNoNavegador(executor, gerenciadorDe(verificacao), false).catch(() => null)
+        if (antes) {
+          estado = { ...estado, checks: [...estado.checks.filter((c) => c.nome !== 'baseline:app'), { ...antes.check, nome: 'baseline:app' }] }
+          estado = anotarAuto(estado, 'verification', `Baseline do app no navegador: ${antes.check.resultado}.`)
+        }
+      }
+      return { ...contexto, estado, verificacao, convencoes, mapa, atencao }
     },
   },
   {
@@ -292,7 +334,7 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       let teste: Execucao | null = null
       let ultimoResumo = ''
       for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
-        const { resumo, uso, acoes } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste, convencoes: contexto.convencoes ?? null })
+        const { resumo, uso, acoes } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste, convencoes: contexto.convencoes ?? null, mapa: contexto.mapa ?? null })
         ultimoResumo = resumo
         estado = anotarAuto(estado, 'implementation', `Tentativa ${tentativa}: ${resumo}`, 'reported')
         if (uso) estado = { ...estado, uso: { entrada: (estado.uso?.entrada ?? 0) + uso.entrada, saida: (estado.uso?.saida ?? 0) + uso.saida } }
@@ -309,7 +351,22 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         // Bug: o teste novo precisa falhar sem a correção e passar com ela.
         const rv = check.resultado === 'PASS' ? await verificarVermelhoVerde(executor, verificacao, estado.card.rota) : null
         if (rv && !rv.restaurou) return pararCom({ ...contexto, estado, verificacao }, 'Não consegui devolver o código ao lugar depois de rodar os testes sem a correção. O trabalho do construtor está guardado no stash do sandbox; rode o card de novo.')
-        const novos = [...extras, ...(rv ? [rv.check] : [])]
+        // O app no navegador: sobe, abre, lê o console e guarda a captura de tela.
+        let appCheck: typeof estado.checks = []
+        if (deps.navegador && check.resultado === 'PASS') {
+          const app = await verificarAppNoNavegador(executor, gerenciadorDe(verificacao), true).catch(() => null)
+          if (app) {
+            appCheck = [app.check]
+            let onde: string | null = null
+            if (app.captura.png) {
+              try {
+                onde = deps.guardarCaptura?.(estado.card.id, app.captura.png) ?? null
+              } catch {}
+            }
+            if (onde) appCheck = [{ ...app.check, evidencia: `${app.check.evidencia}\nCaptura de tela guardada na Factory: ${onde}` }]
+          }
+        }
+        const novos = [...extras, ...(rv ? [rv.check] : []), ...appCheck]
         const nomes = new Set(novos.map((c) => c.nome))
         estado = { ...estado, checks: [...estado.checks.filter((c) => !nomes.has(c.nome)), ...novos] }
         if (novos.length > 0) estado = anotarAuto(estado, 'verification', `Verificações: ${novos.map((c) => `${c.nome} ${c.resultado}`).join(', ')}.`)
@@ -358,13 +415,13 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       const ver = veredito({ checks: estado.checks.some((c) => c.nome === 'testes-no-sandbox') ? estado.checks : [...estado.checks, check] })
       const passou = ver.passou
       const achado = (nome: string) => estado.checks.find((c) => c.nome === nome)
-      const linhasDeChecks = ['lint', 'typecheck', 'build', 'vermelho-verde'].flatMap((nome) => {
+      const linhasDeChecks = ['lint', 'typecheck', 'build', 'vermelho-verde', 'app-no-navegador'].flatMap((nome) => {
         const c = achado(nome)
         if (!c) return []
-        const antes = achado(`baseline:${nome}`)
-        return [`- ${nome === 'vermelho-verde' ? 'Vermelho→verde' : nome}${c.comando ? ` (\`${c.comando}\`)` : ''} → **${c.resultado}**${antes ? ` (antes da mudança: ${antes.resultado})` : ''}`]
+        const antes = achado(`baseline:${nome === 'app-no-navegador' ? 'app' : nome}`)
+        return [`- ${nome === 'vermelho-verde' ? 'Vermelho→verde' : nome === 'app-no-navegador' ? 'App no navegador' : nome}${c.comando ? ` (\`${c.comando}\`)` : ''} → **${c.resultado}**${antes ? ` (antes da mudança: ${antes.resultado})` : ''}`]
       })
-      const pontosDeAtencao = [...ver.notas, ...estado.achados.filter((a) => a.id.startsWith('ANC-')).map((a) => a.texto), ...(achado('vermelho-verde')?.resultado === 'NOT_RUN' ? [achado('vermelho-verde')!.evidencia] : [])]
+      const pontosDeAtencao = [...ver.notas, ...estado.achados.filter((a) => a.id.startsWith('ANC-')).map((a) => a.texto), ...(achado('vermelho-verde')?.resultado === 'NOT_RUN' ? [achado('vermelho-verde')!.evidencia] : []), ...(achado('app-no-navegador')?.resultado === 'FAIL' ? [`App no navegador: ${achado('app-no-navegador')!.evidencia.slice(0, 700)}`] : []), ...(contexto.atencao ?? [])]
       const corpo = [
         `## ${estado.card.id}: ${estado.card.titulo}`,
         '',

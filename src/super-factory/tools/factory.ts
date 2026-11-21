@@ -31,6 +31,8 @@ import { avaliarMerge, iniciar } from '../../factory/pipeline.ts'
 import { comentarPullRequestGithub as postarRevisao, lerPullRequestGithub as buscarPullRequest, MAXIMO_DE_ACHADOS } from '../../factory/revisao.ts'
 import { MAXIMO_DE_CARDS_POR_ONDA, validarOnda } from '../../factory/dependencias.ts'
 import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/paralelo.ts'
+import { lerMapaGuardado } from '../../factory/artefatos.ts'
+import { diagnosticarProntidaoGithub as medirProntidao } from '../../factory/prontidao-github.ts'
 import { pedidoSchema } from '../../factory/schemas.ts'
 import { lerEstado, lerRun } from '../../factory/store.ts'
 
@@ -322,6 +324,28 @@ export const lerProtecaoDeBranchGithub = createTool({
   execute: async ({ repositorio, branch }) => {
     const r = await lerProtecao(repositorio, branch)
     return { ok: r.ok, protecao: r.dado, resumo: r.nota }
+  },
+})
+
+export const diagnosticarProntidaoGithub = createTool({
+  id: 'diagnosticar-prontidao-github',
+  description: 'Diz se um repositório está pronto para a Factory trabalhar nele com segurança: comando de teste, arquivos de teste, lint, typecheck, build, AGENTS.md, CI, lockfile, README e proteção da branch principal. Lista o que falta e por que importa. Só lê; não altera nada. Use antes de ligar o modo autônomo num repositório novo.',
+  inputSchema: z.object({ repositorio: REPOSITORIO, branch: z.string().max(120).optional().describe('Padrão: main, depois master.') }),
+  outputSchema: z.object({ ok: z.boolean(), prontidao: z.any().nullable(), resumo: z.string() }),
+  execute: async ({ repositorio, branch }) => {
+    const r = await medirProntidao(repositorio, branch)
+    return { ok: r.ok, prontidao: r.dado, resumo: r.nota }
+  },
+})
+
+export const lerMapaDoRepositorio = createTool({
+  id: 'ler-mapa-do-repositorio',
+  description: 'Lê o mapa de funcionalidades que a Factory gerou na última vez que trabalhou num repositório: pastas, telas, rotas de API, entradas e testes. Só lê o que já foi guardado; se ainda não há mapa, diz que ele nasce na primeira execução do modo autônomo nesse repositório.',
+  inputSchema: z.object({ repositorio: REPOSITORIO }),
+  outputSchema: z.object({ ok: z.boolean(), mapa: z.string().nullable(), resumo: z.string() }),
+  execute: async ({ repositorio }) => {
+    const mapa = lerMapaGuardado(repositorio)
+    return mapa ? { ok: true, mapa, resumo: 'Mapa guardado pela Factory.' } : { ok: false, mapa: null, resumo: 'Ainda não há mapa deste repositório: ele é gerado na primeira execução do modo autônomo nele.' }
   },
 })
 

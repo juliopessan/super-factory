@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Constrói a imagem do sandbox dos cards (com Python e pip) e liga a Factory a ela.
-#   sudo bash /opt/super-factory/deploy/construir-sandbox.sh [--com-ffmpeg]
+#   sudo bash /opt/super-factory/deploy/construir-sandbox.sh [--com-ffmpeg] [--com-browser]
 # Faz: constrói a imagem, confere que python3, pip e git funcionam dentro dela, grava
 # SUPER_FACTORY_SANDBOX_IMAGE no .env (com cópia do anterior) e recria o container da Factory.
 # Não mexe em nenhum outro projeto da VPS.
@@ -9,10 +9,12 @@ PASTA="${PASTA:-/opt/super-factory}"
 COMPOSE="${COMPOSE:-/docker/super-factory/docker-compose.yml}"
 IMAGEM="${IMAGEM:-super-factory-sandbox:latest}"
 COM_FFMPEG=0
+COM_BROWSER=0
 for arg in "$@"; do
   case "$arg" in
     --com-ffmpeg) COM_FFMPEG=1 ;;
-    -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+    --com-browser) COM_BROWSER=1 ;;
+    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
     *) echo "Opção desconhecida: $arg"; exit 2 ;;
   esac
 done
@@ -22,8 +24,8 @@ cd "$PASTA"
 [ -f .env ] || { echo "✗ Não achei $PASTA/.env"; exit 1; }
 [ -f deploy/sandbox.Dockerfile ] || { echo "✗ Não achei deploy/sandbox.Dockerfile. Rode antes: sudo bash $PASTA/deploy/atualizar.sh"; exit 1; }
 
-echo "→ Construindo $IMAGEM (Python 3 + pip$([ "$COM_FFMPEG" = 1 ] && echo ' + FFmpeg'))…"
-docker build -f deploy/sandbox.Dockerfile --build-arg "COM_FFMPEG=$COM_FFMPEG" -t "$IMAGEM" deploy
+echo "→ Construindo $IMAGEM (Python 3 + pip$([ "$COM_FFMPEG" = 1 ] && echo ' + FFmpeg')$([ "$COM_BROWSER" = 1 ] && echo ' + navegador'))…"
+docker build -f deploy/sandbox.Dockerfile --build-arg "COM_FFMPEG=$COM_FFMPEG" --build-arg "COM_BROWSER=$COM_BROWSER" -t "$IMAGEM" deploy
 
 echo "→ Conferindo a imagem por dentro…"
 SAIDA="$(docker run --rm "$IMAGEM" bash -lc 'python3 --version && python --version && pip --version && git --version && node --version')" \
@@ -33,11 +35,21 @@ if [ "$COM_FFMPEG" = 1 ]; then
   docker run --rm "$IMAGEM" ffmpeg -version | head -1 | sed 's/^/   /'
 fi
 
+if [ "$COM_BROWSER" = 1 ]; then
+  docker run --rm "$IMAGEM" bash -lc 'NODE_PATH="$(npm root -g)" node -e "const {chromium}=require(\"playwright\");chromium.launch({args:[\"--no-sandbox\"]}).then(b=>b.close()).then(()=>console.log(\"navegador ok\"))"' | sed 's/^/   /' \
+    || { echo "✗ A imagem foi construída, mas o navegador não abriu."; exit 1; }
+fi
+
 COPIA=".env.antes-do-sandbox-$(date +%Y%m%d-%H%M%S)"
 cp -p .env "$COPIA"
 TMP="$(mktemp)"
 grep -vE '^SUPER_FACTORY_SANDBOX_IMAGE=' .env > "$TMP" || true
 printf 'SUPER_FACTORY_SANDBOX_IMAGE=%s\n' "$IMAGEM" >> "$TMP"
+if [ "$COM_BROWSER" = 1 ]; then
+  grep -vE '^SUPER_FACTORY_NAVEGADOR=' "$TMP" > "$TMP.2" || true
+  printf 'SUPER_FACTORY_NAVEGADOR=sim\n' >> "$TMP.2"
+  cat "$TMP.2" > "$TMP"; rm -f "$TMP.2"
+fi
 cat "$TMP" > .env
 rm -f "$TMP"
 chmod 600 .env
