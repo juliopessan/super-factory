@@ -3,7 +3,11 @@
 
 import type { Mastra } from '@mastra/core/mastra'
 
+import { CARDS_DE_OURO, DIFFS_DE_OURO } from '../factory/evals.ts'
+
 export const ID_CONJUNTO_CRITERIOS = 'criterios-de-aceite'
+export const ID_CONJUNTO_CARDS_DE_OURO = 'cards-de-ouro'
+export const ID_CONJUNTO_REVISAO_DE_OURO = 'revisao-de-ouro'
 
 export type CasoDeCriterio = { nome: string; criterios: string[]; ok: boolean }
 
@@ -18,8 +22,32 @@ export const CASOS_DE_CRITERIOS: CasoDeCriterio[] = [
   { nome: 'pendência escondida', criterios: ['O relatório deve ser exportado em CSV, TBD o formato das colunas'], ok: false },
 ]
 
-/** Cria o conjunto uma vez. Não mexe se ele já existe, para não apagar o que a pessoa editou no Studio. */
+/** Cria cada conjunto uma vez. Não mexe no que já existe, para não apagar o que a pessoa editou no Studio. */
 export async function semearConjuntos(mastra: Mastra): Promise<'criado' | 'existente'> {
+  const novos = [await semearCriterios(mastra), await semearDeOuro(mastra)]
+  return novos.includes('criado') ? 'criado' : 'existente'
+}
+
+async function semearDeOuro(mastra: Mastra): Promise<'criado' | 'existente'> {
+  let criou = false
+  try {
+    await mastra.datasets.get({ id: ID_CONJUNTO_CARDS_DE_OURO })
+  } catch {
+    const cards = await mastra.datasets.create({ id: ID_CONJUNTO_CARDS_DE_OURO, name: 'Cards de ouro (triagem)', description: 'Pedidos com a rota e o lint esperados. Rode um experimento com o scorer "triagem" para medir a triagem.' })
+    await cards.addItems({ items: CARDS_DE_OURO.map((c) => ({ input: { nome: c.nome, titulo: c.titulo, descricao: c.descricao, criterios: c.criterios }, groundTruth: { rota: c.rota, ok: c.lintOk } })) })
+    criou = true
+  }
+  try {
+    await mastra.datasets.get({ id: ID_CONJUNTO_REVISAO_DE_OURO })
+  } catch {
+    const revisao = await mastra.datasets.create({ id: ID_CONJUNTO_REVISAO_DE_OURO, name: 'Diffs de ouro (revisão)', description: 'Mudanças com um defeito plantado. A boa revisão aponta o defeito. Rode um experimento com o scorer "revisao" e compare modelos.' })
+    await revisao.addItems({ items: DIFFS_DE_OURO.map((d) => ({ input: { nome: d.nome, diff: d.diff }, groundTruth: { palavras: d.palavras } })) })
+    criou = true
+  }
+  return criou ? 'criado' : 'existente'
+}
+
+async function semearCriterios(mastra: Mastra): Promise<'criado' | 'existente'> {
   try {
     await mastra.datasets.get({ id: ID_CONJUNTO_CRITERIOS })
     return 'existente'

@@ -15,6 +15,10 @@ export type Metricas = {
   testesVerdes: number
   tokens: { entrada: number; saida: number; porCard: number | null }
   ultimos7Dias: number
+  /** O que as pessoas fizeram com os PRs: só conta os que já foram medidos (medirResultadosDosPrs). */
+  resultados: { aceitos: number; ajustados: number; recusados: number; abertos: number; medidos: number }
+  /** Tokens gastos em TODAS as execuções, divididos pelos PRs mesclados (aceitos + ajustados). Null sem PR mesclado. Dinheiro não é calculado. */
+  tokensPorPrMesclado: number | null
 }
 
 function minutos(estado: Estado): number | null {
@@ -39,6 +43,8 @@ export function calcularMetricas(runs: Record<string, Estado>, agora = Date.now(
   const saida = comUso.reduce((n, r) => n + (r.uso?.saida ?? 0), 0)
   const semana = agora - 7 * 86_400_000
   const arredonda = (v: number | null) => (v === null ? null : Math.round(v * 10) / 10)
+  const por = (r: string) => lista.filter((x) => x.resultadoPr?.resultado === r).length
+  const mesclados = por('aceito') + por('ajustado')
   return {
     execucoes: lista.length,
     pullRequests: entregues.length,
@@ -48,5 +54,7 @@ export function calcularMetricas(runs: Record<string, Estado>, agora = Date.now(
     testesVerdes: verdes.length,
     tokens: { entrada, saida, porCard: comUso.length ? Math.round((entrada + saida) / comUso.length) : null },
     ultimos7Dias: lista.filter((r) => Date.parse(r.atualizadoEm) >= semana).length,
+    resultados: { aceitos: por('aceito'), ajustados: por('ajustado'), recusados: por('recusado'), abertos: por('aberto'), medidos: lista.filter((x) => x.resultadoPr).length },
+    tokensPorPrMesclado: mesclados > 0 && comUso.length > 0 ? Math.round((entrada + saida) / mesclados) : null,
   }
 }

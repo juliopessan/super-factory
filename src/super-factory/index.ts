@@ -17,7 +17,7 @@ import { habilidades } from './habilidades.ts'
 import { conduzirInstalacaoFerramenta } from './instalacao.ts'
 import { criarFactory } from './controle.ts'
 import { servidorMcp } from './mcp.ts'
-import { evidenciaScorer, portoesScorer, relatorioScorer } from './scorers/factory.ts'
+import { evidenciaScorer, portoesScorer, relatorioScorer, revisaoScorer, triagemScorer } from './scorers/factory.ts'
 import {
   abrirCard,
   avaliarGateMerge,
@@ -97,6 +97,8 @@ export const mastra = new Mastra({
     evidencia: evidenciaScorer,
     portoes: portoesScorer,
     relatorio: relatorioScorer,
+    triagem: triagemScorer,
+    revisao: revisaoScorer,
   },
   storage,
   memory: { factory: memoria },
