@@ -46,6 +46,8 @@ export const ETAPAS_POR_FERRAMENTA: Record<string, { peso: number; sugestao: str
   buscarIssuesGithub: { peso: 5, sugestao: 'Importe as issues etiquetadas e abra os cards' },
   listarPullRequestsGithub: { peso: 5, sugestao: 'Revise o pull request mais antigo e deixe um comentário' },
   listarMilestonesGithub: { peso: 5, sugestao: 'Coloque as issues abertas no milestone com mais atraso' },
+  diagnosticarProntidaoGithub: { peso: 6, sugestao: 'Abra cards para o que falta nesse repositório' },
+  lerMapaDoRepositorio: { peso: 3, sugestao: 'Abra um card para a funcionalidade que você quer mudar' },
   lerChecksGithub: { peso: 6, sugestao: 'O que falta para liberar o merge?' },
   lerProtecaoDeBranchGithub: { peso: 4, sugestao: 'O que falta para a branch principal exigir revisão?' },
   lerAlertasGithub: { peso: 5, sugestao: 'Abra cards para os alertas mais graves' },

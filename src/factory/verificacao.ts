@@ -85,6 +85,11 @@ export function veredito(estado: Pick<Estado, 'checks'>): { passou: boolean; mot
     if (get(`baseline:${nome}`)?.resultado === 'FAIL') notas.push(`${nome} já falhava antes da mudança (baseline): não é regressão deste card`)
     else motivos.push(`${nome} falhou e não falhava antes da mudança`)
   }
+  const app = get('app-no-navegador')
+  if (app?.resultado === 'FAIL') {
+    if (get('baseline:app')?.resultado === 'PASS') motivos.push('o app abria sem erro no navegador antes da mudança e agora não')
+    else notas.push('o app no navegador tem erro (não abria limpo antes da mudança, ou não há baseline): veja a evidência')
+  }
   const rv = get('vermelho-verde')
   if (rv?.resultado === 'FAIL') motivos.push('o teste novo passa mesmo sem a correção, então não prova o conserto')
   const base = get('baseline:testes')

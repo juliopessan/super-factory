@@ -10,6 +10,7 @@ import {
   type FaseAutonomo,
   type SessaoAutonomo,
 } from '../../factory/autonomo.ts'
+import { guardarCapturaDoApp, guardarMapaDoRepositorio } from '../../factory/artefatos.ts'
 import { redigirSegredos } from '../../factory/guards.ts'
 import { parar } from '../../factory/pipeline.ts'
 import { criarExecutorDocker } from '../../factory/sandbox.ts'
@@ -28,6 +29,10 @@ export function depsDoAmbiente(): DepsAutonomo {
     implementador: config.id === 'comando' ? implementadorDeComando(config) : implementadorComAgente,
     // No ambiente real a verificação é completa. SUPER_FACTORY_VERIFICACAO=minima volta ao teste único, para suítes muito longas.
     verificacaoCompleta: process.env.SUPER_FACTORY_VERIFICACAO?.trim().toLowerCase() !== 'minima',
+    // Navegador no sandbox: só com a imagem construída com --com-browser (o script liga esta variável).
+    navegador: ['1', 'sim', 'true'].includes(process.env.SUPER_FACTORY_NAVEGADOR?.trim().toLowerCase() ?? ''),
+    guardarMapa: (repositorio, mapa) => void guardarMapaDoRepositorio(repositorio, mapa),
+    guardarCaptura: guardarCapturaDoApp,
     credenciais: {
       githubToken: process.env.GITHUB_TOKEN,
       azureOrg: process.env.AZURE_DEVOPS_ORG,
@@ -59,6 +64,8 @@ const contextoSchema = z.object({
     })
     .nullable(),
   convencoes: z.string().nullable().optional(),
+  mapa: z.string().nullable().optional(),
+  atencao: z.array(z.string()).optional(),
   estatistica: z.string().nullable(),
   pilha: z.string().nullable().optional(),
 })
