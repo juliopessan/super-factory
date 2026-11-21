@@ -53,6 +53,7 @@ export const VERBOS_POR_FERRAMENTA: Record<string, string> = {
   diagnosticarProntidaoGithub: 'Medindo a prontidão do repositório…',
   lerMapaDoRepositorio: 'Lendo o mapa do repositório…',
   medirResultadoDosPrs: 'Vendo o que aconteceu com os PRs…',
+  triarBugGithub: 'Reproduzindo o bug no sandbox…',
   proporRegrasDeComentarios: 'Procurando comentários que se repetem…',
   lerProtecaoDeBranchGithub: 'Conferindo a proteção da branch…',
   lerAlertasGithub: 'Lendo os alertas de segurança…',

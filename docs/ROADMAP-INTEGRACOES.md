@@ -15,7 +15,7 @@ Continua valendo, por desenho: merge, aprovar PR, force-push, excluir repositór
 | 1. Ver (leitura) | `lerIssueGithub`, `buscarIssuesGithub`, `listarPullRequestsGithub`, `listarMilestonesGithub`, `lerChecksGithub`, `lerProtecaoDeBranchGithub`, `lerAlertasGithub`, `listarProjetosGithub`, `verificarTokenGithub` | feita |
 | 2. Fechar o ciclo da demanda | PR referenciando a issue de origem (`Closes #N` com testes verdes, `Refs #N` em rascunho ou empilhado); comentário automático na issue quando o PR abre, uma vez só | feita |
 | 3. Organizar (escrita reversível) | `editarIssueGithub` (inclui fechar e reabrir com motivo), `comentarIssueGithub`, `gerenciarLabelsGithub`, `criarCampoDoProjetoGithub`, `definirCampoDoProjetoGithub`, `pedirRevisaoGithub`, `marcarPrProntoGithub` | feita |
-| 4. Infraestrutura | Webhook com assinatura HMAC no lugar da varredura; ciclo de feedback de revisão (comentário humano vira correção do construtor) | a fazer |
+| 4. Infraestrutura | Webhook com assinatura HMAC no lugar da varredura (feito, Lote D); ciclo de feedback de revisão (comentário humano vira correção do construtor) | webhook feito; feedback a fazer |
 
 ## Um token para tudo: o que ele precisa
 

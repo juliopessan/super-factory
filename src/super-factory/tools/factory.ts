@@ -34,6 +34,7 @@ import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/parale
 import { lerComentariosHumanos, medirResultadosDosPrs } from '../../factory/github-sinais.ts'
 import { calcularMetricas } from '../../factory/metricas.ts'
 import { minerarRegras } from '../../factory/regras.ts'
+import { triarBugDoAmbiente } from '../triagem.ts'
 import { lerMapaGuardado } from '../../factory/artefatos.ts'
 import { diagnosticarProntidaoGithub as medirProntidao } from '../../factory/prontidao-github.ts'
 import { pedidoSchema } from '../../factory/schemas.ts'
@@ -369,6 +370,17 @@ export const proporRegrasDeComentarios = createTool({
     }
     const propostas = minerarRegras(todos)
     return { ok: true, prsLidos: da.length, comentarios: todos.length, propostas, resumo: propostas.length ? `${propostas.length} comentário(s) se repetem em PRs diferentes. Mostre à pessoa e só grave a regra que ela aprovar.` : `Nenhum comentário se repete ainda em ${da.length} PR(s) da Factory (${todos.length} comentário(s) de pessoas).` }
+  },
+})
+
+export const triarBugGithub = createTool({
+  id: 'triar-bug-github',
+  description: 'Tenta reproduzir um bug de uma issue no sandbox: um agente escreve só um teste que falha por causa do bug e a Factory conclui reproduzido, já corrigido na branch principal, não reproduzido ou inconclusivo, e comenta isso na issue (uma vez). Não corrige nada, não abre PR e não fecha a issue. Leva alguns minutos e gasta modelo: use quando uma pessoa pedir.',
+  inputSchema: z.object({ repositorio: REPOSITORIO, issue: z.number().int().min(1).describe('Número da issue.') }),
+  outputSchema: z.object({ ok: z.boolean(), veredito: z.string().nullable(), resumo: z.string() }),
+  execute: async ({ repositorio, issue }) => {
+    const r = await triarBugDoAmbiente(repositorio, issue)
+    return { ok: r.ok, veredito: r.resultado?.veredito ?? null, resumo: r.nota }
   },
 })
 

@@ -50,7 +50,8 @@ export function pedidoPerigoso(texto: string): string[] {
 
 export function segmento(valor: string, rotulo: string): string {
   const limpo = valor.trim()
-  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(limpo)) {
+  // "." e ".." passam no padrão, mas o fetch os normaliza e a URL da API apontaria para outro caminho.
+  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(limpo) || limpo === '.' || limpo === '..') {
     throw new Error(`${rotulo} inválido.`)
   }
   return limpo

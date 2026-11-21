@@ -20,9 +20,9 @@ Decisões da pessoa que opera a Factory (21/11/2026): navegador no sandbox, **si
 | Evals com rubrica, juiz de outro modelo e matriz de modelos | Lote C: cards e diffs de ouro no Studio, scorers `triagem` e `revisao`, `npm run evals` com juiz de outro provedor e teto de chamadas. A matriz com modelos reais ainda não foi rodada |
 | "Comentou duas vezes? Vire regra dura" | Lote C: `proporRegrasDeComentarios` (só propõe; uma pessoa aprova) |
 | Resultado do PR como sinal; custo por PR aceito | Lote C: aceito/ajustado/recusado por PR e tokens por PR mesclado |
-| Triagem automática de bug (reproduz e diz "já corrigido na main") | Lote D |
-| PRs pequenos e atômicos | Lote D |
-| Webhook no lugar da varredura (Fase 4 do plano das integrações) | Lote D |
+| Triagem automática de bug (reproduz e diz "já corrigido na main") | Lote D: reprodução por teste no sandbox, veredito comentado na issue. "Já corrigido" é provável: compara o commit da época da issue com o atual |
+| PRs pequenos e atômicos | Lote D: orçamento de linhas e arquivos e proposta de divisão em PRs empilhados (sugestão; não corta sozinha) |
+| Webhook no lugar da varredura (Fase 4 do plano das integrações) | Lote D: assinatura HMAC, entrega única, importa issue etiquetada e mede PR fechado. O ciclo de feedback de revisão (comentário humano vira correção do construtor) continua pendente |
 
 ## Estado
 
@@ -31,4 +31,4 @@ Decisões da pessoa que opera a Factory (21/11/2026): navegador no sandbox, **si
 | A | Baseline, extras, vermelho→verde, convenções, trilha e ancoragem, revisor com modelo próprio | feito |
 | B | Control glass (navegador no sandbox), feature map, prontidão do repositório | feito |
 | C | Evals, minerador de regras, resultado do PR | feito |
-| D | Webhook, triagem automática de bug, orçamento de PR | a fazer |
+| D | Webhook, triagem automática de bug, orçamento de PR | feito |
