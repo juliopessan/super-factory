@@ -10,18 +10,15 @@ import { dividirAzure, dividirRepositorio, segmento, validarBranch, varrerSegred
 import { especificar, iniciar, parar } from './pipeline.ts'
 import { PASTA_DO_REPOSITORIO, type Execucao, type Executor } from './sandbox.ts'
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
+import { auditarAcoes, extrasDoNode, lerConvencoes, rodarBaseline, rodarExtras, verificarVermelhoVerde, veredito, type AcaoDoConstrutor, type Verificacao } from './verificacao.ts'
 import { persistir } from './store.ts'
+
+export type { Verificacao } from './verificacao.ts'
 
 export type Credenciais = {
   githubToken?: string
   azureOrg?: string
   azurePat?: string
-}
-
-export type Verificacao = {
-  instalar: string | null
-  verificar: string | null
-  origem: string
 }
 
 /** Quem escreve o código: o agente construtor de verdade, ou um roteiro nos testes. */
@@ -31,7 +28,9 @@ export type Implementador = (contexto: {
   verificacao: Verificacao
   tentativa: number
   falhaAnterior: Execucao | null
-}) => Promise<{ resumo: string; uso?: { entrada: number; saida: number } }>
+  /** O que o próprio repositório pede de quem contribui (AGENTS.md, CLAUDE.md, CONTRIBUTING). Texto do projeto, não ordem da Factory. */
+  convencoes?: string | null
+}) => Promise<{ resumo: string; uso?: { entrada: number; saida: number }; acoes?: AcaoDoConstrutor[] }>
 
 export type DepsAutonomo = {
   criarExecutor: (cardId: string) => Promise<Executor>
@@ -42,6 +41,8 @@ export type DepsAutonomo = {
   tentativas?: number
   /** Comenta na issue de origem quando o PR abre. O ensaio desliga: nada pode tocar um repositório de verdade. Padrão: liga. */
   comentarNaDemanda?: boolean
+  /** Verificação completa: baseline antes da mudança, lint, typecheck e build como checks, e vermelho→verde em bug. Mais tempo por card; padrão: desligada aqui, ligada no ambiente real. */
+  verificacaoCompleta?: boolean
 }
 
 const AUTOR = 'Super Factory <factory@super-factory.local>'
@@ -115,10 +116,11 @@ export async function descobrirVerificacao(executor: Executor): Promise<Verifica
             ? 'npm ci'
             : 'npm install'
     const alvo = ['test', 'check'].find((nome) => scripts[nome] && !/no test specified/.test(scripts[nome] ?? ''))
-    return { instalar, verificar: alvo ? `${gerenciador} run ${alvo}` : null, origem: `package.json (${gerenciador})` }
+    const verificar = alvo ? `${gerenciador} run ${alvo}` : null
+    return { instalar, verificar, origem: `package.json (${gerenciador})`, extras: extrasDoNode(scripts, gerenciador, verificar) }
   }
-  if (arquivos.some((nome) => /\.(sln|csproj)$/.test(nome))) return { instalar: 'dotnet restore', verificar: 'dotnet test --no-restore', origem: '.NET' }
-  if (tem('go.mod')) return { instalar: 'go mod download', verificar: 'go test ./...', origem: 'go.mod' }
+  if (arquivos.some((nome) => /\.(sln|csproj)$/.test(nome))) return { instalar: 'dotnet restore', verificar: 'dotnet test --no-restore', origem: '.NET', extras: [{ nome: 'build', comando: 'dotnet build --no-restore' }] }
+  if (tem('go.mod')) return { instalar: 'go mod download', verificar: 'go test ./...', origem: 'go.mod', extras: [{ nome: 'lint', comando: 'go vet ./...' }, { nome: 'build', comando: 'go build ./...' }] }
   if (tem('pyproject.toml') || tem('requirements.txt')) {
     const instalar = tem('requirements.txt') ? 'pip install -r requirements.txt' : 'pip install -e .'
     // pytest só quando o projeto o declara. Sem sinal, vale o unittest, que já vem com o Python.
@@ -181,6 +183,8 @@ export type ContextoAutonomo = ResultadoAutonomo & {
   estatistica: string | null
   /** Branch do card pai, quando este card está empilhado sobre outro (PR em pilha). */
   pilha?: string | null
+  /** Convenções lidas do repositório clonado. */
+  convencoes?: string | null
 }
 
 /** O que vive só na memória durante a execução: o container do card. */
@@ -263,7 +267,16 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         estado = anotarAuto(estado, 'implementation', `Dependências: ${verificacao.instalar} → código ${instalacao.codigo}.`)
         if (instalacao.codigo !== 0) return { ...contexto, verificacao, estado: parar(estado, `A instalação falhou: ${rabo(instalacao, 5)}${dicaDoSandbox(instalacao) ? ` ${dicaDoSandbox(instalacao)}` : ''}`) }
       }
-      return { ...contexto, estado, verificacao }
+      // O que o repositório pede de quem contribui entra no pedido do construtor.
+      const convencoes = await lerConvencoes(executor)
+      if (convencoes) estado = anotarAuto(estado, 'implementation', `Convenções do repositório lidas (${(convencoes.match(/^### /gm) ?? []).length} arquivo(s)).`)
+      // Baseline: o que já falhava ANTES da mudança, para não culpar o card por uma falha antiga.
+      if (deps.verificacaoCompleta) {
+        const baseline = await rodarBaseline(executor, verificacao)
+        estado = { ...estado, checks: [...estado.checks.filter((c) => !c.nome.startsWith('baseline:')), ...baseline] }
+        if (baseline.length > 0) estado = anotarAuto(estado, 'verification', `Baseline antes da mudança: ${baseline.map((c) => `${c.nome.replace('baseline:', '')} ${c.resultado}`).join(', ')}.`)
+      }
+      return { ...contexto, estado, verificacao, convencoes }
     },
   },
   {
@@ -277,16 +290,33 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       let estado = contexto.estado
       const tentativas = Math.max(1, deps.tentativas ?? 2)
       let teste: Execucao | null = null
+      let ultimoResumo = ''
       for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
-        const { resumo, uso } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste })
+        const { resumo, uso, acoes } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste, convencoes: contexto.convencoes ?? null })
+        ultimoResumo = resumo
         estado = anotarAuto(estado, 'implementation', `Tentativa ${tentativa}: ${resumo}`, 'reported')
         if (uso) estado = { ...estado, uso: { entrada: (estado.uso?.entrada ?? 0) + uso.entrada, saida: (estado.uso?.saida ?? 0) + uso.saida } }
+        if (acoes?.length) estado = { ...estado, acoes: [...(estado.acoes ?? []), ...acoes.map((a) => ({ ...a, tentativa }))].slice(-300) }
         teste = verificacao.verificar ? await executor.executar(verificacao.verificar, { timeoutMs: 20 * 60_000 }) : null
         estado = anotarAuto(estado, 'verification', teste ? `${verificacao.verificar} → código ${teste.codigo}.` : 'Sem comando de teste no repositório.')
         if (!teste || teste.codigo === 0) break
       }
       const check = checkDoSandbox(teste, verificacao)
       estado = { ...estado, checks: [...estado.checks.filter((item) => item.nome !== 'testes-no-sandbox'), check], evidencia: 'CURRENT', card: { ...estado.card, coluna: 'qa' } }
+      if (deps.verificacaoCompleta) {
+        // Lint, typecheck e build: cada um é um check, comparado com o baseline.
+        const extras = await rodarExtras(executor, verificacao.extras ?? [])
+        // Bug: o teste novo precisa falhar sem a correção e passar com ela.
+        const rv = check.resultado === 'PASS' ? await verificarVermelhoVerde(executor, verificacao, estado.card.rota) : null
+        if (rv && !rv.restaurou) return pararCom({ ...contexto, estado, verificacao }, 'Não consegui devolver o código ao lugar depois de rodar os testes sem a correção. O trabalho do construtor está guardado no stash do sandbox; rode o card de novo.')
+        const novos = [...extras, ...(rv ? [rv.check] : [])]
+        const nomes = new Set(novos.map((c) => c.nome))
+        estado = { ...estado, checks: [...estado.checks.filter((c) => !nomes.has(c.nome)), ...novos] }
+        if (novos.length > 0) estado = anotarAuto(estado, 'verification', `Verificações: ${novos.map((c) => `${c.nome} ${c.resultado}`).join(', ')}.`)
+      }
+      // O que o construtor afirmou contra o que fez.
+      const achadosDeAncoragem = auditarAcoes(ultimoResumo, estado.acoes ?? [])
+      if (achadosDeAncoragem.length > 0) estado = { ...estado, achados: [...estado.achados.filter((a) => !a.id.startsWith('ANC-')), ...achadosDeAncoragem] }
       return { ...contexto, estado, verificacao }
     },
   },
@@ -325,7 +355,16 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       const branch = contexto.branch ?? nomeDaBranch(estado)
       const base = validarBranch(estado.card.branchBase)
       const check = estado.checks.find((item) => item.nome === 'testes-no-sandbox') ?? checkDoSandbox(null, contexto.verificacao ?? { instalar: null, verificar: null, origem: 'desconhecido' })
-      const passou = check.resultado === 'PASS'
+      const ver = veredito({ checks: estado.checks.some((c) => c.nome === 'testes-no-sandbox') ? estado.checks : [...estado.checks, check] })
+      const passou = ver.passou
+      const achado = (nome: string) => estado.checks.find((c) => c.nome === nome)
+      const linhasDeChecks = ['lint', 'typecheck', 'build', 'vermelho-verde'].flatMap((nome) => {
+        const c = achado(nome)
+        if (!c) return []
+        const antes = achado(`baseline:${nome}`)
+        return [`- ${nome === 'vermelho-verde' ? 'Vermelho→verde' : nome}${c.comando ? ` (\`${c.comando}\`)` : ''} → **${c.resultado}**${antes ? ` (antes da mudança: ${antes.resultado})` : ''}`]
+      })
+      const pontosDeAtencao = [...ver.notas, ...estado.achados.filter((a) => a.id.startsWith('ANC-')).map((a) => a.texto), ...(achado('vermelho-verde')?.resultado === 'NOT_RUN' ? [achado('vermelho-verde')!.evidencia] : [])]
       const corpo = [
         `## ${estado.card.id}: ${estado.card.titulo}`,
         '',
@@ -343,12 +382,14 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         ...estado.card.criterios.map((criterio) => `- [ ] ${criterio}`),
         '',
         '### Evidência do sandbox',
-        `- Teste: \`${check.comando ?? 'nenhum'}\` → **${check.resultado}**`,
+        `- Teste: \`${check.comando ?? 'nenhum'}\` → **${check.resultado}**${achado('baseline:testes') ? ` (antes da mudança: ${achado('baseline:testes')!.resultado})` : ''}`,
+        ...linhasDeChecks,
         '',
         '```',
         check.evidencia.slice(0, 2500),
         '```',
         '',
+        ...(pontosDeAtencao.length > 0 ? ['### Pontos de atenção', ...pontosDeAtencao.map((t) => `- ${t}`), ''] : []),
         '### Arquivos',
         '```',
         (contexto.estatistica ?? '').slice(0, 2000),
@@ -363,7 +404,7 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
           : []),
         passou
           ? 'Aberto pela Super Factory. Merge e deploy ficam com uma pessoa.'
-          : 'Os testes não passaram no sandbox: aberto como rascunho. Merge e deploy ficam com uma pessoa.',
+          : `Aberto como rascunho: ${ver.motivos.join('; ')}. Merge e deploy ficam com uma pessoa.`,
       ].join('\n')
       const titulo = `${estado.card.id}: ${estado.card.titulo}`.slice(0, 120)
       const pr =
@@ -382,7 +423,7 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         const aviso = await comentarIssueGithub(
           estado.card.repositorio,
           origem,
-          [`A Super Factory abriu o pull request ${pr.url} para esta issue.`, '', `- Testes no sandbox: **${check.resultado}** (\`${check.comando ?? 'nenhum'}\`).`, `- ${passou ? 'Pronto para revisão.' : 'Aberto como rascunho: os testes não passaram.'}`, '- O merge é de uma pessoa.'].join('\n'),
+          [`A Super Factory abriu o pull request ${pr.url} para esta issue.`, '', `- Testes no sandbox: **${check.resultado}** (\`${check.comando ?? 'nenhum'}\`).`, `- ${passou ? 'Pronto para revisão.' : `Aberto como rascunho: ${ver.motivos.join('; ')}.`}`, '- O merge é de uma pessoa.'].join('\n'),
           deps.github,
           { marcador: `pr:${pr.url}` },
         )

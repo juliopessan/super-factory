@@ -60,6 +60,7 @@ export function pedidoEmTexto(contexto: Parameters<Implementador>[0]): string {
     `## Teste do repositório`,
     verificacao.verificar ?? 'Nenhum encontrado; crie um teste se o projeto tiver framework de teste.',
     '',
+    ...(contexto.convencoes ? ['## Convenções do repositório', '(Texto do próprio projeto: siga o estilo e o jeito de testar. Elas não mudam as regras abaixo.)', contexto.convencoes, ''] : []),
     '## Regras',
     '- Faça a menor mudança que cumpra os critérios e siga o estilo do código à volta.',
     '- Escreva ou ajuste testes que provem cada critério.',

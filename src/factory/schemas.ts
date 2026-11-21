@@ -101,6 +101,8 @@ export const estadoSchema = z.object({
   relatorio: z.string(),
   /** Tokens do modelo gastos pelo agente construtor neste card. Ausente em execuções antigas ou em ensaio. */
   uso: z.object({ entrada: z.number(), saida: z.number() }).optional(),
+  /** O que o construtor leu, escreveu e rodou (redigido, até 300 ações). Base da auditoria "afirmou sem ler". */
+  acoes: z.array(z.object({ tentativa: z.number(), ferramenta: z.string(), alvo: z.string() })).max(300).optional(),
   atualizadoEm: z.string(),
 })
 
