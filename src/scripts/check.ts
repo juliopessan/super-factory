@@ -1039,6 +1039,203 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   }
 }
 
+// --- Leitura do GitHub para a gestão: issues, PRs, milestones, CI, proteção, alertas, token. Só GET; nada sensível sai
+{
+  const gl = await import('../factory/github-leitura.ts')
+  const { listarProjetos } = await import('../factory/projeto.ts')
+  const SEGREDO = 'ghp_' + 'b'.repeat(36)
+  const SEGREDO_DO_ALERTA = 'sk_live_' + 'c'.repeat(24)
+  type Opcoes = { escopos?: string | null; token401?: boolean; checks?: 'sucesso' | 'falha' | 'pendente' | 'vazio'; logPara?: string; protecao?: 'protegida' | 'nenhuma' | 'sem-permissao'; rules?: boolean; semAlertas?: boolean; limite?: number }
+  const montar = (o: Opcoes = {}) => {
+    const chamadas: Array<{ metodo: string; url: string; auth: string | null }> = []
+    const issue2 = { number: 2, title: 'Filtro de datas só com dia', state: 'open', state_reason: null, user: { login: 'maria' }, created_at: '2026-11-01T10:00:00Z', updated_at: '2026-11-02T10:00:00Z', closed_at: null, labels: [{ name: 'super-factory' }, { name: 'P1' }], milestone: { number: 7, title: 'Beta interno' }, assignees: [{ login: 'juliopessan' }], html_url: 'https://github.com/acme/pedidos/issues/2', comments: 3, body: `A API falha sem hora. chame @dono-do-repo. Chave vazada: ${SEGREDO}\n\n## Critérios\n- O endpoint devolve 400.` }
+    const buscar = (async (entrada: string | URL, init?: RequestInit) => {
+      const u = new URL(String(entrada))
+      const metodo = (init?.method ?? 'GET').toUpperCase()
+      const auth = new Headers(init?.headers).get('authorization')
+      chamadas.push({ metodo, url: u.toString(), auth })
+      const json = (c: unknown, status = 200, cab: Record<string, string> = {}) => new Response(JSON.stringify(c), { status, headers: cab })
+      if (u.hostname === 'pipelines.actions.githubusercontent.com') return new Response(`2026-11-20T10:00:00.1234567Z \u001b[31mError\u001b[0m: teste falhou\n2026-11-20T10:00:01.0000000Z token=${SEGREDO}\n2026-11-20T10:00:02.0000000Z fim`, { status: 200 })
+      if (u.hostname === 'evil.example.com') return new Response('NÃO DEVIA SER CHAMADO', { status: 200 })
+      if (u.hostname !== 'api.github.com') return json({ message: 'host inesperado' }, 500)
+      if (o.token401) return json({ message: 'Bad credentials' }, 401)
+      const rota = u.pathname
+      const q = u.searchParams
+      if (rota === '/user') return json({ login: 'juliopessan' }, 200, { ...(o.escopos === null ? {} : { 'x-oauth-scopes': o.escopos ?? 'repo, project' }), 'x-ratelimit-remaining': '4990' })
+      if (rota === '/graphql') {
+        const consulta = String(JSON.parse(String(init?.body)).query)
+        if (consulta.includes('viewer')) return json({ data: { viewer: { projectsV2: { totalCount: 1 } } } })
+        return json({ data: { repositoryOwner: { projectsV2: { nodes: [{ number: 3, title: 'Backlog', url: 'https://github.com/users/juliopessan/projects/3', closed: false, shortDescription: 'x', updatedAt: '2026-11-01T00:00:00Z', items: { totalCount: 7 } }, { number: 1, title: 'Velho', url: 'https://github.com/users/juliopessan/projects/1', closed: true, items: { totalCount: 0 } }] } } } })
+      }
+      if (rota === '/repos/acme/pedidos') return json({ default_branch: 'main', permissions: { pull: true, push: true } })
+      if (rota === '/repos/acme/pedidos/issues/2') return json(issue2)
+      if (rota === '/repos/acme/pedidos/issues/2/comments') return json([{ user: { login: 'joao' }, created_at: '2026-11-02T11:00:00Z', body: `Concordo, @maria. ${SEGREDO}` }])
+      if (rota === '/repos/acme/pedidos/issues') {
+        const lote = [issue2, { number: 9, title: 'PR disfarçado', state: 'open', pull_request: {}, user: { login: 'z' }, labels: [], assignees: [], comments: 0 }, { number: 11, title: 'Outra', state: 'open', user: { login: 'ana' }, labels: ['bug'], milestone: null, assignees: [], comments: 1, updated_at: '2026-11-03T00:00:00Z', html_url: 'https://github.com/acme/pedidos/issues/11' }]
+        return json(lote.slice(0, Number(q.get('per_page') ?? 30)))
+      }
+      if (rota === '/repos/acme/pedidos/pulls') return json([{ number: 5, title: 'Fix datas', draft: true, state: 'open', merged_at: null, user: { login: 'bot' }, head: { ref: 'factory/c-1' }, base: { ref: 'main' }, labels: [{ name: 'auto' }], requested_reviewers: [{ login: 'juliopessan' }], updated_at: '2026-11-04T00:00:00Z', html_url: 'https://github.com/acme/pedidos/pull/5' }])
+      if (rota === '/repos/acme/pedidos/pulls/5') return json({ head: { sha: 'a'.repeat(40) } })
+      if (rota === '/repos/acme/pedidos/milestones') return json([{ number: 7, title: 'Beta interno', description: 'Semana 1', state: 'open', due_on: '2026-12-15T23:59:59Z', open_issues: 3, closed_issues: 1, html_url: 'https://github.com/acme/pedidos/milestone/7' }, { number: 8, title: 'Vazio', state: 'open', open_issues: 0, closed_issues: 0 }])
+      if (rota.endsWith('/check-runs')) {
+        if (o.checks === 'vazio') return json({ check_runs: [] })
+        const base = { app: { slug: 'github-actions' }, html_url: 'https://github.com/acme/pedidos/actions/runs/1/job/77' }
+        const runs = o.checks === 'falha'
+          ? [{ ...base, id: 77, name: 'testes', status: 'completed', conclusion: 'failure', output: { summary: 'falhou' } }, { ...base, id: 78, name: 'lint', status: 'completed', conclusion: 'success' }]
+          : o.checks === 'pendente' ? [{ ...base, id: 79, name: 'testes', status: 'in_progress', conclusion: null }] : [{ ...base, id: 80, name: 'testes', status: 'completed', conclusion: 'success' }]
+        return json({ check_runs: runs })
+      }
+      if (rota.endsWith('/status')) return json({ statuses: [{ context: 'ci/legado', state: 'success', target_url: null }] })
+      if (rota === '/repos/acme/pedidos/actions/jobs/77') return json({ steps: [{ name: 'Checkout', conclusion: 'success' }, { name: 'npm test', conclusion: 'failure' }] })
+      if (rota === '/repos/acme/pedidos/actions/jobs/77/logs') return new Response(null, { status: 302, headers: { location: o.logPara ?? 'https://pipelines.actions.githubusercontent.com/log/77' } })
+      if (rota === '/repos/acme/pedidos/branches/main/protection') {
+        if (o.protecao === 'nenhuma') return json({ message: 'Branch not protected' }, 404)
+        if (o.protecao === 'sem-permissao') return json({ message: 'Resource not accessible by personal access token' }, 403)
+        return json({ required_pull_request_reviews: { required_approving_review_count: 2 }, required_status_checks: { contexts: ['testes'], checks: [{ context: 'lint' }] }, enforce_admins: { enabled: true }, allow_force_pushes: { enabled: false }, allow_deletions: { enabled: false } })
+      }
+      if (rota === '/repos/acme/pedidos/rules/branches/main') return json(o.rules ? [{ type: 'pull_request', parameters: { required_approving_review_count: 1 } }, { type: 'non_fast_forward' }, { type: 'deletion' }] : [])
+      if (rota === '/repos/acme/pedidos/dependabot/alerts') return o.semAlertas ? json({ message: 'Dependabot alerts are disabled for this repository.' }, 404) : json([{ number: 4, security_advisory: { severity: 'high', summary: 'Prototype pollution em lodash' }, dependency: { package: { name: 'lodash' }, manifest_path: 'package.json' }, created_at: '2026-11-01T00:00:00Z', html_url: 'https://github.com/acme/pedidos/security/dependabot/4' }, { number: 5, security_advisory: { severity: 'low', summary: 'ReDoS' }, dependency: { package: { name: 'x' } } }])
+      if (rota === '/repos/acme/pedidos/secret-scanning/alerts') return json([{ number: 1, secret_type_display_name: 'Stripe API Key', secret: SEGREDO_DO_ALERTA, state: 'open', created_at: '2026-11-01T00:00:00Z', html_url: 'https://github.com/acme/pedidos/security/secret-scanning/1' }])
+      if (rota === '/repos/acme/pedidos/code-scanning/alerts') return json([{ number: 2, rule: { description: 'SQL injection', security_severity_level: 'critical' }, most_recent_instance: { location: { path: 'src/db.ts', start_line: 12 } }, html_url: 'x' }])
+      return json({ message: 'Not Found' }, 404)
+    }) as unknown as typeof fetch
+    return { buscar, chamadas }
+  }
+  const dep = (f: ReturnType<typeof montar>) => ({ fetch: f.buscar, token: 'tok-de-teste-123456', esperar: async () => {} })
+  const soGet = (f: ReturnType<typeof montar>) => f.chamadas.every((c) => c.metodo === 'GET' || c.url.endsWith('/graphql'))
+
+  // ler issue
+  let f = montar()
+  const issue = await gl.lerIssueGithub('acme/pedidos', 2, dep(f))
+  assert.equal(issue.ok, true, issue.nota)
+  assert.deepEqual([issue.dado?.titulo, issue.dado?.estado, issue.dado?.labels, issue.dado?.milestone, issue.dado?.responsaveis], ['Filtro de datas só com dia', 'open', ['super-factory', 'P1'], { numero: 7, titulo: 'Beta interno' }, ['juliopessan']])
+  assert.ok(!JSON.stringify(issue.dado).includes(SEGREDO), 'segredo no corpo e nos comentários sai redigido')
+  assert.ok(!(issue.dado?.corpo ?? '').includes('@dono-do-repo'), 'menção no corpo é neutralizada')
+  assert.ok(!(issue.dado?.comentarios[0]?.texto ?? '').includes('@maria'), 'menção no comentário é neutralizada')
+  assert.equal(issue.dado?.totalDeComentarios, 3)
+  assert.match(issue.nota, /dado de terceiros/)
+  assert.ok(f.chamadas.some((c) => c.url.includes('/comments?per_page=30&page=1')), 'com poucos comentários lê a primeira página; com muitos, a última')
+  assert.ok(soGet(f), 'ler issue só faz GET')
+  for (const ruim of [0, -1, 1.5, 99_999_999]) assert.equal((await gl.lerIssueGithub('acme/pedidos', ruim, dep(montar()))).ok, false)
+  assert.equal((await gl.lerIssueGithub('acme/pedidos', 404, dep(montar()))).ok, false)
+  assert.match((await gl.lerIssueGithub('acme/pedidos', 404, dep(montar()))).nota, /Issues no repositório/, 'sem acesso: diz a permissão')
+  assert.match((await gl.lerIssueGithub('acme/pedidos', 2, dep(montar({ token401: true })))).nota, /recusou o token/)
+  assert.equal((await gl.lerIssueGithub('acme/pedidos', 2, { token: '', fetch: f.buscar })).ok, false, 'sem token nada é lido')
+
+  // buscar issues
+  f = montar()
+  const busca = await gl.buscarIssuesGithub('acme/pedidos', { labels: ['super-factory', 'P1'], responsavel: '@me', milestone: 'none', limite: 3 }, dep(f))
+  assert.equal(busca.ok, true, busca.nota)
+  assert.deepEqual(busca.dado?.itens.map((i) => i.numero), [2, 11], 'a issue que é pull request fica de fora')
+  assert.equal(busca.dado?.temMais, true, 'página cheia: há mais')
+  const urlBusca = f.chamadas.find((c) => c.url.includes('/issues?'))?.url ?? ''
+  assert.ok(urlBusca.includes('labels=super-factory%2CP1') && urlBusca.includes('assignee=juliopessan') && urlBusca.includes('milestone=none') && urlBusca.includes('state=open'), urlBusca)
+  assert.deepEqual(busca.dado?.itens.find((i) => i.numero === 11)?.labels, ['bug'], 'label em formato de texto também é lida')
+  f = montar()
+  for (const ruim of [{ labels: ['a,b'] }, { labels: ['x'.repeat(51)] }, { labels: Array.from({ length: 11 }, (_, i) => `l${i}`) }, { estado: 'tudo' as 'all' }, { milestone: 'abc' }, { milestone: 0 }, { responsavel: 'com espaço' }]) {
+    assert.equal((await gl.buscarIssuesGithub('acme/pedidos', ruim, dep(f))).ok, false, JSON.stringify(ruim))
+  }
+  assert.equal(f.chamadas.length, 0, 'filtro inválido não chega ao GitHub')
+  assert.equal((await gl.buscarIssuesGithub('acme/pedidos', { limite: 500, pagina: 999 }, dep(f))).dado?.pagina, 50, 'página e limite têm teto')
+
+  // PRs e milestones
+  f = montar()
+  const prs = await gl.listarPullRequestsGithub('acme/pedidos', { base: 'main' }, dep(f))
+  assert.deepEqual([prs.dado?.itens[0]?.numero, prs.dado?.itens[0]?.rascunho, prs.dado?.itens[0]?.head, prs.dado?.itens[0]?.revisoresPedidos], [5, true, 'factory/c-1', ['juliopessan']])
+  assert.equal((await gl.listarPullRequestsGithub('acme/pedidos', { base: '../x' }, dep(montar()))).ok, false)
+  const marcos = await gl.listarMilestonesGithub('acme/pedidos', 'open', dep(f))
+  assert.deepEqual(marcos.dado?.itens.map((m) => [m.numero, m.progresso]), [[7, 25], [8, 0]], 'progresso em % (1 fechada de 4) e milestone vazio sem divisão por zero')
+  assert.ok(soGet(f))
+
+  // CI
+  f = montar({ checks: 'falha' })
+  const ci = await gl.lerChecksGithub('acme/pedidos', 5, dep(f))
+  assert.equal(ci.ok, true, ci.nota)
+  assert.equal(ci.dado?.estadoGeral, 'falha')
+  assert.equal(ci.dado?.sha, 'a'.repeat(40), 'número de PR vira o commit da cabeça do PR')
+  const falhou = ci.dado?.checks.find((c) => c.nome === 'testes')
+  assert.deepEqual(falhou?.passosQueFalharam, ['npm test'], 'diz o passo que falhou')
+  assert.match(falhou?.fimDoLog ?? '', /Error: teste falhou/)
+  assert.ok(!(falhou?.fimDoLog ?? '').includes('\u001b') && !(falhou?.fimDoLog ?? '').includes('2026-11-20T') && !(falhou?.fimDoLog ?? '').includes(SEGREDO), 'log sem cor ANSI, sem carimbo de hora e com segredo redigido')
+  const chamadaDoLog = f.chamadas.find((c) => c.url.startsWith('https://pipelines.actions.githubusercontent.com'))
+  assert.equal(chamadaDoLog?.auth, null, 'o token NÃO vai para o host do redirecionamento')
+  assert.equal(ci.dado?.checks.find((c) => c.nome === 'lint')?.fimDoLog, null)
+  assert.ok(soGet(f))
+  f = montar({ checks: 'falha', logPara: 'https://evil.example.com/roubo' })
+  const semLog = await gl.lerChecksGithub('acme/pedidos', 'main', dep(f))
+  assert.equal(semLog.dado?.checks[0]?.fimDoLog, null, 'redirecionamento para host desconhecido é recusado')
+  assert.ok(!f.chamadas.some((c) => c.url.includes('evil.example.com')), 'e nem chega a ser chamado')
+  assert.deepEqual([(await gl.lerChecksGithub('acme/pedidos', 'main', dep(montar({ checks: 'sucesso' })))).dado?.estadoGeral, (await gl.lerChecksGithub('acme/pedidos', 'main', dep(montar({ checks: 'pendente' })))).dado?.estadoGeral, (await gl.lerChecksGithub('acme/pedidos', 'main', { ...dep(montar({ checks: 'vazio' })), fetch: ((u: string, i?: RequestInit) => (String(u).endsWith('/status') ? Promise.resolve(new Response(JSON.stringify({ statuses: [] }))) : montar({ checks: 'vazio' }).buscar(u, i))) as typeof fetch })).dado?.estadoGeral], ['sucesso', 'pendente', 'sem-checks'])
+  for (const ruim of ['', '../x', 'a b', 0]) assert.equal((await gl.lerChecksGithub('acme/pedidos', ruim as string, dep(montar()))).ok, false, String(ruim))
+
+  // proteção de branch
+  const prot = await gl.lerProtecaoDeBranchGithub('acme/pedidos', undefined, dep(montar()))
+  assert.deepEqual([prot.dado?.branch, prot.dado?.protegida, prot.dado?.exigePullRequest, prot.dado?.aprovacoesExigidas, prot.dado?.mergeDiretoBloqueado, prot.dado?.permiteForcePush, prot.dado?.valeParaAdmins], ['main', true, true, 2, true, false, true], 'a branch principal é descoberta sozinha')
+  assert.deepEqual(prot.dado?.checksObrigatorios.sort(), ['lint', 'testes'])
+  const nua = await gl.lerProtecaoDeBranchGithub('acme/pedidos', 'main', dep(montar({ protecao: 'nenhuma' })))
+  assert.equal(nua.dado?.protegida, false)
+  assert.match(nua.dado?.avisos.join(' ') ?? '', /contradiz a regra de que o merge é de uma pessoa/)
+  const regra = await gl.lerProtecaoDeBranchGithub('acme/pedidos', 'main', dep(montar({ protecao: 'sem-permissao', rules: true })))
+  assert.deepEqual([regra.dado?.fonte, regra.dado?.exigePullRequest, regra.dado?.permiteForcePush, regra.dado?.permiteExcluir], ['ruleset', true, false, false], 'sem administração, o ruleset (legível com leitura) vale')
+  const duvida = await gl.lerProtecaoDeBranchGithub('acme/pedidos', 'main', dep(montar({ protecao: 'sem-permissao' })))
+  assert.equal(duvida.dado?.protegida, null)
+  assert.match(duvida.dado?.avisos.join(' ') ?? '', /não dá para afirmar/, 'sem permissão e sem ruleset: não afirma nada')
+
+  // alertas
+  f = montar()
+  const dependabot = await gl.lerAlertasGithub('acme/pedidos', 'dependabot', {}, dep(f))
+  assert.deepEqual([dependabot.dado?.total, dependabot.dado?.porSeveridade, dependabot.dado?.alertas[0]?.onde], [2, { high: 1, low: 1 }, 'lodash (package.json)'])
+  const segredos = await gl.lerAlertasGithub('acme/pedidos', 'secret-scanning', {}, dep(f))
+  assert.equal(segredos.ok, true)
+  assert.ok(!JSON.stringify(segredos).includes(SEGREDO_DO_ALERTA), 'o valor do segredo do alerta NUNCA sai')
+  assert.equal(segredos.dado?.alertas[0]?.titulo, 'Stripe API Key')
+  assert.equal((await gl.lerAlertasGithub('acme/pedidos', 'code-scanning', {}, dep(f))).dado?.alertas[0]?.onde, 'src/db.ts:12')
+  assert.match((await gl.lerAlertasGithub('acme/pedidos', 'dependabot', {}, dep(montar({ semAlertas: true })))).nota, /security_events/, 'recurso desligado ou sem escopo: diz o que conferir')
+  assert.equal((await gl.lerAlertasGithub('acme/pedidos', 'outro' as 'dependabot', {}, dep(f))).ok, false)
+  assert.ok(soGet(f))
+
+  // token único: diagnóstico
+  f = montar()
+  const tk = await gl.verificarTokenGithub('acme/pedidos', dep(f))
+  assert.equal(tk.ok, true, tk.nota)
+  assert.deepEqual([tk.dado?.login, tk.dado?.tipo, tk.dado?.escopos, tk.dado?.limiteRestante], ['juliopessan', 'classico', ['repo', 'project'], 4990])
+  assert.equal(tk.dado?.capacidades.find((c) => c.capacidade === 'Ler issues')?.estado, 'ok')
+  assert.equal(tk.dado?.capacidades.find((c) => c.capacidade === 'Ler e organizar Projects v2')?.estado, 'ok')
+  assert.equal(tk.dado?.capacidades.find((c) => c.capacidade.startsWith('Escrever em issues'))?.estado, 'nao-testado', 'escrita não é testada escrevendo')
+  assert.ok(!JSON.stringify(tk).includes('tok-de-teste-123456'), 'o token nunca aparece no diagnóstico')
+  assert.ok(soGet(f), 'o diagnóstico só lê')
+  const fine = await gl.verificarTokenGithub(undefined, dep(montar({ escopos: null })))
+  assert.equal(fine.dado?.tipo, 'fine-grained-ou-app')
+  assert.equal(fine.dado?.escopos, null)
+  const invalido = await gl.verificarTokenGithub('acme/pedidos', dep(montar({ token401: true })))
+  assert.equal(invalido.dado?.tipo, 'invalido')
+  assert.match(invalido.nota, /expirou, foi revogado ou está errado/)
+  assert.equal((await gl.verificarTokenGithub('acme/pedidos', { token: '', fetch: f.buscar })).ok, false)
+  assert.equal((await gl.verificarTokenGithub('sem-barra', dep(f))).ok, false)
+
+  // Projects do dono
+  const projetos = await listarProjetos('juliopessan', { fetch: montar().buscar, token: 'tok-de-teste-123456', esperar: async () => {} })
+  assert.deepEqual(projetos.projetos.map((x) => [x.numero, x.itens]), [[3, 7]], 'só Projects abertos')
+  assert.match(projetos.nota, /juliopessan\/NÚMERO/)
+  assert.equal((await listarProjetos('jul io', { fetch: f.buscar, token: 'x' })).ok, false)
+
+  // ferramentas e quem recebe
+  const ferr = await import('../super-factory/tools/factory.ts')
+  const novas = ['lerIssueGithub', 'buscarIssuesGithub', 'listarPullRequestsGithub', 'listarMilestonesGithub', 'lerChecksGithub', 'lerProtecaoDeBranchGithub', 'lerAlertasGithub', 'verificarTokenGithub', 'listarProjetosGithub'] as const
+  for (const nome of novas) assert.notEqual(ferr[nome].requireApproval, true, `${nome} não pede aprovação`)
+  const mcpFonte3 = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'super-factory', 'mcp.ts'), 'utf8')
+  for (const sai of ['lerIssueGithub', 'buscarIssuesGithub', 'listarPullRequestsGithub', 'listarMilestonesGithub', 'lerChecksGithub']) assert.match(mcpFonte3, new RegExp(`^\\s+${sai},$`, 'm'), `o MCP expõe ${sai}`)
+  for (const fica of ['lerAlertasGithub', 'lerProtecaoDeBranchGithub', 'verificarTokenGithub', 'listarProjetosGithub']) assert.equal(new RegExp(`^\\s+${fica},$`, 'm').test(mcpFonte3), false, `o MCP não expõe ${fica}: postura de segurança e escopos do token ficam fora`)
+  const ag = await import('../super-factory/agents/factory.ts')
+  const tem = async (agente: { listTools: () => Promise<Record<string, unknown>> }, nome: string) => Object.keys(await agente.listTools()).includes(nome)
+  for (const agente of [ag.chiefOfStaff, ag.integrations, ag.qa, ag.security, ag.reviewer, ag.docs, ag.architect]) {
+    for (const leitura of ['lerIssueGithub', 'buscarIssuesGithub', 'listarPullRequestsGithub', 'listarMilestonesGithub', 'lerChecksGithub', 'lerProtecaoDeBranchGithub']) assert.ok(await tem(agente, leitura), `${agente.id} lê com ${leitura}`)
+  }
+  for (const agente of [ag.chiefOfStaff, ag.integrations, ag.security]) assert.ok(await tem(agente, 'lerAlertasGithub'), `${agente.id} lê alertas`)
+  for (const agente of [ag.chiefOfStaff, ag.integrations]) for (const nome of ['verificarTokenGithub', 'listarProjetosGithub']) assert.ok(await tem(agente, nome), `${agente.id} tem ${nome}`)
+  for (const agente of [ag.qa, ag.reviewer, ag.docs, ag.architect]) for (const nome of ['lerAlertasGithub', 'verificarTokenGithub', 'listarProjetosGithub']) assert.equal(await tem(agente, nome), false, `${agente.id} não recebe ${nome}`)
+}
+
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
 {
   const { AMOSTRAS, CONVERSAS, PADROES, SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
