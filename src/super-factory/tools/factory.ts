@@ -4,7 +4,7 @@ import { pedidoDaOndaSchema } from '../workflows/onda.ts'
 import { z } from 'zod'
 
 import { lintarCriterios as avaliarCriterios, planejarOnda as montarOnda, quadro } from '../../factory/board.ts'
-import { listarIssuesGithub, criarIssueGithub as abrirIssueGithub } from '../../factory/github.ts'
+import { atribuirIssuesGithub as atribuirIssues, criarMilestoneGithub as criarMilestone, criarIssueGithub as abrirIssueGithub, listarIssuesGithub, MAXIMO_DE_ISSUES_POR_VEZ } from '../../factory/github.ts'
 import { listarWorkItemsAzure, criarWorkItemAzure as abrirWorkItemAzure, modoAzure } from '../../factory/azure.ts'
 import { validarManifesto as checarManifesto } from '../../factory/manifest.ts'
 import { criarProjeto, lerProjeto, lerReferenciaDoProjeto, organizarProjeto, MAXIMO_DE_ACOES } from '../../factory/projeto.ts'
@@ -226,6 +226,55 @@ export const importarIssuesGithub = createTool({
   execute: async ({ repositorio, etiqueta, limite }) => {
     const r = await importarIssues(repositorio, { etiqueta, limite })
     return { ok: r.ok, jaExistiam: r.jaExistiam, importados: r.importados, resumo: r.nota }
+  },
+})
+
+export const criarMilestoneGithub = createTool({
+  id: 'criar-milestone-github',
+  description:
+    'Cria um milestone num repositório do GitHub (título, descrição e vencimento opcionais). Se já existir um milestone aberto com o mesmo título, devolve esse e não cria outro. Não mexe nas issues: depois use atribuirIssuesGithub para colocá-las no milestone. Precisa de escrita em Issues no token.',
+  inputSchema: z.object({
+    repositorio: z.string().min(3).describe('owner/repo'),
+    titulo: z.string().min(1).max(120),
+    descricao: z.string().max(2000).optional(),
+    venceEm: z.string().optional().describe('Dia de vencimento, AAAA-MM-DD.'),
+  }),
+  outputSchema: z.object({
+    ok: z.boolean(),
+    jaExistia: z.boolean(),
+    milestone: z.object({ numero: z.number(), titulo: z.string(), url: z.string().nullable() }).nullable(),
+    resumo: z.string(),
+  }),
+  execute: async ({ repositorio, titulo, descricao, venceEm }, contexto) => {
+    const inicio = Date.now()
+    const r = await criarMilestone(repositorio, { titulo, descricao, venceEm })
+    contexto?.loggerVNext?.info(r.ok ? 'Milestone pronto' : 'Milestone não criado', { repositorio, jaExistia: r.jaExistia, duracaoMs: Date.now() - inicio })
+    return { ok: r.ok, jaExistia: r.jaExistia, milestone: r.milestone ? { numero: r.milestone.numero, titulo: r.milestone.titulo, url: r.milestone.url } : null, resumo: r.nota }
+  },
+})
+
+export const atribuirIssuesGithub = createTool({
+  id: 'atribuir-issues-github',
+  description: `Põe até ${MAXIMO_DE_ISSUES_POR_VEZ} issues (ou pull requests) de um repositório num milestone e/ou acrescenta responsáveis (assignees). "@me" é o dono do token ("atribuir a mim"). O responsável é acrescentado, não substitui os que já existem. Atribua só a quem a pessoa citou: cada atribuição notifica quem recebe. O milestone pode ser o número ou o título e precisa estar aberto (crie com criarMilestoneGithub). Uma falha não derruba as outras issues. Não fecha, não comenta e não faz merge.`,
+  inputSchema: z.object({
+    repositorio: z.string().min(3).describe('owner/repo'),
+    issues: z.array(z.number().int().min(1)).min(1).max(MAXIMO_DE_ISSUES_POR_VEZ).describe('Números das issues.'),
+    milestone: z.union([z.string().min(1).max(120), z.number().int().min(1)]).optional().describe('Número ou título de um milestone aberto.'),
+    atribuirA: z.array(z.string().min(1).max(40)).max(10).optional().describe('Logins do GitHub, ou "@me" para o dono do token.'),
+  }),
+  outputSchema: z.object({
+    ok: z.boolean(),
+    resultados: z.array(z.object({ issue: z.number(), ok: z.boolean(), nota: z.string() })),
+    resumo: z.string(),
+  }),
+  execute: async ({ repositorio, issues, milestone, atribuirA }, contexto) => {
+    const inicio = Date.now()
+    const r = await atribuirIssues(repositorio, { issues, milestone, atribuirA })
+    const falhas = r.resultados.filter((x) => !x.ok).length
+    const dados = { repositorio, issues: issues.length, falhas, duracaoMs: Date.now() - inicio }
+    if (!r.ok) contexto?.loggerVNext?.warn('Issues atualizadas com falhas', dados)
+    else contexto?.loggerVNext?.info('Issues atualizadas', dados)
+    return { ok: r.ok, resultados: r.resultados, resumo: r.nota }
   },
 })
 

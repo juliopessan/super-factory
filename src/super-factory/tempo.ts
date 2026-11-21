@@ -36,6 +36,8 @@ export const VERBOS_POR_FERRAMENTA: Record<string, string> = {
   lerProjetoGithub: 'Lendo o Project…',
   organizarProjetoGithub: 'Organizando o Project…',
   criarProjetoGithub: 'Criando o Project…',
+  criarMilestoneGithub: 'Criando o milestone…',
+  atribuirIssuesGithub: 'Atribuindo as issues…',
   listarBranchesGithub: 'Listando as branches…',
   compararBranchesGithub: 'Comparando as branches…',
   listarArquivosGithub: 'Listando os arquivos…',

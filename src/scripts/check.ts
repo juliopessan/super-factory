@@ -899,6 +899,146 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   }
 }
 
+// --- Milestone e responsável no GitHub: cria uma vez, acrescenta (não substitui), confere a resposta, nunca repete escrita
+{
+  const { criarMilestoneGithub, atribuirIssuesGithub, MAXIMO_DE_ISSUES_POR_VEZ } = await import('../factory/github.ts')
+  const json = (corpo: unknown, status = 200) => new Response(JSON.stringify(corpo), { status })
+  type Marco = { number: number; title: string; html_url: string; state: string }
+  const montar = (opcoes: { marcos?: Marco[]; naoAtribuiveis?: string[]; falhaNaCriacao?: boolean; semLogin?: boolean; erro403?: boolean } = {}) => {
+    const marcos = [...(opcoes.marcos ?? [])]
+    const estado = { criacoes: 0, patches: [] as Array<{ n: string; corpo: Record<string, unknown> }>, adicoes: [] as Array<{ n: string; assignees: string[] }>, consultasUser: 0, auth: new Set<string | null>() }
+    const buscar = (async (url: string, init?: RequestInit) => {
+      const u = String(url)
+      const metodo = (init?.method ?? 'GET').toUpperCase()
+      estado.auth.add(new Headers(init?.headers).get('authorization'))
+      if (opcoes.erro403) return new Response('{"message":"Resource not accessible by personal access token"}', { status: 403 })
+      if (u === 'https://api.github.com/user') { estado.consultasUser++; return json(opcoes.semLogin ? {} : { login: 'juliopessan' }) }
+      const m = /^https:\/\/api\.github\.com\/repos\/acme\/pedidos(\/.*)$/.exec(u)
+      if (!m) return json({ message: 'host inesperado' }, 500)
+      const rota = m[1] as string
+      if (rota.startsWith('/milestones') && metodo === 'GET') return json(marcos.filter((x) => x.state === 'open'))
+      if (rota === '/milestones' && metodo === 'POST') {
+        estado.criacoes++
+        if (opcoes.falhaNaCriacao) return new Response('instável', { status: 502 })
+        const corpo = JSON.parse(String(init?.body)) as { title: string }
+        const novo = { number: marcos.length + 1, title: corpo.title, html_url: `https://github.com/acme/pedidos/milestone/${marcos.length + 1}`, state: 'open' }
+        marcos.push(novo)
+        return json({ ...novo, ...(JSON.parse(String(init?.body)) as object) }, 201)
+      }
+      const issue = /^\/issues\/(\d+)$/.exec(rota)
+      if (issue && metodo === 'PATCH') { estado.patches.push({ n: issue[1] as string, corpo: JSON.parse(String(init?.body)) as Record<string, unknown> }); return json({ number: Number(issue[1]) }) }
+      const assignees = /^\/issues\/(\d+)\/assignees$/.exec(rota)
+      if (assignees && metodo === 'POST') {
+        const pedidos = (JSON.parse(String(init?.body)) as { assignees: string[] }).assignees
+        estado.adicoes.push({ n: assignees[1] as string, assignees: pedidos })
+        // o GitHub ignora, sem erro, quem não pode ser responsável
+        const aceitos = pedidos.filter((l) => !(opcoes.naoAtribuiveis ?? []).includes(l))
+        return json({ number: Number(assignees[1]), assignees: [{ login: 'colega-antigo' }, ...aceitos.map((login) => ({ login }))] }, 201)
+      }
+      return json({ message: 'rota desconhecida' }, 404)
+    }) as unknown as typeof fetch
+    return { buscar, estado, marcos }
+  }
+  const deps = (f: ReturnType<typeof montar>) => ({ fetch: f.buscar, token: 'tok-de-teste-123456', esperar: async () => {} })
+
+  // criar milestone
+  let f = montar()
+  const criado = await criarMilestoneGithub('acme/pedidos', { titulo: '  Beta   interno ', descricao: 'Primeira semana', venceEm: '2026-12-15' }, deps(f))
+  assert.equal(criado.ok, true, criado.nota)
+  assert.equal(f.estado.criacoes, 1)
+  assert.equal(criado.milestone?.titulo, 'Beta interno', 'espaços do título são normalizados')
+  assert.equal(criado.milestone?.numero, 1)
+  assert.match(criado.nota, /vence em 2026-12-15/)
+  f = montar({ marcos: [{ number: 4, title: 'beta INTERNO', html_url: 'https://github.com/acme/pedidos/milestone/4', state: 'open' }] })
+  const repetido = await criarMilestoneGithub('acme/pedidos', { titulo: 'Beta interno' }, deps(f))
+  assert.equal(repetido.ok && repetido.jaExistia, true, 'título que já existe devolve o mesmo milestone')
+  assert.equal(f.estado.criacoes, 0, 'e não cria outro')
+  assert.equal(repetido.milestone?.numero, 4)
+  f = montar({ marcos: [{ number: 4, title: 'Beta', html_url: 'x', state: 'closed' }] })
+  assert.equal((await criarMilestoneGithub('acme/pedidos', { titulo: 'Beta' }, deps(f))).jaExistia, false, 'milestone fechado não conta')
+  f = montar()
+  const [c1, c2] = await Promise.all([criarMilestoneGithub('acme/pedidos', { titulo: 'Concorrente' }, deps(f)), criarMilestoneGithub('acme/pedidos', { titulo: 'Concorrente' }, deps(f))])
+  assert.equal(f.estado.criacoes, 1, 'dois pedidos ao mesmo tempo criam um milestone só')
+  assert.ok(c1.ok && c2.ok && (c1.jaExistia || c2.jaExistia))
+  f = montar({ falhaNaCriacao: true })
+  const instavel = await criarMilestoneGithub('acme/pedidos', { titulo: 'Instável' }, deps(f))
+  assert.equal(instavel.ok, false)
+  assert.equal(f.estado.criacoes, 1, 'escrita nunca é repetida: repetir poderia criar dois')
+  f = montar({ erro403: true })
+  assert.match((await criarMilestoneGithub('acme/pedidos', { titulo: 'X' }, deps(f))).nota, /Issues: Read and write/, 'sem permissão: diz o que o token precisa')
+  f = montar()
+  for (const [titulo, venceEm] of [['', undefined], ['x'.repeat(121), undefined], ['Ok', '15/12/2026'], ['Ok', '2026-02-30']] as const) {
+    assert.equal((await criarMilestoneGithub('acme/pedidos', { titulo, venceEm }, deps(f))).ok, false, `${titulo.slice(0, 6)}|${venceEm}`)
+  }
+  assert.equal((await criarMilestoneGithub('sem-barra', { titulo: 'Ok' }, deps(f))).ok, false)
+  assert.equal(f.estado.criacoes, 0, 'entrada inválida não chega ao GitHub')
+  assert.equal((await criarMilestoneGithub('acme/pedidos', { titulo: 'Ok' }, { fetch: f.buscar, token: '' })).ok, false, 'sem token nada é criado')
+
+  // atribuir issues
+  const marco = { number: 7, title: 'Beta interno', html_url: 'https://github.com/acme/pedidos/milestone/7', state: 'open' }
+  f = montar({ marcos: [marco] })
+  const tudo = await atribuirIssuesGithub('acme/pedidos', { issues: [2, 3, 4, 3], milestone: 'beta interno', atribuirA: ['@me'] }, deps(f))
+  assert.equal(tudo.ok, true, tudo.nota)
+  assert.equal(tudo.resultados.length, 3, 'número repetido conta uma vez')
+  assert.deepEqual(f.estado.patches.map((p) => [p.n, p.corpo.milestone]), [['2', 7], ['3', 7], ['4', 7]], 'o milestone é achado pelo título, sem diferenciar maiúsculas')
+  assert.deepEqual(f.estado.adicoes.map((a) => a.assignees), [['juliopessan'], ['juliopessan'], ['juliopessan']], '@me vira o login do dono do token')
+  assert.equal(f.estado.consultasUser, 1, 'o dono do token é consultado uma vez, não por issue')
+  assert.ok(f.estado.patches.every((p) => !('assignees' in p.corpo)), 'o milestone não substitui responsáveis: eles entram por POST /assignees, que acrescenta')
+  assert.match(tudo.nota, /3 de 3/)
+  // só responsável, sem milestone, por número
+  f = montar({ marcos: [marco] })
+  const numero = await atribuirIssuesGithub('acme/pedidos', { issues: [5], milestone: 7 }, deps(f))
+  assert.equal(numero.ok, true)
+  assert.equal(f.estado.adicoes.length, 0, 'sem responsável pedido, ninguém é atribuído')
+  const outro = await atribuirIssuesGithub('acme/pedidos', { issues: [5], atribuirA: ['@maria-dev', 'Me'] }, deps(f))
+  assert.deepEqual(f.estado.adicoes[0]?.assignees, ['maria-dev', 'juliopessan'], '@ do login sai; "me" também vale')
+  assert.equal(outro.ok, true)
+  // o GitHub ignora, sem erro, quem não pode ser responsável: a resposta é conferida
+  f = montar({ naoAtribuiveis: ['de-fora'] })
+  const ignorado = await atribuirIssuesGithub('acme/pedidos', { issues: [1, 2], atribuirA: ['de-fora'] }, deps(f))
+  assert.equal(ignorado.ok, false)
+  assert.match(ignorado.resultados[0]?.nota ?? '', /de-fora não pode ser responsável/)
+  assert.equal(ignorado.resultados.length, 2, 'uma falha não derruba as outras issues')
+  // milestone que não existe: nada é alterado
+  f = montar()
+  const semMarco = await atribuirIssuesGithub('acme/pedidos', { issues: [1], milestone: 'Inexistente', atribuirA: ['@me'] }, deps(f))
+  assert.equal(semMarco.ok, false)
+  assert.match(semMarco.nota, /Não achei o milestone "Inexistente".*criarMilestoneGithub/)
+  assert.equal(f.estado.patches.length + f.estado.adicoes.length, 0, 'sem o milestone, nenhuma issue é tocada')
+  // token sem /user
+  f = montar({ semLogin: true })
+  assert.match((await atribuirIssuesGithub('acme/pedidos', { issues: [1], atribuirA: ['@me'] }, deps(f))).nota, /de quem é o token/)
+  // 403 em escrita por issue vira nota por issue, com o que o token precisa
+  f = montar({ erro403: true })
+  assert.equal((await atribuirIssuesGithub('acme/pedidos', { issues: [1], milestone: 3 }, deps(f))).ok, false)
+  // validações: nada chega ao GitHub
+  f = montar()
+  const ruins: Array<Parameters<typeof atribuirIssuesGithub>[1]> = [
+    { issues: [] , milestone: 1 }, { issues: [0], milestone: 1 }, { issues: [1.5], milestone: 1 }, { issues: [1] },
+    { issues: [1], atribuirA: ['com espaço'] }, { issues: [1], atribuirA: ['a'.repeat(40)] }, { issues: [1], milestone: 0 }, { issues: [1], milestone: ' ' },
+    { issues: Array.from({ length: MAXIMO_DE_ISSUES_POR_VEZ + 1 }, (_, i) => i + 1), milestone: 1 },
+    { issues: [1], atribuirA: Array.from({ length: 11 }, (_, i) => `u${i}`) },
+  ]
+  for (const entrada of ruins) assert.equal((await atribuirIssuesGithub('acme/pedidos', entrada, deps(f))).ok, false, JSON.stringify(entrada).slice(0, 60))
+  assert.equal(f.estado.auth.size, 0, 'entrada inválida não chega ao GitHub')
+  assert.equal((await atribuirIssuesGithub('acme/pedidos', { issues: [1], atribuirA: ['@me'] }, { fetch: f.buscar, token: '' })).ok, false, 'sem token nada é alterado')
+
+  // ferramentas: sem aprovação por uso (só o merge é decisão humana) e fora do MCP (escrita)
+  const ferr = await import('../super-factory/tools/factory.ts')
+  for (const ferramenta of [ferr.criarMilestoneGithub, ferr.atribuirIssuesGithub]) assert.notEqual(ferramenta.requireApproval, true, `${ferramenta.id} não pede aprovação`)
+  const mcpFonte2 = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'super-factory', 'mcp.ts'), 'utf8')
+  for (const escrita of ['criarMilestoneGithub', 'atribuirIssuesGithub']) assert.equal(new RegExp(`^\\s+${escrita},$`, 'm').test(mcpFonte2), false, `o MCP não expõe ${escrita}`)
+  const agentes = await import('../super-factory/agents/factory.ts')
+  for (const agente of [agentes.chiefOfStaff, agentes.integrations]) {
+    const nomes = Object.keys(await agente.listTools())
+    assert.ok(nomes.includes('criarMilestoneGithub') && nomes.includes('atribuirIssuesGithub'), `${agente.id} tem as ferramentas de milestone e responsável`)
+  }
+  for (const agente of [agentes.qa, agentes.security, agentes.reviewer, agentes.docs, agentes.architect]) {
+    const nomes = Object.keys(await agente.listTools())
+    assert.ok(!nomes.includes('criarMilestoneGithub') && !nomes.includes('atribuirIssuesGithub'), `${agente.id} (só leitura) não escreve milestone nem responsável`)
+  }
+}
+
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
 {
   const { AMOSTRAS, CONVERSAS, PADROES, SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
