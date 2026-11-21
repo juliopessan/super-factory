@@ -3726,6 +3726,162 @@ assert.equal(
   assert.ok(fonteAg.includes('diagnosticarProntidaoGithub') && fonteAg.includes('lerMapaDoRepositorio'), 'o Chief tem as ferramentas do Lote B')
 }
 
+// --- Lote C: evals do time, minerador de regras e resultado do PR como sinal
+{
+  const ev = await import('../factory/evals.ts')
+  const rg = await import('../factory/regras.ts')
+  const sn = await import('../factory/github-sinais.ts')
+  const { calcularMetricas } = await import('../factory/metricas.ts')
+  const { triagemScorer, revisaoScorer } = await import('../super-factory/scorers/factory.ts')
+  const { semearConjuntos, ID_CONJUNTO_CARDS_DE_OURO, ID_CONJUNTO_REVISAO_DE_OURO } = await import('../super-factory/conjuntos.ts')
+
+  // cards de ouro: a triagem determinística acerta todos
+  for (const c of ev.CARDS_DE_OURO) assert.deepEqual(ev.triarCardDeOuro(c), { rota: c.rota, lintOk: c.lintOk }, c.nome)
+  // diffs de ouro: uma revisão boa acerta, uma revisão vazia não
+  const boas = ['Há um segredo hardcoded no código: a chave deve vir do ambiente.', 'O teste removido enfraquece a cobertura: restaure o teste.', 'O diff reescreve o login, fora do escopo do card.', 'Há risco de injeção de SQL: use consulta parametrizada.']
+  ev.DIFFS_DE_OURO.forEach((d, i) => {
+    assert.equal(ev.pontuarRevisao(boas[i]!, d), 1, d.nome)
+    assert.equal(ev.pontuarRevisao('Parece bom, nada a apontar.', d), 0, `${d.nome}: revisão que não vê o defeito`)
+  })
+
+  // juiz: nota ponderada e leitura tolerante
+  assert.equal(ev.notaDoJuiz('{"criterios":{"achou":1,"sem-invencao":1,"severidade":1,"so-comenta":1}}'), 1)
+  assert.equal(ev.notaDoJuiz('```json\n{"criterios":{"achou":1,"sem-invencao":0,"severidade":0,"so-comenta":0}}\n```'), 3 / 10, 'achou pesa 3 de 10')
+  assert.equal(ev.notaDoJuiz('não sei'), null)
+  assert.equal(ev.notaDoJuiz('{"criterios":"x"}'), null)
+  assert.match(ev.promptDoJuiz(ev.DIFFS_DE_OURO[0]!, 'revisão'), /Rubrica:[\s\S]*achou[\s\S]*Defeito plantado no diff: segredo no código/)
+  // o juiz é de outro provedor que o modelo avaliado
+  assert.equal(ev.escolherJuiz('anthropic/claude-opus-5-5', ['anthropic/claude-sonnet-5-5', 'openai/gpt-6.1-sol']), 'openai/gpt-6.1-sol')
+  assert.equal(ev.escolherJuiz('anthropic/claude-opus-5-5', ['anthropic/claude-sonnet-5-5']), null, 'sem juiz de outro provedor, não há juiz')
+  assert.equal(ev.escolherJuiz('openai/x', [], 'google/y'), 'google/y')
+  assert.equal(ev.escolherJuiz('openai/x', [], 'openai/y'), null, 'nem por escolha explícita o juiz é do mesmo provedor')
+
+  // matriz: teto de chamadas
+  const chamadasFeitas: string[] = []
+  const exec = async (modelo: string, caso: { nome: string; palavras: string[] }) => { chamadasFeitas.push(`${modelo}|${caso.nome}`); return { texto: modelo.startsWith('bom') ? `achei: ${caso.palavras[0]}` : 'nada a apontar', tokens: 100 } }
+  const estourou = await ev.rodarMatriz({ casos: ev.DIFFS_DE_OURO, modelos: ['bom/a', 'ruim/b'], rodadas: 3, teto: 10, executar: exec })
+  assert.equal(estourou.ok, false)
+  assert.equal(estourou.planejadas, 24)
+  assert.match(estourou.ok ? '' : estourou.motivo, /faria 24 chamadas e o teto é 10/)
+  assert.equal(chamadasFeitas.length, 0, 'passou do teto: nada roda')
+  assert.equal(ev.chamadasPlanejadas(4, 2, 1, true), 16)
+  assert.equal((await ev.rodarMatriz({ casos: [], modelos: ['a/b'], teto: 5, executar: exec })).ok, false)
+  const julgadas: string[] = []
+  const m = await ev.rodarMatriz({
+    casos: ev.DIFFS_DE_OURO, modelos: ['bom/a', 'ruim/b'], teto: 16, executar: exec,
+    juizPara: (avaliado) => (avaliado.startsWith('bom') ? { nome: 'outro/juiz', julgar: async () => { julgadas.push(avaliado); return '{"criterios":{"achou":1,"sem-invencao":1,"severidade":1,"so-comenta":1}}' } } : null),
+  })
+  assert.ok(m.ok)
+  if (m.ok) {
+    assert.deepEqual(m.resultados.map((r) => [r.modelo, r.deteccao, r.notaDoJuiz, r.tokens, r.chamadas]), [['bom/a', 1, 1, 400, 8], ['ruim/b', 0, null, 400, 4]])
+    assert.equal(m.resultados[0]!.juiz, 'outro/juiz')
+    const tabela = ev.tabelaDaMatriz(m)
+    assert.match(tabela, /\| bom\/a \| 100% \| 100% \| outro\/juiz \| 400 \| 8 \|/)
+    assert.match(tabela, /\| ruim\/b \| 0% \| — \| — \| 400 \| 4 \|/)
+  }
+  assert.match(ev.tabelaDaMatriz(estourou), /Matriz não rodou/)
+  assert.equal(julgadas.length, 4)
+
+  // scorers e conjuntos do Studio
+  assert.equal((await triagemScorer.run({ input: {}, output: { rota: 'bug' }, groundTruth: { rota: 'bug' } })).score, 1)
+  assert.equal((await triagemScorer.run({ input: {}, output: 'A rota é foggy.', groundTruth: { rota: 'bug' } })).score, 0)
+  assert.equal((await triagemScorer.run({ input: {}, output: 'clear', groundTruth: {} })).score, 0, 'sem rota esperada não pontua')
+  assert.equal((await revisaoScorer.run({ input: {}, output: 'Há SQL injection aqui', groundTruth: { palavras: ['sql'] } })).score, 1)
+  assert.equal((await revisaoScorer.run({ input: {}, output: 'ok', groundTruth: { palavras: ['sql'] } })).score, 0)
+  const criados: Record<string, unknown[]> = {}
+  const falsoMastra = {
+    datasets: {
+      get: async ({ id }: { id: string }) => { if (!(id in criados)) throw new Error('não existe'); return {} },
+      create: async ({ id }: { id: string }) => { criados[id] = []; return { addItems: async ({ items }: { items: unknown[] }) => void criados[id]!.push(...items) } },
+    },
+  } as unknown as Parameters<typeof semearConjuntos>[0]
+  assert.equal(await semearConjuntos(falsoMastra), 'criado')
+  assert.equal(criados[ID_CONJUNTO_CARDS_DE_OURO]?.length, ev.CARDS_DE_OURO.length)
+  assert.equal(criados[ID_CONJUNTO_REVISAO_DE_OURO]?.length, ev.DIFFS_DE_OURO.length)
+  assert.equal(await semearConjuntos(falsoMastra), 'existente', 'não recria nem apaga o que a pessoa editou')
+
+  // minerador de regras
+  const c = (pr: number, texto: string) => ({ pr, texto })
+  const propostas = rg.minerarRegras([
+    c(10, 'Falta validar a entrada da rota antes de consultar o banco'),
+    c(11, 'Por favor valide a entrada da rota antes de consultar o banco de dados'),
+    c(12, 'Validar a entrada da rota antes de consultar o banco, falta isso'),
+    c(10, 'LGTM'),
+    c(13, 'Use tabs em vez de espaços neste projeto, como no resto do código'),
+    c(13, 'Use tabs em vez de espaços neste projeto, como no resto do código'),
+    c(14, '```\nconst x = 1\n```'),
+    c(15, 'Renomeie esta função para algo mais claro do que fazer'),
+  ])
+  assert.equal(propostas.length, 1, 'só o que se repete em PRs diferentes')
+  assert.deepEqual(propostas[0]!.prs, [10, 11, 12])
+  assert.equal(propostas[0]!.ocorrencias, 3)
+  assert.match(propostas[0]!.texto, /entrada da rota/)
+  assert.ok(propostas[0]!.exemplos.length <= 3 && propostas[0]!.texto.length <= 240)
+  assert.equal(rg.minerarRegras([c(13, 'Use tabs em vez de espaços neste projeto, como no resto'), c(13, 'Use tabs em vez de espaços neste projeto, como no resto')]).length, 0, 'o mesmo PR repetido não vira regra')
+  assert.equal(rg.minerarRegras([c(1, 'x y'), c(2, 'x y')]).length, 0, 'comentário curto demais não conta')
+  assert.equal(rg.minerarRegras(propostas.length ? [c(1, 'Falta validar a entrada antes do banco'), c(2, 'Falta validar a entrada antes do banco')] : [], { minimoDePrs: 3 }).length, 0, 'o mínimo é configurável')
+  assert.ok(!rg.palavrasDoComentario('Veja `codigo` e https://x.com/a em ```bloco```').some((p) => ['codigo', 'bloco', 'https'].includes(p)))
+
+  // resultado do PR
+  assert.deepEqual(sn.classificarPr({ mesclado: true, estado: 'closed', commitsHumanos: 0, mudancasPedidas: 0 }).resultado, 'aceito')
+  assert.match(sn.classificarPr({ mesclado: true, estado: 'closed', commitsHumanos: 2, mudancasPedidas: 1 }).motivo, /2 commit\(s\) de pessoas e 1 pedido\(s\) de mudança/)
+  assert.equal(sn.classificarPr({ mesclado: false, estado: 'closed', commitsHumanos: 0, mudancasPedidas: 0 }).resultado, 'recusado')
+  assert.equal(sn.classificarPr({ mesclado: false, estado: 'open', commitsHumanos: 0, mudancasPedidas: 0 }).resultado, 'aberto')
+  const ghFalso = (pr: { merged_at?: string | null; state: string }, commits: string[], reviews: string[], comentarios: Array<Record<string, unknown>> = []) => {
+    const urls: string[] = []
+    return {
+      urls,
+      deps: {
+        token: TOKEN_TESTE,
+        fetch: (async (url: string, init?: RequestInit) => {
+          urls.push(`${init?.method ?? 'GET'} ${url}`)
+          const u = String(url)
+          const corpo = /\/pulls\/\d+\/commits/.test(u) ? commits.map((n) => ({ commit: { author: { name: n } } })) : /\/pulls\/\d+\/reviews/.test(u) ? reviews.map((s) => ({ state: s, body: s === 'COMMENTED' ? 'Falta validar a entrada' : '', user: { type: 'User' } })) : /\/pulls\/\d+\/comments/.test(u) ? comentarios : /\/issues\/\d+\/comments/.test(u) ? [] : pr
+          return new Response(JSON.stringify(corpo), { status: 200 })
+        }) as typeof fetch,
+      },
+    }
+  }
+  let g = ghFalso({ merged_at: '2026-01-01', state: 'closed' }, ['Super Factory', 'Super Factory'], [])
+  let sinal = await sn.lerSinalDoPr('acme/pedidos', 7, g.deps)
+  assert.deepEqual([sinal.ok, sinal.dado?.resultado, sinal.dado?.commitsHumanos], [true, 'aceito', 0])
+  assert.ok(g.urls.every((u) => u.startsWith('GET ')), 'só lê')
+  g = ghFalso({ merged_at: '2026-01-01', state: 'closed' }, ['Super Factory', 'Ana Dev'], ['CHANGES_REQUESTED'])
+  sinal = await sn.lerSinalDoPr('acme/pedidos', 7, g.deps)
+  assert.deepEqual([sinal.dado?.resultado, sinal.dado?.commitsHumanos, sinal.dado?.mudancasPedidas], ['ajustado', 1, 1])
+  assert.equal((await sn.lerSinalDoPr('acme/pedidos', 7, ghFalso({ merged_at: null, state: 'closed' }, [], []).deps)).dado?.resultado, 'recusado')
+  assert.equal((await sn.lerSinalDoPr('acme/pedidos', 0, g.deps)).ok, false)
+  assert.match((await sn.lerSinalDoPr('acme/pedidos', 7, { token: '' })).nota, /Sem GITHUB_TOKEN/)
+  // comentários humanos: sem bot, sem a revisão automática
+  g = ghFalso({ state: 'open' }, [], ['COMMENTED'], [{ body: 'Use tabs aqui', path: 'src/a.ts', user: { type: 'User' } }, { body: 'dependabot', user: { type: 'Bot' } }, { body: '🤖 **Revisão automática da Super Factory.** x', user: { type: 'User' } }])
+  const humanos = await sn.lerComentariosHumanos('acme/pedidos', 9, g.deps)
+  assert.deepEqual(humanos.dado?.map((x) => x.texto), ['Use tabs aqui', 'Falta validar a entrada'])
+  assert.equal(humanos.dado?.[0]?.arquivo, 'src/a.ts')
+  // medir e guardar nos cards; o que já foi decidido não é lido de novo
+  const run = (id: string, pr: string | null, extra: Record<string, unknown> = {}) => ({ runId: id, card: { id, provedor: 'github', repositorio: 'acme/pedidos' }, entrega: pr ? { ok: true, pullRequestUrl: pr } : null, desfecho: 'aceito-com-ressalvas', checks: [], trilha: [], atualizadoEm: '2026-01-01T00:00:00Z', uso: { entrada: 3000, saida: 1000 }, ...extra })
+  const gravados: string[] = []
+  g = ghFalso({ merged_at: '2026-01-01', state: 'closed' }, ['Super Factory'], [])
+  const medido = await sn.medirResultadosDosPrs(
+    { a: run('C-1', 'https://github.com/acme/pedidos/pull/7'), b: run('C-2', null), c: run('C-3', 'https://github.com/acme/pedidos/pull/8', { resultadoPr: { resultado: 'recusado' } }), d: run('C-4', 'https://github.com/acme/pedidos/pull/9', { resultadoPr: { resultado: 'aberto' } }) } as unknown as Parameters<typeof sn.medirResultadosDosPrs>[0],
+    g.deps,
+    (e) => void gravados.push(`${e.card.id}:${e.resultadoPr?.resultado}`),
+  )
+  assert.deepEqual(gravados.sort(), ['C-1:aceito', 'C-4:aceito'], 'mede o novo e o que estava aberto; ignora o sem PR e o já decidido')
+  assert.equal(medido.medidos, 2)
+  // custo por PR mesclado
+  const mm = calcularMetricas({ a: run('C-1', 'https://github.com/a/b/pull/1', { resultadoPr: { resultado: 'aceito' } }), b: run('C-2', 'https://github.com/a/b/pull/2', { resultadoPr: { resultado: 'ajustado' } }), c: run('C-3', 'https://github.com/a/b/pull/3', { resultadoPr: { resultado: 'recusado' } }), d: run('C-4', 'https://github.com/a/b/pull/4') } as unknown as Parameters<typeof calcularMetricas>[0], Date.parse('2026-01-02T00:00:00Z'))
+  assert.deepEqual(mm.resultados, { aceitos: 1, ajustados: 1, recusados: 1, abertos: 0, medidos: 3 })
+  assert.equal(mm.tokensPorPrMesclado, 8000, '4 execuções × 4000 tokens ÷ 2 PRs mesclados: o custo inclui o que foi recusado ou não medido')
+  assert.equal(calcularMetricas({ a: run('C-1', 'https://github.com/a/b/pull/1') } as unknown as Parameters<typeof calcularMetricas>[0]).tokensPorPrMesclado, null, 'sem PR mesclado, não há custo por PR')
+
+  // ligação nas ferramentas do Chief e no script
+  const fonteAg = fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8')
+  assert.ok(fonteAg.includes('medirResultadoDosPrs') && fonteAg.includes('proporRegrasDeComentarios'))
+  const fonteIdx = fs.readFileSync(new URL('../super-factory/index.ts', import.meta.url), 'utf8')
+  assert.ok(fonteIdx.includes('triagem: triagemScorer') && fonteIdx.includes('revisao: revisaoScorer'))
+  assert.match(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'), /"evals": "node --experimental-strip-types src\/scripts\/evals\.ts"/)
+}
+
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(

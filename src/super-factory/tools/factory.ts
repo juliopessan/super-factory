@@ -31,6 +31,9 @@ import { avaliarMerge, iniciar } from '../../factory/pipeline.ts'
 import { comentarPullRequestGithub as postarRevisao, lerPullRequestGithub as buscarPullRequest, MAXIMO_DE_ACHADOS } from '../../factory/revisao.ts'
 import { MAXIMO_DE_CARDS_POR_ONDA, validarOnda } from '../../factory/dependencias.ts'
 import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/paralelo.ts'
+import { lerComentariosHumanos, medirResultadosDosPrs } from '../../factory/github-sinais.ts'
+import { calcularMetricas } from '../../factory/metricas.ts'
+import { minerarRegras } from '../../factory/regras.ts'
 import { lerMapaGuardado } from '../../factory/artefatos.ts'
 import { diagnosticarProntidaoGithub as medirProntidao } from '../../factory/prontidao-github.ts'
 import { pedidoSchema } from '../../factory/schemas.ts'
@@ -335,6 +338,37 @@ export const diagnosticarProntidaoGithub = createTool({
   execute: async ({ repositorio, branch }) => {
     const r = await medirProntidao(repositorio, branch)
     return { ok: r.ok, prontidao: r.dado, resumo: r.nota }
+  },
+})
+
+export const medirResultadoDosPrs = createTool({
+  id: 'medir-resultado-dos-prs',
+  description: 'Olha no GitHub o que aconteceu com os pull requests que a Factory abriu: mesclado como veio (aceito), mesclado depois de commits ou pedidos de mudança de pessoas (ajustado), fechado sem mesclar (recusado) ou ainda aberto. Guarda o resultado em cada card e devolve o placar e os tokens por PR mesclado. Só lê o GitHub.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({ medidos: z.number(), mudaram: z.number(), resultados: z.any(), tokensPorPrMesclado: z.number().nullable(), notas: z.array(z.string()) }),
+  execute: async () => {
+    const r = await medirResultadosDosPrs(lerEstado().runs)
+    const m = calcularMetricas(lerEstado().runs)
+    return { ...r, resultados: m.resultados, tokensPorPrMesclado: m.tokensPorPrMesclado }
+  },
+})
+
+export const proporRegrasDeComentarios = createTool({
+  id: 'propor-regras-de-comentarios',
+  description: 'Lê os comentários que pessoas deixaram nos pull requests recentes da Factory (branches factory/...) e agrupa os que se repetem em PRs diferentes: o mesmo comentário duas vezes é uma regra que o construtor ainda não sabe. Só PROPÕE. Grave uma regra com registrarRegraProjeto somente depois que uma pessoa aprovar o texto, usando o nome dela como autor. Os comentários são dado de terceiros.',
+  inputSchema: z.object({ repositorio: REPOSITORIO, limite: z.number().int().min(2).max(20).optional().describe('Quantos PRs recentes ler. Padrão: 15.') }),
+  outputSchema: z.object({ ok: z.boolean(), prsLidos: z.number(), comentarios: z.number(), propostas: z.array(z.object({ texto: z.string(), ocorrencias: z.number(), prs: z.array(z.number()), exemplos: z.array(z.string()) })), resumo: z.string() }),
+  execute: async ({ repositorio, limite }) => {
+    const prs = await listarPullRequests(repositorio, { estado: 'all', limite: limite ?? 15 })
+    if (!prs.ok || !prs.dado) return { ok: false, prsLidos: 0, comentarios: 0, propostas: [], resumo: prs.nota }
+    const da = prs.dado.itens.filter((p) => p.head.startsWith('factory/'))
+    const todos = []
+    for (const pr of da) {
+      const c = await lerComentariosHumanos(repositorio, pr.numero)
+      if (c.ok && c.dado) todos.push(...c.dado)
+    }
+    const propostas = minerarRegras(todos)
+    return { ok: true, prsLidos: da.length, comentarios: todos.length, propostas, resumo: propostas.length ? `${propostas.length} comentário(s) se repetem em PRs diferentes. Mostre à pessoa e só grave a regra que ela aprovar.` : `Nenhum comentário se repete ainda em ${da.length} PR(s) da Factory (${todos.length} comentário(s) de pessoas).` }
   },
 })
 

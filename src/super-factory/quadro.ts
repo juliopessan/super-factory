@@ -205,6 +205,10 @@ export function paginaQuadro(opcoes: { embed: boolean; tema: 'dark' | 'light' | 
     metrica(x.tempoMedianoMin === null ? '–' : x.tempoMedianoMin + ' min', 'tempo mediano até o PR')
     metrica(String(x.bloqueadas), 'bloqueadas')
     metrica(x.tokens.porCard === null ? 'não medido' : numero(x.tokens.porCard), 'tokens por card (entrada + saída)')
+    if (x.resultados && x.resultados.medidos) {
+      metrica(x.resultados.aceitos + ' de ' + x.resultados.medidos, 'PRs mesclados sem ajuste')
+      metrica(x.tokensPorPrMesclado === null ? '–' : numero(x.tokensPorPrMesclado), 'tokens por PR mesclado')
+    }
   }
   function desenhar(q) {
     resumo.textContent = q.resumo
