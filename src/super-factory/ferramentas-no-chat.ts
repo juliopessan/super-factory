@@ -26,6 +26,8 @@ export const ETAPAS_POR_FERRAMENTA: Record<string, { peso: number; sugestao: str
   iniciarOnda: { peso: 10, sugestao: 'Como está o quadro agora?' },
   importarIssuesGithub: { peso: 9, sugestao: 'Inicie a onda com os cards novos que não estão bloqueados' },
   criarProjetoGithub: { peso: 9, sugestao: 'Adicione as issues abertas ao Project e ordene por prioridade' },
+  criarMilestoneGithub: { peso: 8, sugestao: 'Coloque as issues nesse milestone e atribua a mim' },
+  atribuirIssuesGithub: { peso: 8, sugestao: 'Leia o Project de novo e confira o resultado' },
   organizarProjetoGithub: { peso: 8, sugestao: 'Leia o Project de novo e confira o resultado' },
   comentarPullRequestGithub: { peso: 8, sugestao: 'Como está o quadro agora?' },
   abrirCard: { peso: 7, sugestao: 'Inicie a onda com este card' },
