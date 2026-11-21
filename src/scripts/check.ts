@@ -1236,6 +1236,271 @@ assert.match(chamadasDoAgente, /criarIssueGithub|criar-issue-github/, 'o agente 
   for (const agente of [ag.qa, ag.reviewer, ag.docs, ag.architect]) for (const nome of ['lerAlertasGithub', 'verificarTokenGithub', 'listarProjetosGithub']) assert.equal(await tem(agente, nome), false, `${agente.id} não recebe ${nome}`)
 }
 
+// --- Fase 3: escrita reversível no GitHub (comentar, editar e fechar, labels, revisão, PR pronto, campos do Project)
+{
+  const esc = await import('../factory/github-escrita.ts')
+  const { criarCampoDoProjeto, definirCamposDoProjeto } = await import('../factory/projeto.ts')
+  const SEGREDO = 'ghp_' + 'd'.repeat(36)
+  const json = (c: unknown, status = 200) => new Response(JSON.stringify(c), { status })
+  type Opcoes = { ci?: 'sucesso' | 'falha' | 'pendente'; revisoresIgnorados?: string[]; mutacaoNaoConfirma?: boolean; semLabelNaResposta?: boolean; jaTemLabel?: boolean }
+  const montar = (o: Opcoes = {}) => {
+    const chamadas: Array<{ metodo: string; rota: string; consulta: string; corpo: Record<string, unknown> | null }> = []
+    const comentarios: Array<{ numero: number; body: string }> = []
+    const labels = [{ name: 'bug', color: 'd73a4a', description: 'Algo quebrado' }, { name: 'P1', color: 'b60205', description: null }]
+    const campos: Array<Record<string, unknown>> = [
+      { __typename: 'ProjectV2SingleSelectField', id: 'F_status', name: 'Status', options: [{ id: 'o1', name: 'Todo' }, { id: 'o2', name: 'In Progress' }, { id: 'o3', name: 'Done' }] },
+      { __typename: 'ProjectV2SingleSelectField', id: 'F_prio', name: 'Prioridade', options: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }] },
+      { __typename: 'ProjectV2Field', id: 'F_est', name: 'Estimativa', dataType: 'NUMBER' },
+      { __typename: 'ProjectV2Field', id: 'F_prazo', name: 'Prazo', dataType: 'DATE' },
+      { __typename: 'ProjectV2Field', id: 'F_notas', name: 'Notas', dataType: 'TEXT' },
+      { __typename: 'ProjectV2IterationField', id: 'F_sprint', name: 'Sprint', configuration: { iterations: [{ id: 'i1', title: 'Sprint 1' }] } },
+      { __typename: 'ProjectV2Field', id: 'F_data', name: 'Estranho', dataType: 'TITLE' },
+    ]
+    const mutacoes: Array<{ tipo: string; variaveis: Record<string, unknown> }> = []
+    const issues: Record<number, Record<string, unknown>> = {
+      2: { number: 2, title: 'Filtro', body: 'corpo antigo', state: 'open', html_url: 'https://github.com/acme/pedidos/issues/2' },
+      3: { number: 3, title: 'Fechada', body: '', state: 'closed', html_url: 'https://github.com/acme/pedidos/issues/3' },
+      9: { number: 9, title: 'É um PR', body: '', state: 'open', pull_request: {}, html_url: 'https://github.com/acme/pedidos/pull/9' },
+    }
+    const buscar = (async (entrada: string | URL, init?: RequestInit) => {
+      const u = new URL(String(entrada))
+      const metodo = (init?.method ?? 'GET').toUpperCase()
+      const corpo = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null
+      chamadas.push({ metodo, rota: u.pathname, consulta: u.search, corpo })
+      const rota = u.pathname
+      if (rota === '/graphql') {
+        const consulta = String((corpo as { query: string }).query)
+        const v = (corpo as { variables: Record<string, unknown> }).variables
+        if (consulta.includes('fields(first:50)')) return json({ data: { repositoryOwner: { projectV2: { id: 'PVT_proj1', title: 'Backlog', fields: { nodes: campos } } } } })
+        if (consulta.includes('createProjectV2Field')) { mutacoes.push({ tipo: 'criarCampo', variaveis: v }); campos.push({ __typename: 'ProjectV2Field', id: `F_${v.nome}`, name: v.nome, dataType: v.tipo }); return json({ data: { createProjectV2Field: { projectV2Field: { id: 'x', name: v.nome } } } }) }
+        if (consulta.includes('updateProjectV2ItemFieldValue')) { mutacoes.push({ tipo: 'definir', variaveis: v }); return json({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: v.item } } } }) }
+        if (consulta.includes('markPullRequestReadyForReview')) { mutacoes.push({ tipo: 'pronto', variaveis: v }); return json({ data: { markPullRequestReadyForReview: { pullRequest: { isDraft: Boolean(o.mutacaoNaoConfirma) } } } }) }
+        return json({ errors: [{ message: 'consulta desconhecida' }] })
+      }
+      const comentarioDaIssue = /^\/repos\/acme\/pedidos\/issues\/(\d+)\/comments$/.exec(rota)
+      if (comentarioDaIssue && metodo === 'GET') return json(comentarios.filter((c) => c.numero === Number(comentarioDaIssue[1])).map((c) => ({ body: c.body })))
+      if (comentarioDaIssue && metodo === 'POST') { comentarios.push({ numero: Number(comentarioDaIssue[1]), body: String(corpo?.body) }); return json({ id: comentarios.length, html_url: `https://github.com/acme/pedidos/issues/${comentarioDaIssue[1]}#issuecomment-${comentarios.length}` }, 201) }
+      const issue = /^\/repos\/acme\/pedidos\/issues\/(\d+)$/.exec(rota)
+      if (issue && metodo === 'GET') return issues[Number(issue[1])] ? json(issues[Number(issue[1])]) : json({ message: 'Not Found' }, 404)
+      if (issue && metodo === 'PATCH') return json({ ...issues[Number(issue[1])], ...corpo, html_url: `https://github.com/acme/pedidos/issues/${issue[1]}` })
+      if (rota === '/repos/acme/pedidos/labels' && metodo === 'GET') return json(labels)
+      if (rota === '/repos/acme/pedidos/labels' && metodo === 'POST') { labels.push({ name: String(corpo?.name), color: String(corpo?.color), description: (corpo?.description as string) ?? null }); return json(labels.at(-1), 201) }
+      const aplicar = /^\/repos\/acme\/pedidos\/issues\/(\d+)\/labels$/.exec(rota)
+      if (aplicar && metodo === 'POST') return json(o.semLabelNaResposta ? [] : [{ name: 'outra' }, ...((corpo?.labels as string[]) ?? []).map((name) => ({ name }))])
+      const remover = /^\/repos\/acme\/pedidos\/issues\/(\d+)\/labels\/(.+)$/.exec(rota)
+      if (remover && metodo === 'DELETE') return Number(remover[1]) === 3 ? json({ message: 'Label does not exist' }, 404) : json([])
+      const pr = /^\/repos\/acme\/pedidos\/pulls\/(\d+)$/.exec(rota)
+      if (pr && metodo === 'GET') {
+        const n = Number(pr[1])
+        if (n === 11) return json({ state: 'closed', draft: false, node_id: 'PR_fechado01', user: { login: 'bot' }, head: { sha: 'b'.repeat(40) } })
+        return json({ state: 'open', draft: n !== 12, node_id: 'PR_node12345', user: { login: 'bot' }, head: { sha: 'a'.repeat(40) } })
+      }
+      const revisores = /^\/repos\/acme\/pedidos\/pulls\/(\d+)\/requested_reviewers$/.exec(rota)
+      if (revisores && metodo === 'POST') return json({ requested_reviewers: ((corpo?.reviewers as string[]) ?? []).filter((l) => !(o.revisoresIgnorados ?? []).includes(l)).map((login) => ({ login })) }, 201)
+      if (rota.endsWith('/check-runs')) return json({ check_runs: [{ id: 5, name: 'testes', status: o.ci === 'pendente' ? 'in_progress' : 'completed', conclusion: o.ci === 'falha' ? 'failure' : o.ci === 'pendente' ? null : 'success', app: { slug: 'outro' } }] })
+      if (rota.endsWith('/status')) return json({ statuses: [] })
+      return json({ message: 'Not Found' }, 404)
+    }) as unknown as typeof fetch
+    return { buscar, chamadas, comentarios, labels, mutacoes, issues }
+  }
+  const dep = (f: ReturnType<typeof montar>) => ({ fetch: f.buscar, token: 'tok-de-teste-123456', esperar: async () => {} })
+  const escritas = (f: ReturnType<typeof montar>) => f.chamadas.filter((c) => c.metodo !== 'GET' && c.rota !== '/graphql')
+
+  // comentar
+  let f = montar()
+  const c1 = await esc.comentarIssueGithub('acme/pedidos', 2, `Obrigado @maria! ${SEGREDO}`, dep(f))
+  assert.equal(c1.ok, true, c1.nota)
+  const postado = f.comentarios[0]?.body ?? ''
+  assert.ok(!postado.includes(SEGREDO) && !postado.includes('@maria'), 'segredo redigido e @menção neutralizada: o comentário não chama ninguém')
+  assert.ok(postado.includes('Comentário automático da Super Factory') && postado.includes('<!-- super-factory -->'), 'tem a marca de automação')
+  const m1 = await esc.comentarIssueGithub('acme/pedidos', 2, 'PR aberto', dep(f), { marcador: 'pr:x#1' })
+  const m2 = await esc.comentarIssueGithub('acme/pedidos', 2, 'PR aberto', dep(f), { marcador: 'pr:x#1' })
+  assert.equal(m1.ok && !m1.jaExistia, true)
+  assert.equal(m2.ok && m2.jaExistia, true, 'com o mesmo marcador, o segundo comentário não é postado')
+  assert.equal(f.comentarios.length, 2)
+  f = montar()
+  for (const [n, t] of [[0, 'x'], [-3, 'x'], [1.5, 'x'], [2, ''], [2, '   ']] as const) assert.equal((await esc.comentarIssueGithub('acme/pedidos', n, t, dep(f))).ok, false, `${n}|${t}`)
+  assert.equal((await esc.comentarIssueGithub('acme/pedidos', 2, 'x', dep(f), { marcador: 'com espaço' })).ok, false)
+  assert.equal((await esc.comentarIssueGithub('sem-barra', 2, 'x', dep(f))).ok, false)
+  assert.equal((await esc.comentarIssueGithub('acme/pedidos', 2, 'x', { fetch: f.buscar, token: '' })).ok, false)
+  assert.equal(f.chamadas.length, 0, 'entrada inválida não chega ao GitHub')
+
+  // editar, fechar e reabrir
+  f = montar()
+  const e1 = await esc.editarIssueGithub('acme/pedidos', 2, { titulo: '  Novo   título ', estado: 'closed' }, dep(f))
+  assert.equal(e1.ok, true, e1.nota)
+  assert.deepEqual(escritas(f).map((c) => [c.metodo, c.corpo]), [['PATCH', { title: 'Novo título', state: 'closed', state_reason: 'completed' }]], 'fechar sem motivo vale completed')
+  assert.match(e1.nota, /título, fechada \(completed\)/)
+  f = montar()
+  await esc.editarIssueGithub('acme/pedidos', 2, { estado: 'closed', motivo: 'not_planned' }, dep(f))
+  assert.equal(escritas(f)[0]?.corpo?.state_reason, 'not_planned')
+  f = montar()
+  await esc.editarIssueGithub('acme/pedidos', 3, { estado: 'open' }, dep(f))
+  assert.deepEqual(escritas(f)[0]?.corpo, { state: 'open', state_reason: 'reopened' }, 'reabrir é reversível e fica registrado como tal')
+  f = montar()
+  const igual = await esc.editarIssueGithub('acme/pedidos', 2, { titulo: 'Filtro', corpo: 'corpo antigo', estado: 'open' }, dep(f))
+  assert.equal(igual.ok, true)
+  assert.equal(escritas(f).length, 0, 'sem mudança real, nada é escrito')
+  f = montar()
+  const pr = await esc.editarIssueGithub('acme/pedidos', 9, { estado: 'closed' }, dep(f))
+  assert.equal(pr.ok, false)
+  assert.match(pr.nota, /pull request.*decisão de uma pessoa/)
+  assert.equal(escritas(f).length, 0, 'pull request nunca é fechado nem editado por esta ferramenta')
+  f = montar()
+  await esc.editarIssueGithub('acme/pedidos', 2, { corpo: `novo ${SEGREDO}` }, dep(f))
+  assert.ok(!JSON.stringify(escritas(f)).includes(SEGREDO), 'segredo no corpo novo sai redigido')
+  f = montar()
+  for (const ruim of [{}, { motivo: 'completed' as const }, { estado: 'closed' as const, motivo: 'outro' as 'completed' }, { estado: 'fechar' as 'open' }, { titulo: '   ' }]) assert.equal((await esc.editarIssueGithub('acme/pedidos', 2, ruim, dep(f))).ok, false, JSON.stringify(ruim))
+  assert.equal((await esc.editarIssueGithub('acme/pedidos', 0, { titulo: 'x' }, dep(f))).ok, false)
+  assert.equal(f.chamadas.length, 0)
+  assert.equal((await esc.editarIssueGithub('acme/pedidos', 404, { titulo: 'x' }, dep(montar()))).ok, false)
+  assert.match((await esc.editarIssueGithub('acme/pedidos', 404, { titulo: 'x' }, dep(montar()))).nota, /Read and write/, 'sem permissão: diz o que o token precisa')
+
+  // labels
+  f = montar()
+  const nova = await esc.gerenciarLabelsGithub('acme/pedidos', { acao: 'criar', label: 'P2', cor: '#FBCA04', descricao: 'Prioridade média' }, dep(f))
+  assert.equal(nova.ok && !nova.jaExistia, true, nova.nota)
+  assert.deepEqual(escritas(f)[0]?.corpo, { name: 'P2', color: 'fbca04', description: 'Prioridade média' })
+  const existe = await esc.gerenciarLabelsGithub('acme/pedidos', { acao: 'criar', label: 'BUG' }, dep(f))
+  assert.equal(existe.jaExistia, true, 'label que já existe (sem diferenciar maiúsculas) não é criada de novo')
+  assert.equal(escritas(f).length, 1)
+  f = montar()
+  await Promise.all([esc.gerenciarLabelsGithub('acme/pedidos', { acao: 'criar', label: 'nova' }, dep(f)), esc.gerenciarLabelsGithub('acme/pedidos', { acao: 'criar', label: 'nova' }, dep(f))])
+  assert.equal(escritas(f).length, 1, 'dois pedidos ao mesmo tempo criam a label uma vez só')
+  f = montar()
+  const inexistente = await esc.gerenciarLabelsGithub('acme/pedidos', { acao: 'aplicar', label: 'p3-com-erro', issues: [2] }, dep(f))
+  assert.equal(inexistente.ok, false)
+  assert.match(inexistente.nota, /não existe.*criar/s, 'aplicar label que não existe é recusado: o GitHub criaria outra por erro de digitação')
+  assert.equal(escritas(f).length, 0)
+  const aplicada = await esc.gerenciarLabelsGithub('acme/pedidos', { acao: 'aplicar', label: 'p1', issues: [2, 3, 2] }, dep(f))
+  assert.equal(aplicada.ok, true, aplicada.nota)
+  assert.deepEqual(escritas(f).map((c) => [c.rota, c.corpo]), [['/repos/acme/pedidos/issues/2/labels', { labels: ['P1'] }], ['/repos/acme/pedidos/issues/3/labels', { labels: ['P1'] }]], 'usa o nome exato da label e acrescenta (POST), sem substituir')
+  f = montar({ semLabelNaResposta: true })
+  const naoConfirmou = await esc.gerenciarLabelsGithub('acme/pedidos', { acao: 'aplicar', label: 'bug', issues: [2] }, dep(f))
+  assert.equal(naoConfirmou.ok, false, 'a resposta do GitHub é conferida')
+  f = montar()
+  const tirada = await esc.gerenciarLabelsGithub('acme/pedidos', { acao: 'remover', label: 'bug', issues: [2, 3] }, dep(f))
+  assert.equal(tirada.ok, true, 'remover de quem já não tem é sucesso, não erro')
+  assert.match(tirada.resultados[1]?.nota ?? '', /já não tinha/)
+  f = montar()
+  for (const ruim of [{ acao: 'criar' as const, label: 'a,b' }, { acao: 'criar' as const, label: '' }, { acao: 'criar' as const, label: 'x'.repeat(51) }, { acao: 'criar' as const, label: 'ok', cor: 'vermelho' }, { acao: 'aplicar' as const, label: 'bug' }, { acao: 'aplicar' as const, label: 'bug', issues: Array.from({ length: 41 }, (_, i) => i + 1) }, { acao: 'aplicar' as const, label: 'bug', issues: [0] }, { acao: 'excluir' as 'criar', label: 'bug' }]) {
+    assert.equal((await esc.gerenciarLabelsGithub('acme/pedidos', ruim, dep(f))).ok, false, JSON.stringify(ruim).slice(0, 60))
+  }
+  assert.equal(f.chamadas.length, 0, 'entrada inválida não chega ao GitHub')
+
+  // pedir revisão
+  f = montar()
+  const rev = await esc.pedirRevisaoGithub('acme/pedidos', 12, ['@maria', 'joao'], dep(f))
+  assert.equal(rev.ok, true, rev.nota)
+  assert.deepEqual(escritas(f)[0]?.corpo, { reviewers: ['maria', 'joao'] })
+  assert.match(rev.nota, /Quem aprova e faz o merge é uma pessoa/)
+  assert.equal((await esc.pedirRevisaoGithub('acme/pedidos', 12, ['bot'], dep(montar()))).ok, false, 'o autor não pode ser o revisor')
+  assert.equal((await esc.pedirRevisaoGithub('acme/pedidos', 11, ['maria'], dep(montar()))).ok, false, 'PR fechado')
+  assert.match((await esc.pedirRevisaoGithub('acme/pedidos', 12, ['maria', 'de-fora'], dep(montar({ revisoresIgnorados: ['de-fora'] })))).nota, /de-fora não ficou como revisor/, 'o GitHub ignora quem não tem acesso: a resposta é conferida')
+  f = montar()
+  for (const ruim of [[], ['com espaço'], Array.from({ length: 6 }, (_, i) => `u${i}`)]) assert.equal((await esc.pedirRevisaoGithub('acme/pedidos', 12, ruim, dep(f))).ok, false)
+  assert.equal(f.chamadas.length, 0)
+
+  // marcar PR como pronto
+  f = montar({ ci: 'sucesso', mutacaoNaoConfirma: true })
+  assert.equal((await esc.marcarPrProntoGithub('acme/pedidos', 10, dep(f))).ok, false, 'mutação que o GitHub não confirma não vira sucesso')
+  f = montar({ ci: 'sucesso' })
+  const resposta = await esc.marcarPrProntoGithub('acme/pedidos', 10, dep(f))
+  assert.deepEqual(f.mutacoes.map((m) => [m.tipo, m.variaveis.id]), [['pronto', 'PR_node12345']])
+  assert.equal(resposta.ok, true, resposta.nota)
+  f = montar({ ci: 'falha' })
+  const barrado = await esc.marcarPrProntoGithub('acme/pedidos', 10, dep(f))
+  assert.equal(barrado.ok, false)
+  assert.match(barrado.nota, /CI .* falhou/)
+  assert.equal(f.mutacoes.length, 0, 'com o CI falhando, o PR continua rascunho')
+  assert.match((await esc.marcarPrProntoGithub('acme/pedidos', 10, dep(montar({ ci: 'pendente' })))).nota, /ainda está rodando/)
+  f = montar({ ci: 'sucesso' })
+  assert.equal((await esc.marcarPrProntoGithub('acme/pedidos', 12, dep(f))).ok, true, 'PR que já está pronto: sem erro')
+  assert.equal(f.mutacoes.length, 0, 'e sem mutação')
+  assert.equal((await esc.marcarPrProntoGithub('acme/pedidos', 11, dep(montar()))).ok, false, 'PR fechado')
+  assert.equal((await esc.marcarPrProntoGithub('acme/pedidos', 0, dep(montar()))).ok, false)
+
+  // campos do Project
+  const ref = { dono: 'juliopessan', numero: 3 }
+  f = montar()
+  const criado = await criarCampoDoProjeto(ref, { nome: 'Risco', tipo: 'single_select', opcoes: ['Alto', 'Médio', 'Baixo', 'Alto'] }, dep(f))
+  assert.equal(criado.ok && !criado.jaExistia, true, criado.nota)
+  const opcoesCriadas = (f.mutacoes[0]?.variaveis.opcoes as Array<{ name: string; color: string; description: string }>) ?? []
+  assert.deepEqual(opcoesCriadas.map((o) => o.name), ['Alto', 'Médio', 'Baixo'], 'opções repetidas contam uma vez')
+  assert.deepEqual(opcoesCriadas.map((o) => o.color), ['GRAY', 'BLUE', 'GREEN'])
+  assert.equal(f.mutacoes[0]?.variaveis.tipo, 'SINGLE_SELECT')
+  const jaTem = await criarCampoDoProjeto(ref, { nome: 'prioridade', tipo: 'single_select', opcoes: ['P1'] }, dep(f))
+  assert.equal(jaTem.jaExistia, true, 'campo que já existe (sem diferenciar maiúsculas) não é criado de novo')
+  assert.equal(f.mutacoes.filter((m) => m.tipo === 'criarCampo').length, 1)
+  f = montar()
+  await Promise.all([criarCampoDoProjeto(ref, { nome: 'Concorrente', tipo: 'number' }, dep(f)), criarCampoDoProjeto(ref, { nome: 'Concorrente', tipo: 'number' }, dep(f))])
+  assert.equal(f.mutacoes.filter((m) => m.tipo === 'criarCampo').length, 1, 'dois pedidos ao mesmo tempo criam o campo uma vez só')
+  f = montar()
+  for (const ruim of [{ nome: '', tipo: 'text' as const }, { nome: 'x', tipo: 'single_select' as const }, { nome: 'x', tipo: 'text' as const, opcoes: ['a'] }, { nome: 'x', tipo: 'lista' as 'text' }, { nome: 'x', tipo: 'single_select' as const, opcoes: Array.from({ length: 21 }, (_, i) => `o${i}`) }]) {
+    assert.equal((await criarCampoDoProjeto(ref, ruim, dep(f))).ok, false, JSON.stringify(ruim).slice(0, 50))
+  }
+  assert.equal(f.chamadas.length, 0, 'entrada inválida não chega ao GitHub')
+
+  f = montar()
+  const definidos = await definirCamposDoProjeto(
+    ref,
+    [
+      { itemId: 'PVTI_item0001', campo: 'prioridade', valor: 'p1' },
+      { itemId: 'PVTI_item0001', campo: 'Estimativa', valor: '3,5' },
+      { itemId: 'PVTI_item0002', campo: 'Prazo', valor: '2026-12-15' },
+      { itemId: 'PVTI_item0002', campo: 'Notas', valor: 'depende da #4' },
+      { itemId: 'PVTI_item0003', campo: 'Sprint', valor: 'sprint 1' },
+      { itemId: 'PVTI_item0003', campo: 'Status', valor: 'Todo' },
+    ],
+    dep(f),
+  )
+  assert.equal(definidos.ok, true, definidos.nota)
+  assert.deepEqual(
+    f.mutacoes.map((m) => m.variaveis.valor),
+    [{ singleSelectOptionId: 'p1' }, { number: 3.5 }, { date: '2026-12-15' }, { text: 'depende da #4' }, { iterationId: 'i1' }, { singleSelectOptionId: 'o1' }],
+    'cada tipo de campo vira o valor certo (opção pelo nome, número com vírgula, data, texto, iteração)',
+  )
+  f = montar()
+  const parcial = await definirCamposDoProjeto(
+    ref,
+    [
+      { itemId: 'PVTI_item0001', campo: 'Prioridade', valor: 'P9' },
+      { itemId: 'PVTI_item0001', campo: 'Inexistente', valor: 'x' },
+      { itemId: 'PVTI_item0001', campo: 'Prazo', valor: '2026-02-30' },
+      { itemId: 'PVTI_item0001', campo: 'Estimativa', valor: 'muito' },
+      { itemId: 'PVTI_item0001', campo: 'Estranho', valor: 'x' },
+      { itemId: 'id inválido', campo: 'Status', valor: 'Todo' },
+      { itemId: 'PVTI_item0001', campo: 'Status', valor: 'Done' },
+    ],
+    dep(f),
+  )
+  assert.equal(parcial.ok, false)
+  assert.equal(parcial.resultados.filter((r) => r.ok).length, 1, 'uma falha não derruba as outras')
+  assert.match(parcial.resultados[0]?.nota ?? '', /Opções: P1, P2/)
+  assert.match(parcial.resultados[1]?.nota ?? '', /Campos: Status, Prioridade/)
+  assert.equal(f.mutacoes.length, 1, 'só a ação válida chegou ao GitHub')
+  assert.equal((await definirCamposDoProjeto(ref, [], dep(f))).ok, false)
+  assert.equal((await definirCamposDoProjeto(ref, Array.from({ length: 41 }, () => ({ itemId: 'PVTI_item0001', campo: 'Status', valor: 'Todo' })), dep(f))).ok, false)
+
+  // ferramentas e quem recebe
+  const ferr = await import('../super-factory/tools/factory.ts')
+  const escrita = ['comentarIssueGithub', 'editarIssueGithub', 'gerenciarLabelsGithub', 'pedirRevisaoGithub', 'marcarPrProntoGithub', 'criarCampoDoProjetoGithub', 'definirCampoDoProjetoGithub'] as const
+  for (const nome of [...escrita, 'listarLabelsGithub' as const]) assert.notEqual(ferr[nome].requireApproval, true, `${nome} não pede aprovação: só o merge é decisão humana`)
+  const mcpFonte4 = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'super-factory', 'mcp.ts'), 'utf8')
+  for (const nome of [...escrita, 'listarLabelsGithub']) assert.equal(new RegExp(`^\\s+${nome},$`, 'm').test(mcpFonte4), false, `o MCP não expõe ${nome}`)
+  const ag = await import('../super-factory/agents/factory.ts')
+  const tem = async (agente: { listTools: () => Promise<Record<string, unknown>> }, nome: string) => Object.keys(await agente.listTools()).includes(nome)
+  for (const agente of [ag.chiefOfStaff, ag.integrations]) for (const nome of escrita) assert.ok(await tem(agente, nome), `${agente.id} tem ${nome}`)
+  for (const agente of [ag.qa, ag.security, ag.reviewer, ag.docs, ag.architect, ag.frontend, ag.backend]) {
+    for (const nome of escrita) assert.equal(await tem(agente, nome), false, `${agente.id} (só leitura) não recebe ${nome}`)
+    assert.ok(await tem(agente, 'listarLabelsGithub'), `${agente.id} lê as labels`)
+  }
+  // nenhuma ferramenta de escrita faz merge, aprova, fecha PR ou exclui
+  const codigo = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'factory', 'github-escrita.ts'), 'utf8')
+  for (const proibido of ['/merge', '/reviews', 'APPROVE', 'REQUEST_CHANGES', 'git/refs', 'DELETE /repos']) assert.ok(!codigo.includes(proibido), `github-escrita.ts não usa ${proibido}`)
+  assert.equal((codigo.match(/method: 'DELETE'/g) ?? []).length, 1, 'o único DELETE é tirar uma label de uma issue (não há exclusão de label, issue, branch ou repositório)')
+}
+
 // --- Sugestões com Tab: os exemplos têm de passar na triagem e todo agente tem o que sugerir no chat
 {
   const { AMOSTRAS, CONVERSAS, PADROES, SCRIPT_SUGESTOES } = await import('../super-factory/sugestoes.ts')
@@ -2999,6 +3264,97 @@ assert.equal(
   for (const perigo of ['docker system prune', 'docker rm ', 'docker stop', 'compose down', 'docker volume', 'rm -rf']) assert.ok(!script.includes(perigo), `construir-sandbox.sh não faz ${perigo}: não toca nos outros projetos da VPS`)
   assert.ok(!/(TOKEN|SECRET|PASSWORD|SENHA)\w*=/.test(script.replace(/SUPER_FACTORY_SANDBOX_IMAGE=/g, '')), 'o script não lida com segredo')
 }
+// --- Fase 2: o PR referencia a issue de origem e a Factory avisa nela, uma vez só; falhar no aviso não derruba o card
+{
+  const { issueDeOrigem } = await import('../factory/autonomo.ts')
+  const { lerEstado } = await import('../factory/store.ts')
+  const card = (itemExterno: string | null, repositorio = 'acme/pedidos', provedor: 'github' | 'azure-devops' = 'github') => ({ itemExterno, repositorio, provedor })
+  assert.equal(issueDeOrigem(card('issue:acme/pedidos#7')), 7)
+  assert.equal(issueDeOrigem(card('issue:ACME/Pedidos#7')), 7, 'o repositório é comparado sem diferenciar maiúsculas')
+  assert.equal(issueDeOrigem(card('issue:acme/outro#7')), null, 'issue de outro repositório não vira "Closes #N" aqui')
+  assert.equal(issueDeOrigem(card('issue:acme/pedidos#7', 'acme/pedidos', 'azure-devops')), null)
+  for (const ruim of [null, '', '41', 'issue:acme/pedidos#', 'issue:acme/pedidos#abc', 'issue:acme/pedidos#12345678', 'issue:acme/pedidos#7 extra']) assert.equal(issueDeOrigem(card(ruim)), null, String(ruim))
+
+  const json = (c: unknown, status = 200) => new Response(JSON.stringify(c), { status })
+  const montar = (o: { existentes?: string[]; falhaNoAviso?: boolean } = {}) => {
+    const chamadas: Array<{ metodo: string; rota: string; corpo: Record<string, unknown> | null }> = []
+    const buscar = (async (url: string, init?: RequestInit) => {
+      const u = new URL(String(url))
+      const metodo = (init?.method ?? 'GET').toUpperCase()
+      chamadas.push({ metodo, rota: u.pathname, corpo: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null })
+      if (u.pathname === '/repos/acme/pedidos/pulls' && metodo === 'POST') return json({ number: 7, html_url: 'https://github.com/acme/pedidos/pull/7' }, 201)
+      if (u.pathname === '/repos/acme/pedidos/issues/7/comments' && metodo === 'GET') return json((o.existentes ?? []).map((body) => ({ body })))
+      if (u.pathname === '/repos/acme/pedidos/issues/7/comments' && metodo === 'POST') return o.falhaNoAviso ? json({ message: 'Resource not accessible by personal access token' }, 403) : json({ id: 99, html_url: 'https://github.com/acme/pedidos/issues/7#issuecomment-99' }, 201)
+      return json({ message: 'Not Found' }, 404)
+    }) as unknown as typeof fetch
+    return { chamadas, deps: { token: TOKEN_TESTE, fetch: buscar, esperar: async () => {} } }
+  }
+  const rodar = async (g: ReturnType<typeof montar>, opcoes: { issue?: number; pilha?: string; testes?: number[]; comentarNaDemanda?: boolean } = {}) =>
+    executarAutonomo(
+      pedidoAuto,
+      { criarExecutor: async () => criarExecutorFalso(roteiroNode({ teste: opcoes.testes ?? [0] })), implementador: async () => ({ resumo: 'ok' }), credenciais: { githubToken: TOKEN_TESTE }, github: g.deps, ...(opcoes.comentarNaDemanda === undefined ? {} : { comentarNaDemanda: opcoes.comentarNaDemanda }) },
+      { issue: opcoes.issue, pilha: opcoes.pilha },
+    )
+  const corpoDoPr = (g: ReturnType<typeof montar>) => String(g.chamadas.find((c) => c.rota === '/repos/acme/pedidos/pulls')?.corpo?.body ?? '')
+  const avisos = (g: ReturnType<typeof montar>) => g.chamadas.filter((c) => c.metodo === 'POST' && c.rota.endsWith('/issues/7/comments'))
+
+  // testes verdes, direto na principal: Closes e aviso
+  let g = montar()
+  const verde = await rodar(g, { issue: 7 })
+  assert.equal(verde.estado.parado, false, verde.estado.motivo ?? '')
+  assert.equal(lerEstado().cards.find((c) => c.id === verde.estado.card.id)?.itemExterno, 'issue:acme/pedidos#7', 'o card guarda a issue de origem')
+  assert.match(corpoDoPr(g), /### Demanda de origem\nCloses #7\n/)
+  assert.equal(avisos(g).length, 1, 'avisa na issue uma vez')
+  const texto = String(avisos(g)[0]?.corpo?.body)
+  assert.ok(texto.includes('https://github.com/acme/pedidos/pull/7') && texto.includes('**PASS**') && texto.includes('Pronto para revisão') && texto.includes('O merge é de uma pessoa') && texto.includes('<!-- super-factory:pr:https://github.com/acme/pedidos/pull/7 -->') && texto.includes('Comentário automático da Super Factory'), texto)
+  assert.ok(verde.estado.trilha.some((e) => /Avisei na issue #7/.test(e.resumo)), 'o aviso entra na trilha do card')
+  // testes que falham: rascunho e só Refs
+  g = montar()
+  const vermelho = await rodar(g, { issue: 7, testes: [1, 1] })
+  assert.equal(vermelho.estado.parado, false)
+  assert.match(corpoDoPr(g), /### Demanda de origem\nRefs #7\n/)
+  assert.ok(!corpoDoPr(g).includes('Closes #7'), 'com testes falhando, o merge não fecha a issue')
+  assert.match(String(avisos(g)[0]?.corpo?.body), /Aberto como rascunho: os testes não passaram/)
+  // empilhado: só Refs (o PR não aponta para a branch principal)
+  g = montar()
+  await rodar(g, { issue: 7, pilha: 'factory/c-1-api' })
+  assert.match(corpoDoPr(g), /Refs #7/)
+  assert.ok(!corpoDoPr(g).includes('Closes #7'))
+  // sem issue: nada muda
+  g = montar()
+  await rodar(g)
+  assert.ok(!corpoDoPr(g).includes('Demanda de origem'))
+  assert.equal(g.chamadas.filter((c) => c.rota.includes('/comments')).length, 0, 'sem issue de origem, ninguém é avisado')
+  // ensaio / desligado: o PR sai, mas nada é comentado
+  g = montar()
+  await rodar(g, { issue: 7, comentarNaDemanda: false })
+  assert.match(corpoDoPr(g), /Closes #7/)
+  assert.equal(g.chamadas.filter((c) => c.rota.includes('/comments')).length, 0, 'com o aviso desligado (ensaio) nada é comentado')
+  // já avisado (rodar de novo): não duplica
+  g = montar({ existentes: ['antes\n<!-- super-factory:pr:https://github.com/acme/pedidos/pull/7 -->'] })
+  const repetido = await rodar(g, { issue: 7 })
+  assert.equal(avisos(g).length, 0, 'o aviso do mesmo PR não é postado duas vezes')
+  assert.ok(repetido.estado.trilha.some((e) => /já tinha o aviso deste PR/.test(e.resumo)))
+  // falha no aviso: o PR continua aberto, o card não para
+  g = montar({ falhaNoAviso: true })
+  const semAviso = await rodar(g, { issue: 7 })
+  assert.equal(semAviso.estado.parado, false, 'falhar no aviso não derruba o card')
+  assert.equal(semAviso.estado.entrega?.ok, true)
+  assert.ok(semAviso.estado.trilha.some((e) => /Não consegui avisar na issue #7/.test(e.resumo)))
+  // os esquemas da onda e do autônomo aceitam "issue"
+  const { pedidoDaOndaSchema } = await import('../super-factory/workflows/onda.ts')
+  const { autonomoWorkflow } = await import('../super-factory/workflows/autonomo.ts')
+  const pedidoValido = { ...pedidoAuto, issue: 7 }
+  assert.equal(pedidoDaOndaSchema.parse(pedidoValido).issue, 7)
+  const validado = (autonomoWorkflow.inputSchema as unknown as { '~standard': { validate: (x: unknown) => { value?: { issue?: number }; issues?: unknown[] } } })['~standard'].validate(pedidoValido)
+  assert.equal(validado.value?.issue, 7, 'o workflow autônomo repassa a issue')
+  assert.equal(pedidoDaOndaSchema.safeParse({ ...pedidoAuto, issue: 0 }).success, false)
+  assert.equal(pedidoDaOndaSchema.safeParse({ ...pedidoAuto, issue: 'x' }).success, false)
+  // o ensaio nunca comenta numa issue de verdade
+  const { depsDeEnsaio } = await import('../super-factory/workflows/ensaio.ts')
+  assert.equal(depsDeEnsaio().comentarNaDemanda, false)
+}
+
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(

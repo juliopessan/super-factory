@@ -604,3 +604,27 @@ export async function verificarTokenGithub(repositorio?: string, deps?: GithubDe
     return falha(erro instanceof Error ? erro.message : 'Falha ao verificar o token.')
   }
 }
+
+// ---------- labels ----------
+
+export type LabelLida = { nome: string; cor: string; descricao: string }
+
+/** As labels do repositório (até 300), para ver o que já existe antes de criar ou aplicar. */
+export async function listarLabelsGithub(repositorio: string, deps?: GithubDeps): Promise<ResultadoDaLeitura<{ labels: LabelLida[] }>> {
+  const falha = (nota: string) => ({ ok: false, dado: null, nota })
+  const p = preparar(repositorio, deps)
+  if ('erro' in p) return falha(p.erro)
+  try {
+    const labels: LabelLida[] = []
+    for (let pg = 1; pg <= 3; pg++) {
+      const r = await ler(`${base(p)}/labels?per_page=100&page=${pg}`, p.remoto)
+      if (r.status !== 200) return falha(falhaDoGithub(r, p.remoto.token, 'as labels', 'leitura de Issues no repositório'))
+      const lote = lista(r.corpo)
+      labels.push(...lote.map((l) => ({ nome: texto(l.name, 60), cor: texto(l.color, 8), descricao: texto(l.description, 100) })))
+      if (lote.length < 100) break
+    }
+    return { ok: true, dado: { labels }, nota: `${labels.length} label(s) em ${p.owner}/${p.name}.` }
+  } catch (erro) {
+    return falha(erro instanceof Error ? erro.message : 'Falha ao listar as labels.')
+  }
+}

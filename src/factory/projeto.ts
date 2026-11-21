@@ -407,3 +407,152 @@ export async function listarProjetos(dono: string, deps?: DepsProjeto): Promise<
     return { ok: false, projetos: [], nota: erro instanceof Error ? erro.message : 'Não consegui listar os Projects.' }
   }
 }
+
+// ---------- campos do Project (prioridade, estimativa, data, iteração) ----------
+
+export type TipoDeCampo = 'single_select' | 'number' | 'text' | 'date'
+
+type CampoDoProjeto = { id: string; nome: string; tipo: 'SINGLE_SELECT' | 'NUMBER' | 'TEXT' | 'DATE' | 'ITERATION' | 'OUTRO'; opcoes: Array<{ id: string; nome: string }>; iteracoes: Array<{ id: string; titulo: string }> }
+
+const CAMPOS = `query($dono:String!,$numero:Int!){
+  repositoryOwner(login:$dono){
+    ... on ProjectV2Owner {
+      projectV2(number:$numero){
+        id title
+        fields(first:50){ nodes {
+          __typename
+          ... on ProjectV2Field { id name dataType }
+          ... on ProjectV2SingleSelectField { id name options { id name } }
+          ... on ProjectV2IterationField { id name configuration { iterations { id title } } }
+        } }
+      }
+    }
+  }
+}`
+
+async function lerCampos(ref: ReferenciaDoProjeto, deps?: DepsProjeto): Promise<{ id: string; titulo: string; campos: CampoDoProjeto[] } | null> {
+  const dados = await graphql(CAMPOS, { dono: ref.dono, numero: ref.numero }, false, deps)
+  const projeto = (dados.repositoryOwner as { projectV2?: { id?: string; title?: string; fields?: { nodes?: Array<Record<string, unknown> | null> } } | null } | null)?.projectV2
+  if (!projeto?.id) return null
+  const campos = (projeto.fields?.nodes ?? [])
+    .filter((n): n is Record<string, unknown> => Boolean(n) && typeof n?.id === 'string' && typeof n?.name === 'string')
+    .map((n): CampoDoProjeto => {
+      const tipoDeDados = String(n.dataType ?? '')
+      const tipo = n.__typename === 'ProjectV2SingleSelectField' ? 'SINGLE_SELECT' : n.__typename === 'ProjectV2IterationField' ? 'ITERATION' : tipoDeDados === 'NUMBER' || tipoDeDados === 'TEXT' || tipoDeDados === 'DATE' ? tipoDeDados : 'OUTRO'
+      return {
+        id: n.id as string,
+        nome: n.name as string,
+        tipo,
+        opcoes: ((n.options as Array<{ id?: string; name?: string }> | undefined) ?? []).filter((o) => o.id && o.name).map((o) => ({ id: o.id as string, nome: o.name as string })),
+        iteracoes: (((n.configuration as { iterations?: Array<{ id?: string; title?: string }> } | undefined)?.iterations) ?? []).filter((i) => i.id && i.title).map((i) => ({ id: i.id as string, titulo: i.title as string })),
+      }
+    })
+  return { id: projeto.id, titulo: projeto.title ?? '', campos }
+}
+
+const CORES_DAS_OPCOES = ['GRAY', 'BLUE', 'GREEN', 'YELLOW', 'ORANGE', 'RED', 'PINK', 'PURPLE']
+const TIPOS_DE_CAMPO: Record<TipoDeCampo, string> = { single_select: 'SINGLE_SELECT', number: 'NUMBER', text: 'TEXT', date: 'DATE' }
+
+/**
+ * Cria um campo no Project (seleção única, número, texto ou data), sem duplicar: se já existe um campo com o mesmo nome,
+ * devolve esse. Seleção única precisa das opções (por exemplo P1, P2, P3). Não exclui nem renomeia campo.
+ */
+export function criarCampoDoProjeto(
+  ref: ReferenciaDoProjeto,
+  entrada: { nome: string; tipo: TipoDeCampo; opcoes?: string[] },
+  deps?: DepsProjeto,
+): Promise<{ ok: boolean; jaExistia: boolean; nota: string }> {
+  return filaDeEscrita(`${ref.dono}/${ref.numero}`, () => criarCampoAgora(ref, entrada, deps))
+}
+
+async function criarCampoAgora(ref: ReferenciaDoProjeto, entrada: { nome: string; tipo: TipoDeCampo; opcoes?: string[] }, deps?: DepsProjeto): Promise<{ ok: boolean; jaExistia: boolean; nota: string }> {
+  const falha = (nota: string) => ({ ok: false, jaExistia: false, nota })
+  const nome = entrada.nome.replace(/\s+/g, ' ').trim()
+  if (nome.length < 1 || nome.length > 60) return falha('O nome do campo precisa ter de 1 a 60 caracteres.')
+  if (!(entrada.tipo in TIPOS_DE_CAMPO)) return falha('Tipo inválido: use single_select, number, text ou date.')
+  const opcoes = [...new Set((entrada.opcoes ?? []).map((o) => o.replace(/\s+/g, ' ').trim()).filter(Boolean))]
+  if (entrada.tipo === 'single_select' && (opcoes.length < 1 || opcoes.length > 20 || opcoes.some((o) => o.length > 50))) return falha('Seleção única precisa de 1 a 20 opções, de até 50 caracteres.')
+  if (entrada.tipo !== 'single_select' && opcoes.length > 0) return falha('Só o campo de seleção única tem opções.')
+  try {
+    const lido = await lerCampos(ref, deps)
+    if (!lido) return falha(`Não achei o projeto ${ref.dono}/${ref.numero}.`)
+    const existente = lido.campos.find((c) => c.nome.toLowerCase() === nome.toLowerCase())
+    if (existente) return { ok: true, jaExistia: true, nota: `O campo "${existente.nome}" já existe em ${lido.titulo} (${existente.tipo.toLowerCase().replace('_', ' ')}). Usei esse e não criei outro.` }
+    await graphql(
+      `mutation($projeto:ID!,$nome:String!,$tipo:ProjectV2CustomFieldType!,$opcoes:[ProjectV2SingleSelectFieldOptionInput!]){ createProjectV2Field(input:{projectId:$projeto,name:$nome,dataType:$tipo,singleSelectOptions:$opcoes}){ projectV2Field { ... on ProjectV2FieldCommon { id name } } } }`,
+      { projeto: lido.id, nome, tipo: TIPOS_DE_CAMPO[entrada.tipo], opcoes: entrada.tipo === 'single_select' ? opcoes.map((o, i) => ({ name: o, color: CORES_DAS_OPCOES[i % CORES_DAS_OPCOES.length], description: '' })) : null },
+      true,
+      deps,
+    )
+    return { ok: true, jaExistia: false, nota: `Campo "${nome}" criado em ${lido.titulo}${entrada.tipo === 'single_select' ? ` com as opções ${opcoes.join(', ')}` : ''}.` }
+  } catch (erro) {
+    return falha(erro instanceof Error ? erro.message : 'Não consegui criar o campo.')
+  }
+}
+
+export type AcaoDeCampo = { itemId: string; campo: string; valor: string | number }
+
+/**
+ * Define o valor de um campo em itens do Project: seleção única (pelo nome da opção), número, texto, data (AAAA-MM-DD) ou
+ * iteração (pelo título). Serve para Prioridade, Estimativa, Prazo e também para o Status. Até 40 ações; uma falha não derruba as outras.
+ */
+export function definirCamposDoProjeto(ref: ReferenciaDoProjeto, acoes: AcaoDeCampo[], deps?: DepsProjeto): Promise<{ ok: boolean; resultados: ResultadoDaAcao[]; nota: string }> {
+  return filaDeEscrita(`${ref.dono}/${ref.numero}`, () => definirCamposAgora(ref, acoes, deps))
+}
+
+async function definirCamposAgora(ref: ReferenciaDoProjeto, acoes: AcaoDeCampo[], deps?: DepsProjeto): Promise<{ ok: boolean; resultados: ResultadoDaAcao[]; nota: string }> {
+  if (acoes.length === 0) return { ok: false, resultados: [], nota: 'Nenhuma ação para executar.' }
+  if (acoes.length > MAXIMO_DE_ACOES) return { ok: false, resultados: [], nota: `No máximo ${MAXIMO_DE_ACOES} ações por vez. Divida em lotes.` }
+  let lido
+  try {
+    lido = await lerCampos(ref, deps)
+  } catch (erro) {
+    return { ok: false, resultados: [], nota: erro instanceof Error ? erro.message : 'Não consegui ler o projeto.' }
+  }
+  if (!lido) return { ok: false, resultados: [], nota: `Não achei o projeto ${ref.dono}/${ref.numero}.` }
+  const projeto = lido
+  const resultados: ResultadoDaAcao[] = []
+  for (const acao of acoes) {
+    try {
+      if (!ID_DE_NO.test(acao.itemId)) throw new Error('Identificador de item inválido.')
+      const campo = projeto.campos.find((c) => c.nome.toLowerCase() === String(acao.campo).trim().toLowerCase())
+      if (!campo) throw new Error(`O campo "${acao.campo}" não existe. Campos: ${projeto.campos.map((c) => c.nome).join(', ')}.`)
+      let valor: Record<string, unknown>
+      const bruto = acao.valor
+      if (campo.tipo === 'SINGLE_SELECT') {
+        const opcao = achar(campo.opcoes, String(bruto))
+        if (!opcao) throw new Error(`A opção "${bruto}" não existe em "${campo.nome}". Opções: ${campo.opcoes.map((o) => o.nome).join(', ')}.`)
+        valor = { singleSelectOptionId: opcao.id }
+      } else if (campo.tipo === 'NUMBER') {
+        const n = typeof bruto === 'number' ? bruto : Number(String(bruto).replace(',', '.'))
+        if (!Number.isFinite(n)) throw new Error(`"${bruto}" não é um número.`)
+        valor = { number: n }
+      } else if (campo.tipo === 'DATE') {
+        const dia = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(bruto).trim())
+        if (!dia || new Date(`${dia[0]}T00:00:00Z`).toISOString().slice(0, 10) !== dia[0]) throw new Error('A data precisa ser um dia válido no formato AAAA-MM-DD.')
+        valor = { date: dia[0] }
+      } else if (campo.tipo === 'ITERATION') {
+        const alvo = campo.iteracoes.find((i) => i.titulo.toLowerCase() === String(bruto).trim().toLowerCase())
+        if (!alvo) throw new Error(`A iteração "${bruto}" não existe. Iterações: ${campo.iteracoes.map((i) => i.titulo).join(', ')}.`)
+        valor = { iterationId: alvo.id }
+      } else if (campo.tipo === 'TEXT') {
+        const texto = String(bruto).trim()
+        if (!texto || texto.length > 1000) throw new Error('O texto precisa ter de 1 a 1000 caracteres.')
+        valor = { text: texto }
+      } else {
+        throw new Error(`O campo "${campo.nome}" é de um tipo que esta ferramenta não preenche.`)
+      }
+      await graphql(
+        `mutation($projeto:ID!,$item:ID!,$campo:ID!,$valor:ProjectV2FieldValue!){ updateProjectV2ItemFieldValue(input:{projectId:$projeto,itemId:$item,fieldId:$campo,value:$valor}){ projectV2Item { id } } }`,
+        { projeto: projeto.id, item: acao.itemId, campo: campo.id, valor },
+        true,
+        deps,
+      )
+      resultados.push({ acao: 'definir', ok: true, itemId: acao.itemId, nota: `${campo.nome} = ${bruto}.` })
+    } catch (erro) {
+      resultados.push({ acao: 'definir', ok: false, itemId: acao.itemId, nota: erro instanceof Error ? erro.message : 'Falhou.' })
+    }
+  }
+  const certas = resultados.filter((r) => r.ok).length
+  return { ok: certas === resultados.length, resultados, nota: `${certas} de ${resultados.length} campo(s) definido(s) em ${projeto.titulo}.` }
+}

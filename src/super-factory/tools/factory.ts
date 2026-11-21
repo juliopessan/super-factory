@@ -10,14 +10,22 @@ import {
   lerChecksGithub as lerChecks,
   lerIssueGithub as lerIssue,
   lerProtecaoDeBranchGithub as lerProtecao,
+  listarLabelsGithub as listarLabels,
   listarMilestonesGithub as listarMilestones,
   listarPullRequestsGithub as listarPullRequests,
   verificarTokenGithub as verificarToken,
 } from '../../factory/github-leitura.ts'
+import {
+  comentarIssueGithub as comentarIssue,
+  editarIssueGithub as editarIssue,
+  gerenciarLabelsGithub as gerenciarLabels,
+  marcarPrProntoGithub as marcarPrPronto,
+  pedirRevisaoGithub as pedirRevisao,
+} from '../../factory/github-escrita.ts'
 import { atribuirIssuesGithub as atribuirIssues, criarMilestoneGithub as criarMilestone, criarIssueGithub as abrirIssueGithub, listarIssuesGithub, MAXIMO_DE_ISSUES_POR_VEZ } from '../../factory/github.ts'
 import { listarWorkItemsAzure, criarWorkItemAzure as abrirWorkItemAzure, modoAzure } from '../../factory/azure.ts'
 import { validarManifesto as checarManifesto } from '../../factory/manifest.ts'
-import { criarProjeto, listarProjetos, lerProjeto, lerReferenciaDoProjeto, organizarProjeto, MAXIMO_DE_ACOES } from '../../factory/projeto.ts'
+import { criarCampoDoProjeto, criarProjeto, definirCamposDoProjeto, listarProjetos, lerProjeto, lerReferenciaDoProjeto, organizarProjeto, MAXIMO_DE_ACOES } from '../../factory/projeto.ts'
 import { listarArquivosGithub as buscarArquivosGithub, listarBranchesGithub as buscarBranchesGithub, lerArquivoGithub as buscarArquivoGithub, compararBranchesGithub as buscarComparacaoDeBranches, MAXIMO_DE_BRANCHES } from '../../factory/repositorio.ts'
 import { avaliarMerge, iniciar } from '../../factory/pipeline.ts'
 import { comentarPullRequestGithub as postarRevisao, lerPullRequestGithub as buscarPullRequest, MAXIMO_DE_ACHADOS } from '../../factory/revisao.ts'
@@ -240,6 +248,7 @@ export const importarIssuesGithub = createTool({
 })
 
 const REPOSITORIO = z.string().min(3).describe('owner/repo')
+const projetoEntrada = z.string().min(3).describe('O endereço do projeto (https://github.com/users/dono/projects/3) ou "dono/3".')
 const ESTADO = z.enum(['open', 'closed', 'all'])
 
 export const lerIssueGithub = createTool({
@@ -346,6 +355,133 @@ export const listarProjetosGithub = createTool({
   execute: async ({ dono }) => {
     const r = await listarProjetos(dono.replace(/^@/, ''))
     return { ok: r.ok, projetos: r.projetos, resumo: r.nota }
+  },
+})
+
+export const listarLabelsGithub = createTool({
+  id: 'listar-labels-github',
+  description: 'Lista as labels de um repositório (nome, cor, descrição). Use antes de criar ou aplicar uma label. Só lê.',
+  inputSchema: z.object({ repositorio: REPOSITORIO }),
+  outputSchema: z.object({ ok: z.boolean(), labels: z.array(z.any()), resumo: z.string() }),
+  execute: async ({ repositorio }) => {
+    const r = await listarLabels(repositorio)
+    return { ok: r.ok, labels: r.dado?.labels ?? [], resumo: r.nota }
+  },
+})
+
+export const comentarIssueGithub = createTool({
+  id: 'comentar-issue-github',
+  description:
+    'Comenta numa issue (ou na conversa de um pull request). O comentário sai com a marca de automação da Super Factory, com segredo redigido e @menção neutralizada (não chama ninguém). Comente só quando a pessoa pedir. Não aprova nem faz merge.',
+  inputSchema: z.object({ repositorio: REPOSITORIO, numero: z.number().int().min(1), texto: z.string().min(1).max(4000) }),
+  outputSchema: z.object({ ok: z.boolean(), url: z.string().nullable(), resumo: z.string() }),
+  execute: async ({ repositorio, numero, texto }, contexto) => {
+    const r = await comentarIssue(repositorio, numero, texto)
+    contexto?.loggerVNext?.info(r.ok ? 'Comentário postado' : 'Comentário não postado', { repositorio, numero })
+    return { ok: r.ok, url: r.comentario?.url ?? null, resumo: r.nota }
+  },
+})
+
+export const editarIssueGithub = createTool({
+  id: 'editar-issue-github',
+  description:
+    'Edita uma ISSUE: título, corpo (substitui o corpo inteiro: leia antes com lerIssueGithub) e estado. Pode fechar (motivo completed ou not_planned) e reabrir, quando a pessoa pedir. Pull request é recusado: fechar PR é decisão de uma pessoa. Não exclui nada.',
+  inputSchema: z.object({
+    repositorio: REPOSITORIO,
+    numero: z.number().int().min(1),
+    titulo: z.string().min(1).max(256).optional(),
+    corpo: z.string().max(20_000).optional(),
+    estado: z.enum(['open', 'closed']).optional(),
+    motivo: z.enum(['completed', 'not_planned']).optional().describe('Só ao fechar. Padrão: completed.'),
+  }),
+  outputSchema: z.object({ ok: z.boolean(), mudancas: z.array(z.string()), issue: z.any().nullable(), resumo: z.string() }),
+  execute: async ({ repositorio, numero, ...mudanca }, contexto) => {
+    const r = await editarIssue(repositorio, numero, mudanca)
+    contexto?.loggerVNext?.info(r.ok ? 'Issue editada' : 'Issue não editada', { repositorio, numero, mudancas: r.mudancas })
+    return { ok: r.ok, mudancas: r.mudancas, issue: r.issue, resumo: r.nota }
+  },
+})
+
+export const gerenciarLabelsGithub = createTool({
+  id: 'gerenciar-labels-github',
+  description: `Cria uma label (sem duplicar), aplica uma label existente a até ${MAXIMO_DE_ISSUES_POR_VEZ} issues (acrescenta, não substitui) ou remove uma label de issues. Aplicar uma label que não existe é recusado: crie antes. Não exclui labels.`,
+  inputSchema: z.object({
+    repositorio: REPOSITORIO,
+    acao: z.enum(['criar', 'aplicar', 'remover']),
+    label: z.string().min(1).max(50),
+    cor: z.string().optional().describe('Só ao criar: 6 dígitos hexadecimais, como d73a4a. Padrão: ededed.'),
+    descricao: z.string().max(100).optional().describe('Só ao criar.'),
+    issues: z.array(z.number().int().min(1)).max(MAXIMO_DE_ISSUES_POR_VEZ).optional().describe('Obrigatório ao aplicar e ao remover.'),
+  }),
+  outputSchema: z.object({ ok: z.boolean(), jaExistia: z.boolean(), resultados: z.array(z.object({ issue: z.number(), ok: z.boolean(), nota: z.string() })), resumo: z.string() }),
+  execute: async ({ repositorio, ...entrada }, contexto) => {
+    const r = await gerenciarLabels(repositorio, entrada)
+    contexto?.loggerVNext?.info(r.ok ? 'Labels atualizadas' : 'Labels não atualizadas', { repositorio, acao: entrada.acao })
+    return { ok: r.ok, jaExistia: r.jaExistia, resultados: r.resultados, resumo: r.nota }
+  },
+})
+
+export const pedirRevisaoGithub = createTool({
+  id: 'pedir-revisao-github',
+  description: 'Pede revisão de um pull request a pessoas (até 5 logins). Só aos logins que a pessoa citou: o GitHub notifica quem recebe. Nunca aprova nem faz merge; o autor do PR não pode ser o revisor.',
+  inputSchema: z.object({ repositorio: REPOSITORIO, numero: z.number().int().min(1), revisores: z.array(z.string().min(1).max(40)).min(1).max(5) }),
+  outputSchema: z.object({ ok: z.boolean(), resumo: z.string() }),
+  execute: async ({ repositorio, numero, revisores }) => {
+    const r = await pedirRevisao(repositorio, numero, revisores)
+    return { ok: r.ok, resumo: r.nota }
+  },
+})
+
+export const marcarPrProntoGithub = createTool({
+  id: 'marcar-pr-pronto-github',
+  description: 'Tira um pull request do rascunho (pronto para revisão), só quando a pessoa pedir. Recusa se o CI falhou ou ainda roda: o PR do modo autônomo abre como rascunho justamente quando os testes não passaram. Não aprova nem faz merge.',
+  inputSchema: z.object({ repositorio: REPOSITORIO, numero: z.number().int().min(1) }),
+  outputSchema: z.object({ ok: z.boolean(), resumo: z.string() }),
+  execute: async ({ repositorio, numero }) => {
+    const r = await marcarPrPronto(repositorio, numero)
+    return { ok: r.ok, resumo: r.nota }
+  },
+})
+
+export const criarCampoDoProjetoGithub = createTool({
+  id: 'criar-campo-do-projeto-github',
+  description: 'Cria um campo num GitHub Project (v2): seleção única (com as opções, como P1, P2, P3), número, texto ou data. Se já existir um campo com o mesmo nome, usa esse. Não exclui nem renomeia campo.',
+  inputSchema: z.object({
+    projeto: projetoEntrada,
+    nome: z.string().min(1).max(60),
+    tipo: z.enum(['single_select', 'number', 'text', 'date']),
+    opcoes: z.array(z.string().min(1).max(50)).max(20).optional().describe('Só para seleção única.'),
+  }),
+  outputSchema: z.object({ ok: z.boolean(), jaExistia: z.boolean(), resumo: z.string() }),
+  execute: async ({ projeto, nome, tipo, opcoes }) => {
+    let referencia
+    try {
+      referencia = lerReferenciaDoProjeto(projeto)
+    } catch (erro) {
+      return { ok: false, jaExistia: false, resumo: erro instanceof Error ? erro.message : 'Projeto inválido.' }
+    }
+    const r = await criarCampoDoProjeto(referencia, { nome, tipo, opcoes })
+    return { ok: r.ok, jaExistia: r.jaExistia, resumo: r.nota }
+  },
+})
+
+export const definirCampoDoProjetoGithub = createTool({
+  id: 'definir-campo-do-projeto-github',
+  description: `Define o valor de um campo em itens de um GitHub Project (v2), até ${MAXIMO_DE_ACOES} por chamada: seleção única pelo nome da opção (Prioridade = P1), número (Estimativa), texto, data (AAAA-MM-DD) ou iteração pelo título. Use os ids de lerProjetoGithub. Uma falha não derruba as outras.`,
+  inputSchema: z.object({
+    projeto: projetoEntrada,
+    acoes: z.array(z.object({ itemId: z.string(), campo: z.string().min(1).max(60), valor: z.union([z.string().max(1000), z.number()]) })).min(1).max(MAXIMO_DE_ACOES),
+  }),
+  outputSchema: z.object({ ok: z.boolean(), resultados: z.array(z.object({ acao: z.string(), ok: z.boolean(), nota: z.string(), itemId: z.string().optional() })), resumo: z.string() }),
+  execute: async ({ projeto, acoes }) => {
+    let referencia
+    try {
+      referencia = lerReferenciaDoProjeto(projeto)
+    } catch (erro) {
+      return { ok: false, resultados: [], resumo: erro instanceof Error ? erro.message : 'Projeto inválido.' }
+    }
+    const r = await definirCamposDoProjeto(referencia, acoes)
+    return { ok: r.ok, resultados: r.resultados, resumo: r.nota }
   },
 })
 
@@ -564,7 +700,6 @@ export const comentarPullRequestGithub = createTool({
 
 // ---------- GitHub Projects v2 ----------
 
-const projetoEntrada = z.string().min(3).describe('O endereço do projeto (https://github.com/users/dono/projects/3) ou "dono/3".')
 
 export const lerProjetoGithub = createTool({
   id: 'ler-projeto-github',
