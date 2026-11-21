@@ -14,6 +14,7 @@ import { SCRIPT_MENU, tratarMenu } from './menu.ts'
 import { respostaLlms, respostaRobots, respostaSitemap } from './seo.ts'
 import { paginaQuadro, SCRIPT_QUADRO, tratarQuadro } from './quadro.ts'
 import { SCRIPT_TEMPO } from './tempo.ts'
+import { tratarWebhook } from './triagem.ts'
 import { SCRIPT_TIME } from './time-animado.ts'
 
 // Marca: tile claro (text-main-white) com a sigla no preto da página (surface-bg), em Greed.
@@ -524,6 +525,8 @@ export async function marcaSuperFactory(c: { req: Pedido; res: Response }, next:
   const caminho = c.req.path
   // O porteiro vem antes de qualquer leitura de corpo: quem não entrou não gasta nada do servidor.
   const cfg = lerConfig()
+  // O webhook do GitHub tem a própria autenticação (assinatura HMAC sobre o corpo), então passa antes do login e antes de qualquer leitura do corpo.
+  if (caminho === '/factory/webhook/github') return tratarWebhook(c.req.raw)
   const decisao = await porteiro(c.req.raw, cfg, (p) => ehPublico(p, Object.keys(ARQUIVOS_PUBLICOS)), PAGINAS)
   if (decisao.tipo === 'resposta') return decisao.resposta
   const acesso = await tratarAcesso(c.req.raw, cfg, decisao.usuario)

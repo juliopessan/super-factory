@@ -12,6 +12,7 @@ import { PASTA_DO_REPOSITORIO, type Execucao, type Executor } from './sandbox.ts
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
 import { auditarAcoes, extrasDoNode, lerConvencoes, rodarBaseline, rodarExtras, verificarVermelhoVerde, veredito, type AcaoDoConstrutor, type Verificacao } from './verificacao.ts'
 import { persistir } from './store.ts'
+import { lerNumstat, lerOrcamento, textoDoOrcamento } from './orcamento.ts'
 import { atencaoDeProntidao, diagnosticarProntidao, gerarMapaDoRepositorio, prontidaoEmTexto, verificarAppNoNavegador, type MapaDoRepositorio } from './mapa.ts'
 
 export type { Verificacao } from './verificacao.ts'
@@ -52,6 +53,8 @@ export type DepsAutonomo = {
   guardarMapa?: (repositorio: string, mapa: MapaDoRepositorio) => void
   /** Guarda a captura de tela do app e devolve onde ficou. */
   guardarCaptura?: (cardId: string, pngBase64: string) => string | null
+  /** Teto de tamanho do PR (linhas e arquivos). Padrão: SUPER_FACTORY_PR_MAX_LINHAS / _ARQUIVOS, ou 400 linhas e 15 arquivos. */
+  orcamentoDePr?: { linhas: number; arquivos: number }
 }
 
 const AUTOR = 'Super Factory <factory@super-factory.local>'
@@ -82,18 +85,18 @@ export function nomeDaBranch(estado: Estado): string {
   return validarBranch(`factory/${estado.card.id.toLowerCase()}-${slug || 'card'}`)
 }
 
+/** Clone do GitHub: a URL e o cabeçalho de autenticação (que vai só no env do comando). */
+export function alvoDoCloneGithub(repositorio: string, token: string | undefined): { url: string; env: Record<string, string> } {
+  const { owner, name } = dividirRepositorio(repositorio)
+  const t = token?.trim()
+  if (!t) throw new Error('Defina GITHUB_TOKEN para a Factory clonar e abrir o pull request.')
+  return { url: `https://github.com/${owner}/${name}.git`, env: { FACTORY_GIT_AUTH: `Authorization: Basic ${Buffer.from(`x-access-token:${t}`).toString('base64')}` } }
+}
+
 /** URL de clone e o cabeçalho de autenticação, que vai só no env do comando. */
 export function alvoDoClone(estado: Estado, credenciais: Credenciais): { url: string; env: Record<string, string> } {
   const { provedor, repositorio } = estado.card
-  if (provedor === 'github') {
-    const { owner, name } = dividirRepositorio(repositorio)
-    const token = credenciais.githubToken?.trim()
-    if (!token) throw new Error('Defina GITHUB_TOKEN para a Factory clonar e abrir o pull request.')
-    return {
-      url: `https://github.com/${owner}/${name}.git`,
-      env: { FACTORY_GIT_AUTH: `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}` },
-    }
-  }
+  if (provedor === 'github') return alvoDoCloneGithub(repositorio, credenciais.githubToken)
   const { project, repository } = dividirAzure(repositorio)
   if (!repository) throw new Error('No Azure DevOps, informe projeto/repositorio para o modo autônomo.')
   const org = segmento(credenciais.azureOrg?.trim() ?? '', 'Organização')
@@ -392,6 +395,9 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       const segredos = varrerSegredos(diff.saida)
       if (segredos.encontrado) return pararCom(contexto, `O diff tem padrão de segredo (${segredos.rotulos.join(', ')}). Nada foi enviado.`)
       const estatistica = (await executor.executar('git diff --cached --stat')).saida.trim()
+      // Orçamento de tamanho: PR grande não é bloqueado, mas leva o aviso e uma proposta de divisão em PRs empilhados.
+      const orcamentoDoPr = textoDoOrcamento(lerNumstat((await executor.executar('git diff --cached --numstat')).saida), deps.orcamentoDePr ?? lerOrcamento())
+      if (orcamentoDoPr.length > 0) estado = anotarAuto(estado, 'verification', orcamentoDoPr[0]!.split('\n')[0]!)
       const mensagem = `${estado.card.id}: ${estado.card.titulo}`.replace(/'/g, '')
       const commit = await executor.executar(`git commit -q -m '${mensagem}' --author='${AUTOR}'`)
       if (commit.codigo !== 0) return pararCom(contexto, `O commit falhou: ${rabo(commit, 5)}`)
@@ -399,7 +405,7 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       const push = await executor.executar(`git -c http.extraHeader="$FACTORY_GIT_AUTH" push -u origin '${branch}'`, { env: alvo.env, timeoutMs: 5 * 60_000 })
       if (push.codigo !== 0) return pararCom(contexto, `O push falhou: ${rabo(push, 5)}`)
       estado = anotarAuto({ ...estado, card: { ...estado.card, coluna: 'review' } }, 'delivery', `Branch ${branch} enviada.`)
-      return { ...contexto, estado, estatistica }
+      return { ...contexto, estado, estatistica, atencao: [...(contexto.atencao ?? []), ...orcamentoDoPr] }
     },
   },
   {

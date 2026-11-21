@@ -14,7 +14,7 @@ export const PAGINAS: Paginas = {
 
 /** Caminhos que qualquer pessoa abre, mesmo com o login ligado. */
 export function ehPublico(caminho: string, estaticos: Iterable<string> = []): boolean {
-  if (['/', '/en', '/login', '/waitlist', '/waitlist/enviar', '/sf.svg', '/motion.js', '/robots.txt', '/sitemap.xml', '/llms.txt', '/favicon.ico'].includes(caminho)) return true
+  if (['/', '/en', '/login', '/waitlist', '/waitlist/enviar', '/sf.svg', '/motion.js', '/robots.txt', '/sitemap.xml', '/llms.txt', '/favicon.ico', '/factory/webhook/github'].includes(caminho)) return true
   if (caminho.startsWith('/auth/')) return true
   for (const e of estaticos) if (e === caminho) return true
   return false
