@@ -6,7 +6,10 @@ import { conduzirInstalacaoFerramenta } from './instalacao.ts'
 import {
   abrirCard,
   avaliarGateMerge,
+  buscarIssuesGithub,
   lerArquivoGithub,
+  lerChecksGithub,
+  lerIssueGithub,
   lerPullRequestGithub,
   lerLedger,
   lerProjetoGithub,
@@ -15,6 +18,8 @@ import {
   listarAzure,
   listarBranchesGithub,
   listarGithub,
+  listarMilestonesGithub,
+  listarPullRequestsGithub,
   planejarOnda,
   statusQuadro,
   validarManifesto,
@@ -52,7 +57,7 @@ export const servidorMcp = new MCPServer({
     docs,
   },
   // As ferramentas que escrevem (criar issue, criar work item, organizar o Project) ficam fora: quem fala
-  // com este servidor MCP não passa pelo login do Studio nem pela conversa com um agente. Só leitura sai daqui.
+  // com este servidor MCP não passa pelo login do Studio nem pela conversa com um agente. Só leitura sai daqui, e só a de dados do repositório: alertas de segurança, proteção de branch, Projects e o diagnóstico do token ficam de fora.
   tools: {
     statusQuadro,
     validarManifesto,
@@ -67,6 +72,11 @@ export const servidorMcp = new MCPServer({
     listarArquivosGithub,
     lerArquivoGithub,
     lerPullRequestGithub,
+    lerIssueGithub,
+    buscarIssuesGithub,
+    listarPullRequestsGithub,
+    listarMilestonesGithub,
+    lerChecksGithub,
     lerProjetoGithub,
     lerBaseProjeto,
     registrarRegraProjeto,

@@ -384,3 +384,26 @@ async function criarProjetoAgora(
     return falha(erro instanceof Error ? erro.message : 'Não consegui criar o Project.')
   }
 }
+
+export type ProjetoDaLista = { numero: number; titulo: string; url: string; descricao: string; itens: number; atualizadoEm: string | null }
+
+/** Os Projects v2 abertos de um usuário ou organização, do mais recente ao mais antigo. Só lê. */
+export async function listarProjetos(dono: string, deps?: DepsProjeto): Promise<{ ok: boolean; projetos: ProjetoDaLista[]; nota: string }> {
+  if (!DONO_VALIDO.test(dono)) return { ok: false, projetos: [], nota: 'Dono inválido: use o usuário ou a organização do GitHub, sem @.' }
+  try {
+    const dados = await graphql(
+      `query($dono:String!){ repositoryOwner(login:$dono){ ... on ProjectV2Owner { projectsV2(first:50, orderBy:{field:UPDATED_AT,direction:DESC}){ nodes { number title url closed shortDescription updatedAt items { totalCount } } } } } }`,
+      { dono },
+      false,
+      deps,
+    )
+    const dono_ = dados.repositoryOwner as { projectsV2?: { nodes?: Array<{ number?: number; title?: string; url?: string; closed?: boolean; shortDescription?: string | null; updatedAt?: string; items?: { totalCount?: number } } | null> } } | null
+    if (!dono_) return { ok: false, projetos: [], nota: `Não achei o usuário ou a organização "${dono}" no GitHub.` }
+    const projetos = (dono_.projectsV2?.nodes ?? [])
+      .filter((n): n is NonNullable<typeof n> => Boolean(n) && !n?.closed && typeof n?.number === 'number' && typeof n?.url === 'string')
+      .map((n) => ({ numero: n.number as number, titulo: String(n.title ?? '').slice(0, 120), url: n.url as string, descricao: String(n.shortDescription ?? '').slice(0, 200), itens: n.items?.totalCount ?? 0, atualizadoEm: n.updatedAt ?? null }))
+    return { ok: true, projetos, nota: `${projetos.length} Project(s) aberto(s) de ${dono}. Use a referência ${dono}/NÚMERO com lerProjetoGithub.` }
+  } catch (erro) {
+    return { ok: false, projetos: [], nota: erro instanceof Error ? erro.message : 'Não consegui listar os Projects.' }
+  }
+}
