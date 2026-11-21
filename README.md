@@ -12,11 +12,28 @@
 
 *A factory que constrói factory: do Azure DevOps ou do GitHub ao pull request. Você decide o merge.*
 
-A Super Factory lê a demanda num work item do Azure DevOps ou numa issue do GitHub, implementa num container Docker descartável, roda os testes do seu repositório e abre o pull request pronto para revisão. Uma pessoa revisa e faz o merge. A Factory não faz merge, não faz push em `main` ou `master` e não coloca nada em produção.
+A Super Factory lê a demanda (uma issue do GitHub que você etiquetou, um work item do Azure DevOps ou um pedido no chat), organiza o trabalho no GitHub (milestone, responsável, labels e Project), implementa num container Docker descartável, roda os testes do seu repositório e abre o pull request pronto para revisão. O PR volta para a issue de origem, um agente revisor comenta nele e **uma pessoa revisa e faz o merge**. A Factory não faz merge, não aprova nem fecha pull request, não faz push em `main` ou `master` e não coloca nada em produção.
+
+A gestão do dia a dia (ler, organizar, comentar e fechar issues, milestones, labels e Projects) é do GitHub. O Azure DevOps cobre ler e criar work item e abrir o pull request do modo autônomo.
 
 Para quem prefere aprovar a entrega antes de abrir o pull request, o workflow `sdlc` segue disponível, com um só gate humano: o do merge.
 
-[Comece em 7 passos](#7-passos-para-ver-com-os-próprios-olhos) · [Modo autônomo](#modo-autônomo-do-pedido-ao-pull-request) · [Siga um pedido](#um-pedido-do-começo-ao-fim) · [O que ela recusa](#o-que-a-factory-se-recusa-a-fazer)
+[Comece em 7 passos](#7-passos-para-ver-com-os-próprios-olhos) · [Modo autônomo](#modo-autônomo-do-pedido-ao-pull-request) · [Siga um pedido](#um-pedido-do-começo-ao-fim) · [Uma semana com a Factory](#uma-semana-com-a-factory) · [O que ela recusa](#o-que-a-factory-se-recusa-a-fazer)
+
+---
+
+## O que a Factory faz hoje
+
+| Etapa | O que a Factory faz | Detalhes |
+| --- | --- | --- |
+| **Escolher** | Importa as issues que você etiquetou e cria um card para cada uma. Sem critério observável, o card nasce bloqueado, com o motivo. | [Gatilho de issues](#gatilho-de-issues) |
+| **Organizar** | Cria milestone, atribui responsável, mexe em labels, cria o Project e seus campos (Prioridade, Estimativa, Prazo). Comenta e fecha issues quando você pede. | [Gestão do GitHub](#gestão-do-github) |
+| **Conferir** | Lê issues, pull requests, o CI (com o passo que falhou e o fim do log), a proteção de branch, os alertas de segurança e o alcance do token. | [Ler o GitHub](#ler-o-github-um-token-só-para-tudo) |
+| **Implementar** | Um container por card (Node ou Python), os testes do seu repositório, épicos em PRs empilhados, até 5 cards ao mesmo tempo. | [Modo autônomo](#modo-autônomo-do-pedido-ao-pull-request) |
+| **Entregar** | O PR referencia a issue de origem e a Factory avisa nela. O PR Review comenta o PR: só comenta, nunca aprova. | [O ciclo fechado](#da-issue-ao-pull-request-o-ciclo-fechado) · [Revisão](#revisão-automática-de-pull-request) |
+| **Decidir** | **Merge, deploy, fechar ou aprovar PR: uma pessoa.** | [O que a Factory se recusa a fazer](#o-que-a-factory-se-recusa-a-fazer) |
+| **Acompanhar** | Quadro por coluna, métricas de entrega, time animado e o motivo de cada parada. | [Acompanhar o trabalho](#acompanhar-o-trabalho) |
+| **Conversar** | Menu `/` e `@`, verbos e segundos enquanto o agente trabalha e a próxima etapa sugerida no campo de texto (Tab). | [Conversar com o time](#conversar-com-o-time) |
 
 ---
 
@@ -85,16 +102,46 @@ Cada onda leva no máximo 5 cards prontos, sem dois mexendo no mesmo lugar.
 
 ### Os oito papéis
 
-| Papel | O que faz | Onde escreve |
+O ciclo `sdlc` tem oito papéis. O modo autônomo acrescenta dois agentes: o **Construtor**, que escreve o código no container, e o **PR Review**, que comenta o pull request.
+
+| Papel | O que faz | Onde atua |
 | --- | --- | --- |
-| Chief of Staff | Abre o card e encaminha o ciclo | Quadro |
+| Chief of Staff | Abre o card, importa issues, organiza o GitHub (milestone, responsável, labels, Project), comenta e fecha issues quando você pede, dispara a onda | Quadro e GitHub |
 | Architect | Separa donos e caminhos | Plano |
-| Frontend | Escreve a interface na implementação | `src/ui/` |
-| Backend | Escreve a API na implementação | `src/api/` |
-| Integrations | Lê e abre issue ou work item; não faz merge | GitHub, Azure DevOps |
-| QA | Lê a evidência; não transforma `NOT_RUN` em `PASS` | Só lê |
-| Security | Procura segredo, push protegido e gate furado | Só lê |
+| Frontend | Dono da fatia de UI: lê e opina; quem escreve o código é o Construtor | `src/ui/` |
+| Backend | Dono da fatia de API: lê e opina; quem escreve o código é o Construtor | `src/api/` |
+| Integrations | Lê e organiza o GitHub e o Azure DevOps, abre issue ou work item; não faz merge | GitHub, Azure DevOps |
+| QA | Lê a evidência e o CI; não transforma `NOT_RUN` em `PASS` | Só lê |
+| Security | Procura segredo, push protegido e gate furado; lê os alertas de segurança e a proteção da branch | Só lê |
 | Docs | Diz o que foi observado e o que ficou de fora | Relatório |
+| Construtor (autônomo) | Escreve o código e os testes no container do card | Só o sandbox |
+| PR Review (autônomo) | Lê o PR e o CI e deixa uma revisão como comentário; nunca aprova | Só comenta |
+
+## Uma semana com a Factory
+
+A história da Joana acima mostra o ciclo com gates (`sdlc`). Na prática, a maior parte do trabalho segue o modo autônomo, a partir das issues que o time já tem no GitHub. Esta é uma terça-feira típica, do backlog ao merge. Cada passo existe como ferramenta do Chief of Staff; as seções de referência, mais abaixo, explicam cada uma.
+
+**1. Ela escolhe o que entra.** A Joana etiqueta três issues de um projeto Python de edição de vídeo com `super-factory` no GitHub. Etiquetar exige permissão de triagem no repositório: é a decisão dela. Quem só abriu a issue não faz a Factory trabalhar.
+
+**2. O backlog vira cards.** No chat do Chief: "importe as issues etiquetadas de acme/editor-de-video". Cada issue vira um card. A que tem critério observável vai para `ready`; a que não tem nasce `blocked`, com o motivo. Nada roda ainda: o texto da issue é dado de terceiros, e iniciar o trabalho é um pedido dela.
+
+**3. Ela organiza o trabalho.** "Crie o milestone Beta, vencendo em 15/12, ponha as três issues nele e atribua a mim. Crie o Project Backlog com o campo Prioridade (P1, P2, P3) e coloque as P1 em Todo." O Chief cria o milestone e o Project sem duplicar o que já existe, atribui (acrescenta, sem tirar ninguém) e preenche os campos. Enquanto ele trabalha, uma linha acima do campo de texto mostra `✻ Criando o Project… (8s)`, e a resposta termina com o tempo gasto.
+
+**4. Ela confere o terreno antes de rodar.** "A branch principal exige pull request? O CI está verde? Há algum alerta de segurança aberto?" O Chief lê a proteção da branch, o CI (com o passo que falhou e o fim do log) e os alertas. Se uma leitura ou uma escrita falhar por permissão, `verificarTokenGithub` diz qual permissão falta no token, que é um só para tudo.
+
+**5. A onda.** "Inicie a onda com #2, #3 e #4; a #4 depende da #2; peça a revisão." (Quando o Chief oferece a onda, o campo de texto já sugere essa resposta em cinza, e Tab preenche.) Cada card ganha um container descartável, uma branch e um pull request. A #2 e a #3 rodam ao mesmo tempo; a #4 espera a #2 e abre o PR empilhado sobre a branch dela. Repositórios Python rodam na imagem de sandbox com Python (`unittest` ou `pytest`).
+
+**6. Cada PR volta para a issue.** O PR referencia a demanda: `Closes #2` quando os testes passaram, `Refs #4` quando é rascunho ou empilhado. A Factory comenta na issue, uma vez só, com o link do PR e o resultado dos testes. O PR Review comenta em cada PR: resumo, achados por severidade e a situação de cada critério de aceite. Só comenta: nunca aprova.
+
+**7. Algo falha, e a causa aparece.** O PR da #3 saiu como rascunho. "Por que o CI da #3 falhou?" O Chief mostra o passo `npm test` e o fim do log. Se o sandbox não tiver uma ferramenta (`pip`, `ffmpeg`), o card diz que a imagem do sandbox é que precisa de ajuste, e como.
+
+**8. Ela decide.** A Joana pede a revisão de um colega (só aos logins que ela cita), tira o rascunho quando o CI fica verde e faz o merge **ela mesma**, de baixo para cima. O merge da #2 fecha a issue, por causa do `Closes`. A issue que não vai entrar, ela pede ao Chief que feche como `not_planned`, com um comentário explicando.
+
+**9. Ela acompanha.** O Quadro, no Studio, mostra os cards por coluna, a onda, o desfecho e o link de cada PR. A faixa de métricas traz execuções, pull requests abertos, tempo mediano até o PR e tokens por card.
+
+Em nenhum momento a Factory fez merge, aprovou ou fechou um pull request, apagou issue ou branch, mexeu em proteção de branch ou colocou algo em produção. Isso continua sendo de uma pessoa.
+
+> **Estado de validação.** Este roteiro está coberto por testes com GitHub e sandbox simulados (`npm run check` e `npm run e2e`). A primeira execução real do modo autônomo com a imagem de sandbox com Python e as ferramentas de escrita do GitHub, contra o GitHub de verdade, acontece na sua VPS. Se algo vier diferente do que está descrito aqui, é defeito do código, e o conserto vem antes de a descrição mudar.
 
 ## Modo autônomo: do pedido ao pull request
 
@@ -102,14 +149,15 @@ Os dois workflows têm uma só decisão humana, o merge. O `sdlc` para uma vez, 
 
 1. **Triagem.** A mesma regra do `sdlc`: pedido vago, segredo ou force-push param o card antes de qualquer código.
 2. **Sandbox.** A Factory abre um container Docker descartável para o card e clona o repositório do GitHub ou do Azure DevOps na branch base. A branch de trabalho é `factory/<card>-<título>`, nunca `main` nem `master`.
-3. **Implementação.** O agente construtor (Claude) lê o código, escreve a mudança e os testes, e roda o teste do próprio repositório (`npm`, `pnpm`, `yarn`, `dotnet`, `go`, `pytest` ou `make`). Se o teste falhar, ele tenta mais uma vez com a falha na mão.
+3. **Implementação.** O agente construtor (Claude) lê o código, escreve a mudança e os testes, e roda o teste do próprio repositório (`npm`, `pnpm`, `yarn`, `dotnet`, `go`, Python com `unittest` ou `pytest`, ou `make`). Se o teste falhar, ele tenta mais uma vez com a falha na mão.
 4. **Evidência.** O check `testes-no-sandbox` guarda o comando, o código de saída e o fim da saída. É PASS ou FAIL observado, não relato.
-5. **Pull request.** Antes do push, a Factory confere se o diff não traz segredo. Com testes passando, o PR sai pronto para revisão; com falha, sai como rascunho, com a falha na descrição.
-6. **Merge.** Fica com uma pessoa, pelo processo normal do repositório. A Factory não tem endpoint de merge nem de deploy.
+5. **Pull request.** Antes do push, a Factory confere se o diff não traz segredo. Com testes passando, o PR sai pronto para revisão; com falha, sai como rascunho, com a falha na descrição. Se o pedido veio de uma issue, o PR a referencia (`Closes #N` ou `Refs #N`) e a Factory comenta nela.
+6. **Revisão (opcional).** Com `revisar: true`, o agente PR Review comenta cada PR da onda. Só comenta: nunca aprova.
+7. **Merge.** Fica com uma pessoa, pelo processo normal do repositório. A Factory não tem endpoint de merge nem de deploy.
 
 **Segurança do sandbox.** Um container por card, destruído no fim. Sem privilégios extras (`cap-drop ALL`, `no-new-privileges`), com limite de processos, de memória e de tempo por comando. O token do repositório não fica no container: entra só no clone e no push, e nenhuma saída o mostra. O agente não tem `git push`, não lê credencial e não executa script baixado direto no shell.
 
-**Para rodar.** Docker ativo (Docker Desktop, Colima ou Docker Engine), `ANTHROPIC_API_KEY`, e `GITHUB_TOKEN` ou `AZURE_DEVOPS_ORG` com `AZURE_DEVOPS_PAT`, com permissão de escrita em branch. No Studio, abra o workflow `autonomo` e preencha os mesmos campos do `sdlc`; no Azure DevOps, o repositório vai como `projeto/repositorio`. Sem chave, o workflow para e diz o que falta.
+**Para rodar.** Docker ativo (Docker Desktop, Colima ou Docker Engine), `ANTHROPIC_API_KEY`, e `GITHUB_TOKEN` ou `AZURE_DEVOPS_ORG` com `AZURE_DEVOPS_PAT`, com permissão de escrita em branch. No Studio, abra o workflow `autonomo` e preencha os mesmos campos do `sdlc`; no Azure DevOps, o repositório vai como `projeto/repositorio`. Sem chave, o workflow para e diz o que falta. Para repositórios Python, construa a imagem de sandbox com Python (`sudo bash deploy/construir-sandbox.sh`; veja [Credenciais](#credenciais)).
 
 ## Harness evolutivo
 
@@ -129,6 +177,10 @@ Agente é modelo mais harness: o que entrega o contexto certo a cada passo e o q
 | Issue ou work item no provedor | Force-push e commit direto em `main` |
 | Pull request em rascunho (`sdlc`) ou pronto para revisão (`autonomo`) | Revisar o pull request e decidir o merge |
 | Código e testes só dentro do container do card (`autonomo`) | Rodar fora do sandbox, em produção |
+| Importar as issues etiquetadas e criar cards; organizar milestone, responsável, labels e Project | Etiquetar o que entra e iniciar a onda |
+| Comentar e fechar issues quando você pede; avisar na issue que o PR abriu | Fechar, aprovar ou editar pull request |
+| Revisar o PR com um comentário (PR Review) | Aprovar, pedir mudanças formalmente e decidir o merge |
+| Pedir revisão e tirar o PR do rascunho (só com o CI verde) quando você pede | Excluir issue, label, branch ou repositório; alterar proteção de branch; release |
 
 **Segredos não ficam guardados.** Todo corpo JSON que entra na API passa por uma redação antes de chegar ao Mastra: o token vira `[segredo:token-github]`. O valor não entra no snapshot do workflow, na memória nem nos spans, e a triagem continua bloqueando o card pelo marcador. Para limpar um `factory.db` antigo, rode `npm run limpar-segredos`.
 
@@ -193,7 +245,196 @@ O workflow suspende três vezes. Em cada uma, retome com o JSON do gate. `aprova
 
 ---
 
-## Deploy numa VPS
+## Da demanda ao pull request
+
+Do card ao PR: o que roda dentro do container, como uma issue vira card, como o PR volta para a issue, como tarefas que dependem uma da outra viram pull requests em pilha e quem revisa. Uma só decisão humana: o merge.
+
+### Modo autônomo, fase por fase
+
+No Studio, em **Workflows → autonomo**, o canvas acende uma fase de cada vez: triar o card, abrir o sandbox, clonar e preparar, construir e testar, revisar e enviar, abrir o pull request. Um painel sobre o canvas mostra a fase atual com um verbo girando (Clonando…, Rodando os testes…, Procurando segredo…), e o nó que está rodando ganha contorno e a mesma etiqueta.
+
+Se o card parar, o nó da fase fica vermelho com o motivo, e as fases seguintes não começam. O estado do card continua salvo no quadro.
+
+Para conhecer o fluxo sem tocar repositório, marque **ensaio** no formulário: as mesmas fases rodam com um sandbox de mentira, sem rede e sem chave.
+
+### Gatilho de issues
+
+No chat do Chief: "importe as issues etiquetadas de acme/pedidos". A ferramenta `importarIssuesGithub` traz as issues abertas com a etiqueta `super-factory` (ou outra, se você pedir) e cria um card para cada uma, sem repetir as que já viraram card. Os critérios saem da seção "Critérios" da issue ou da lista de tarefas (`- [ ] ...`); sem critério observável o card nasce **bloqueado**, com o motivo, e uma pessoa completa.
+
+Duas travas de segurança: só entra issue **etiquetada** (etiquetar exige permissão de triagem no repositório: é a decisão da pessoa; quem só abriu a issue não faz a Factory trabalhar), e importar **só cria o card**. Iniciar a onda continua sendo um pedido seu, porque o texto da issue é dado de terceiros. Segredo na issue é redigido, @menção é neutralizada e a origem fica marcada no card. Precisa de `GITHUB_TOKEN`; sem ele nada é importado. A varredura é sob demanda (até 10 issues por vez): ainda não há agendamento automático.
+
+### Da issue ao pull request: o ciclo fechado
+
+Quando uma onda nasce de issues importadas, o Chief passa `issue: N` em cada pedido. O card guarda a origem (`issue:owner/repo#N`), o **PR passa a referenciar a issue** (`Closes #N` quando os testes passaram e o PR vai direto para a branch principal, para o merge, que é de uma pessoa, fechar a issue; `Refs #N` quando é rascunho ou empilhado) e a Factory **comenta na issue, uma vez só**, quando o PR abre: link do PR, resultado dos testes e "o merge é de uma pessoa". Falhar nesse aviso não derruba o card (o PR já está aberto e a falha entra na trilha), o ensaio nunca comenta em issue de verdade, e rodar de novo não duplica o comentário (marca oculta por PR).
+
+### Épicos e PRs em pilha
+
+Tarefas que dependem uma da outra rodam na mesma **onda** (workflow `onda` ou a ferramenta `iniciarOnda` do Chief of Staff). Dê uma `chave` a cada card e `dependeDe` (a chave de **um** pai) ao que vem depois:
+
+```json
+{ "pedidos": [
+  { "chave": "api", "titulo": "API de filtro por data", "...": "..." },
+  { "chave": "ui",  "titulo": "Tela do filtro", "dependeDe": "api", "...": "..." },
+  { "titulo": "Documentação do filtro", "dependeDe": "ui", "...": "..." }
+] }
+```
+
+- O filho **espera o pai**, clona a **branch que o pai enviou** e abre o pull request **contra ela**: PRs em pilha, em vez de um diff gigante.
+- O corpo do PR do filho avisa que está empilhado. O resumo da onda traz a **ordem de merge**: de baixo para cima (primeiro o PR da base; depois confira se o próximo passou a apontar para a branch principal).
+- Se o pai não chega ao pull request, o filho e os netos ficam **bloqueados** e nunca rodam. Os cards independentes seguem.
+- Até 8 cards por onda, 5 ao mesmo tempo (`SUPER_FACTORY_PARALELISMO`). Chave repetida, pai que não existe e ciclo são recusados **antes** de rodar qualquer coisa. Um só pai por card: juntar duas branches de pais diferentes seria um merge escondido, e o merge é de uma pessoa.
+
+### Paralelismo
+
+- **Vários cards ao mesmo tempo:** o workflow **onda** (ou a ferramenta `iniciarOnda` do Chief of Staff) roda de 1 a 8 cards por onda, até 5 independentes juntos, cada um com sandbox, branch e pull request próprios. `SUPER_FACTORY_PARALELISMO` (padrão 3) limita quantos rodam simultâneos, porque cada card abre um container e chama o modelo. Um card que para não derruba os outros. Em ensaio, 3 cards levam o tempo de 1.
+- **Dentro de um card** as fases seguem em ordem de propósito: clonar, instalar, escrever, testar, enviar e abrir o PR dependem uma da anterior.
+- **Agentes:** leituras independentes do mesmo passo rodam juntas (até 4). `compararBranchesGithub` resume até 20 branches numa chamada, no lugar de ler branch por branch.
+- **Escrita no GitHub Project** é sempre uma por vez no mesmo Project, como o GitHub recomenda.
+- **Logs** do Studio mostram uma linha por fase do autônomo, por card da onda e por chamada das ferramentas de GitHub.
+
+### Revisão automática de pull request
+
+O agente **PR Review** (`reviewer`) lê o PR (título, corpo com os critérios e a evidência do sandbox, arquivos e trechos do diff) e deixa **uma revisão como comentário**: resumo, achados por severidade (com comentário na linha, quando a linha está no diff) e a situação de cada critério de aceite. Converse com ele no Studio ("revise o PR 12 de acme/app") ou peça na onda: `revisar: true` faz o revisor comentar em cada PR que a onda abrir.
+
+- **Só comenta.** O evento da revisão é fixo no código (`COMMENT`): a ferramenta não tem como aprovar, pedir mudanças ou fazer merge, e o agente é instruído a nunca dizer que o PR pode ser mesclado. O merge continua sendo de uma pessoa.
+- **O texto final é montado pela Factory**, não pelo agente. `@menções` são neutralizadas (a revisão não chama ninguém) e segredos são redigidos.
+- **O PR é dado de terceiros.** O revisor não segue instruções que estejam no diff, no corpo ou nos comentários.
+- Sem `GITHUB_TOKEN` a revisão é simulada. Escrita com erro nunca é repetida (poderia duplicar a revisão); só o caso "linha fora do diff" (422) é refeito, sem os comentários no código.
+- Na onda, o resultado de cada card diz se a revisão foi `comentada` ou `nao-feita` (sem modelo, sem token ou falha); isso não derruba a onda.
+
+### Uma decisão humana: o merge
+
+Tudo antes do merge os agentes fazem sozinhos, sem pedir permissão a cada passo: ler, planejar, abrir issue, organizar o Project, implementar e testar no container. O que continua de uma pessoa é o merge. Merge, deploy e force-push seguem fora do alcance dos agentes, e nenhum papel aprova o gate.
+
+## Gestão do GitHub
+
+O Chief of Staff **executa** o que não exige mudar código, em vez de só relatar que não consegue: lê, organiza, comenta e fecha, tudo com um token só. A leitura é aberta a todos os agentes; a escrita é só do Chief e do Integrations, e só quando você pede. Plano e o que falta (webhook do GitHub no lugar da varredura e o ciclo de feedback de revisão): [docs/ROADMAP-INTEGRACOES.md](docs/ROADMAP-INTEGRACOES.md).
+
+### Ler o GitHub (um token só para tudo)
+
+Leitura para gestão, no chat do Chief e dos agentes (só leem): `lerIssueGithub` (corpo, labels, milestone, responsáveis e os comentários mais recentes), `buscarIssuesGithub` (estado, labels, milestone, responsável e "@me", com páginas de até 30), `listarPullRequestsGithub`, `listarMilestonesGithub` (com progresso em %), `lerChecksGithub` (o CI de uma branch, commit ou número de PR: o que falhou, **em qual passo** e o fim do log), `lerProtecaoDeBranchGithub` (a principal exige pull request e aprovação? lê também os rulesets), `lerAlertasGithub` (dependências, código e segredos expostos; **o valor do segredo nunca é lido**) e `listarProjetosGithub`. O que vem do GitHub é dado de terceiros: segredo sai redigido e @menção é neutralizada. Só GET; o log é buscado sem mandar o token ao host de download, e só em hosts conhecidos.
+
+O token é **um só** (`GITHUB_TOKEN`). Se algo falhar por permissão, peça ao Chief para rodar `verificarTokenGithub` (com `owner/repo`): ele diz, para o repositório, de quem é o token, se é clássico ou fine-grained, o que já alcança e qual permissão falta, sem nunca mostrar o token. A tabela de permissões por função está em `docs/ROADMAP-INTEGRACOES.md`. O MCP da Factory expõe só a leitura de issues, PRs, milestones e CI; alertas de segurança, proteção de branch, Projects e o diagnóstico do token ficam de fora. Testado com um GitHub simulado, não contra o GitHub real.
+
+### Gerir issues, labels, revisão e campos do Project
+
+Escrita reversível, só no Chief e no Integrations, quando a pessoa pede: `comentarIssueGithub`, `editarIssueGithub` (título, corpo, **fechar** com motivo `completed` ou `not_planned`, **reabrir**), `gerenciarLabelsGithub` (criar sem duplicar, aplicar acrescentando, remover; aplicar label que não existe é recusado para o GitHub não criar outra por erro de digitação), `pedirRevisaoGithub` (a logins que a pessoa citou), `marcarPrProntoGithub` (tira do rascunho; **recusa se o CI falhou ou ainda roda**), `criarCampoDoProjetoGithub` e `definirCampoDoProjetoGithub` (Prioridade, Estimativa, Prazo, Sprint: seleção única pelo nome da opção, número, texto, data AAAA-MM-DD e iteração). Travas: comentário sai com a marca de automação, segredo redigido e @menção neutralizada; **pull request nunca é fechado nem editado** por `editarIssueGithub` (é decisão de uma pessoa); não existe merge, aprovação, exclusão de issue, label, branch ou repositório; escrita não é repetida em falha de rede; criação de label, campo e milestone não duplica nem com dois pedidos ao mesmo tempo; a resposta do GitHub é conferida (ele ignora em silêncio revisor ou responsável sem acesso). Fora do MCP. Testado com um GitHub simulado, não contra o GitHub real.
+
+### Milestone e responsável (assignee)
+
+No chat do Chief: "crie o milestone Beta interno em acme/pedidos, vencendo em 2026-12-15, coloque as issues #2, #3 e #4 nele e atribua a mim". Duas ferramentas, só do Chief e do Integrations: `criarMilestoneGithub` (não duplica: se já existe um milestone aberto com o mesmo título, usa esse; a criação nunca é repetida em falha de rede e dois pedidos simultâneos criam um só) e `atribuirIssuesGithub` (até 40 issues por vez, milestone por número ou título, responsáveis por login; **"@me" é o dono do token**). O responsável é **acrescentado**, nunca substitui os que já existem, e a resposta do GitHub é conferida: ele ignora em silêncio quem não tem acesso ao repositório, e a Factory avisa em vez de dizer que deu certo. Uma issue que falha não derruba as outras. Atribuir notifica quem recebe, então o Chief só atribui a quem a pessoa citou. Precisa de `GITHUB_TOKEN` com escrita em Issues (clássico com `repo`, ou fine-grained com Issues: Read and write). Não fecha issue, não comenta e não faz merge; as ferramentas não ficam no MCP da Factory (são escrita). Testado com um GitHub simulado, não contra o GitHub real.
+
+### Criar o GitHub Project
+
+No chat do Chief: "crie o Project Backlog Super Factory em juliopessan". A ferramenta `criarProjetoGithub` cria o Project v2 (usuário ou organização) com o campo Status (Todo, In Progress, Done) e devolve a referência `dono/número`; em seguida o Chief adiciona as issues e ordena com `organizarProjetoGithub`. Se já existe um Project aberto com o mesmo título, devolve esse e **não cria outro**; a escrita nunca é repetida. Opcionalmente liga o Project a um repositório. A API do GitHub não escolhe o modelo nem o layout: para ver em colunas, troque a visão para **Board** na tela do Project. Precisa de `GITHUB_PROJECT_TOKEN` (ou `GITHUB_TOKEN`) clássico com os escopos `project` e `repo` para Project de usuário.
+
+### Ler uma branch e organizar o GitHub Project
+
+O Chief of Staff **executa** o que não exige mudar código, em vez de só relatar que não consegue. Peça no chat, por exemplo: "analise a branch `trabalho-backlog` do repositório X e organize tudo no Project `https://github.com/users/dono/projects/3`".
+
+- **Ler o repositório:** `listarBranchesGithub`, `listarArquivosGithub` e `lerArquivoGithub`. Só leitura, sem token em repositório público, com `GITHUB_TOKEN` no privado. Segredos dentro dos arquivos são redigidos, e o conteúdo vem marcado como dado de terceiros: uma instrução escrita num arquivo nunca vira ordem para o agente.
+- **Ler o Project:** `lerProjetoGithub` devolve as colunas do campo de status e os itens de cada uma, com o id de cada item.
+- **Organizar o Project:** `organizarProjetoGithub` move itens entre colunas, adiciona issues, pull requests e rascunhos, e ordena, em lotes de até 40 ações. Não exclui nada, e uma ação que falha não derruba as outras.
+- **Token do Project:** Project de **usuário** só aceita token **clássico** com os escopos `repo` e `project`; token fine-grained cobre apenas Project de organização. Cole em **Settings → Chaves e acessos → GitHub: token do Project**. O painel testa o token e avisa se faltar o escopo. Sem essa chave, vale o `GITHUB_TOKEN`.
+- Os papéis Architect, QA, Docs e Security só **leem** (repositório e Project). Quem escreve no Project é o Chief of Staff e o Integrations.
+- A conversa com o agente tem até 30 passos por vez para o Chief of Staff, o bastante para organizar um quadro inteiro.
+
+## Acompanhar o trabalho
+
+Para saber em que pé está cada card sem abrir o GitHub: o quadro, as métricas de entrega e o time trabalhando.
+
+### Quadro no Studio
+
+Na tela **Agents** do Studio, logo abaixo do desenho do time, aparece o **Quadro**: as sete colunas (backlog, pronto, construindo, QA, revisão, bloqueado, concluído) com os cards, a onda, o desfecho e o link do pull request. Card de um épico em pilha mostra "sobre C-1". A tela atualiza sozinha a cada 8 s e também abre em tela cheia em `/quadro`. É somente leitura (`GET /factory/quadro`) e fica atrás do mesmo login do Studio.
+
+Acima das colunas fica a faixa de **métricas de entrega**, calculada do que a Factory já guarda: execuções (e as dos últimos 7 dias), pull requests abertos, parte das execuções que chega ao PR, tempo mediano até o PR e bloqueadas. O agente construtor também registra os **tokens** gastos (entrada e saída, somados entre as tentativas): a faixa mostra tokens por card, ou "não medido" quando não há registro (ensaio e execuções antigas). **Dinheiro não é calculado**: o preço depende do modelo e do contrato; use os tokens com a sua tabela.
+
+### Time de agentes animado
+
+Na tela **Agents** do Studio, o espaço abaixo dos cards mostra **Como o time trabalha**: o Chief of Staff no topo delegando para o time (Architect, Frontend, Backend, Construtor, QA, Security, PR Review, Docs, Integrations) e, embaixo, o **merge**, o único nó humano. Um pulso percorre o ciclo a cada 12 s e cada agente acende na sua vez; o merge pulsa em âmbar esperando uma pessoa. Passe o mouse para ver o papel e clique para abrir o chat do agente. Aparece nas visões em cards e em lista, acompanha o tema claro/escuro e fica parado com `prefers-reduced-motion`. O desenho é fixo no código (`src/super-factory/time-animado.ts`): ao criar um agente novo, inclua-o lá.
+
+### Métricas, logs e datasets no Studio
+
+- **Metrics e Logs** usam um arquivo **DuckDB** (`SUPER_FACTORY_OBS_DB`; no container, `/data/observabilidade.duckdb`, no mesmo volume). O banco principal (agentes, memória, workflows) continua no LibSQL. Se o DuckDB não abrir, a Factory sobe sem métricas e avisa no log. Os traces antigos ficavam no LibSQL e não aparecem mais no Studio; os novos passam a valer daqui para a frente.
+- **Datasets** abre com o conjunto **Critérios de aceite (triagem)**: casos do lint com o veredito esperado. É criado uma vez e não é sobrescrito se você editar. **Experiments** e **Review Queue** começam vazios de propósito: Experiments nasce quando você roda um conjunto contra um agente ou workflow (gasta chamadas de modelo, por isso nada roda sozinho), e a Review Queue recebe o que for marcado para revisão.
+
+## Conversar com o time
+
+O chat do Studio tenta ser tão direto quanto o do Claude Code: o menu escreve o pedido por você, uma linha mostra o que o agente está fazendo e há quanto tempo, e o campo de texto sugere o próximo passo.
+
+### Menu `/` e `@` no chat
+
+No chat de qualquer agente, digite **`/`** no começo da mensagem para ver workflows, atalhos e skills, ou **`@`** em qualquer ponto para referenciar um card, um pull request ou o repositório usado por último. Setas navegam, **Enter** ou **Tab** escolhem, **Esc** fecha.
+
+- **`/` só preenche a mensagem** com um modelo. Quem executa é o agente, com as mesmas ferramentas e travas de sempre; merge e deploy não aparecem no menu. No Chief, `/autonomo` e `/onda` viram pedidos para `iniciarOnda`; nos outros agentes, os workflows abrem a tela do workflow no Studio.
+- **`@` coloca só o identificador** (`C-12`), nunca o título do card, que é texto de terceiros.
+- O menu lê as skills e os cards do servidor (`/factory/menu`, só leitura): skill nova aparece sozinha.
+- `SUPER_FACTORY_MENU=0` desliga o menu sem mexer no resto.
+
+Para o beta interno, veja [docs/BETA.md](docs/BETA.md): checklist de pré-voo, roteiro de demo, limites conhecidos e como voltar atrás.
+
+### Conversa com o agente
+
+O Studio abre uma conversa nova toda vez que você volta para o agente, e a anterior fica na lista de threads. A Factory lembra a última conversa de cada agente (neste navegador) e a reabre quando você volta pelo menu ou pela lista. O trabalho do agente continua no servidor enquanto você está em outra tela: ao voltar, a conversa mostra a pergunta, o botão de parar indica que ainda está rodando e a resposta aparece quando termina. **New Thread** continua começando uma conversa nova.
+
+### Verbos e segundos no chat do Studio
+
+Enquanto um agente trabalha, uma linha acima do campo de texto mostra um verbo do projeto e os segundos, como no Claude Code: `✻ Conferindo evidência… (12s)`. Cada agente tem o próprio vocabulário (o QA fala de evidência e `NOT_RUN`, o Security de segredo e gate, o PR Review de diff e critérios, o Chief de quadro e onda), e quando a mensagem já mostra o nome de uma ferramenta o verbo diz o que ela faz (`Importando as issues etiquetadas…`, `Criando o Project…`). Quando o agente termina, a mensagem ganha `✻ Trabalhou por 1m 15s`; a nota volta quando a conversa é reaberta no mesmo navegador. O Studio só mostra um ponto pulsando nessa hora, então a linha é da Factory (`src/super-factory/tempo.ts`). O tempo é guardado só no navegador de quem usou, e o ícone não gira para quem pede menos movimento.
+
+### Sugestões com Tab
+
+Para quem não é técnico e não sabe o que escrever, os campos do Studio mostram uma **sugestão em cinza** quando estão vazios, no estilo do Claude Code. Aperte **Tab** para preencher e **Esc** para ignorar. Com teclado não há dica na tela: o texto em cinza basta. No celular, que não tem Tab, aparece um botão sobre o campo e tocar nele preenche.
+
+- **Formulário dos workflows:** título, descrição e critérios vêm de exemplos prontos, escritos para passar na triagem da Factory. O repositório, o branch de trabalho e o aprovador repetem o que a própria pessoa usou da última vez. O branch base sugere `main`.
+- **Chat de cada agente:** a sugestão é a próxima pergunta útil para aquele papel, e muda a cada mensagem enviada. Depois de uma resposta do agente, ela passa a ler a conversa: veja [Próxima etapa sugerida no campo de texto (Tab)](#próxima-etapa-sugerida-no-campo-de-texto-tab).
+- **Nada é inventado:** repositório e aprovador só sugerem o que você já digitou. A nota de aprovação de um gate **nunca** é sugerida, para ninguém aprovar sem ler.
+- **O histórico fica no navegador** (`localStorage`), não vai para o servidor.
+
+### Próxima etapa sugerida no campo de texto (Tab)
+
+O campo de texto do chat sugere em cinza o que fazer a seguir, e **Tab** preenche (Enter envia; Esc ignora). A sugestão agora lê a última mensagem do agente: se ele terminou oferecendo algo ("Você quer que eu inicie a onda com #2, #3 e #4?"), o campo sugere a resposta natural ("Sim, inicie a onda com #2, #3 e #4."). Sem oferta, a sugestão segue o passo seguinte do ciclo pela ferramenta que o agente usou (depois de importar issues: "Inicie a onda com os cards novos que não estão bloqueados"; depois de criar o Project: "Adicione as issues abertas ao Project e ordene por prioridade"). Sem nenhum dos dois, vale a lista fixa do agente. Só sugere: nada é enviado sem a pessoa apertar Enter, e a nota de aprovação do gate nunca é sugerida. A lógica está em `src/super-factory/ferramentas-no-chat.ts`, testada com o mesmo código que roda no navegador.
+
+### Ferramentas (MCP) que o time instala
+
+As chaves ficam em **Settings → Chaves e acessos**. As ferramentas (MCP) abrem pelo botão **+** das páginas **Tools** e **MCP Servers** do Studio. Cada pessoa conecta aos agentes da Factory as ferramentas que ajudam no processo, sem SSH e sem mexer em arquivo.
+
+- **Catálogo curado, versões fixas:** Microsoft Learn (documentação do Azure, sem chave), Context7 (documentação de bibliotecas), GitHub (leitura de repositórios, issues e PRs), Azure DevOps (work items, repositórios, builds) e Raciocínio em etapas.
+- **Servidor remoto:** qualquer MCP publicado em https. A URL precisa ser pública; endereço da rede interna, IP e nome interno são recusados. O token vai criptografado, nunca na URL.
+- **Comando no servidor:** só para o administrador, com `SUPER_FACTORY_MCP_COMANDO=1` no `.env`. Rodar um comando é executar código dentro da Factory, por isso a tela não liga isso sozinha.
+- **Testa antes de gravar:** a Factory conecta, lista as ferramentas e só então instala. Credencial recusada nunca instala. Na primeira vez, o `npx` baixa o pacote e pode levar até um minuto.
+- **Cada ferramenta liga e desliga** na própria tela, com um selo: *somente leitura*, *pede aprovação* ou *bloqueada*.
+
+O que protege o processo:
+
+- **Merge, deploy, publicação e aprovação nunca chegam a um agente.** Uma ferramenta com esse jeito, como `merge_pull_request`, fica bloqueada mesmo que o servidor a ofereça.
+- **O que não é declarado somente leitura pede a sua aprovação a cada uso.** O papel Security só recebe ferramentas de leitura.
+- **As chaves da Factory não vazam para o MCP.** O subprocesso só enxerga as variáveis dele; o token do MCP mora no cofre criptografado e só sai dali para conectar.
+- **Um MCP quebrado não derruba nada.** Cada um tem a própria conexão; o que falha fica de fora, com o motivo na tela.
+
+Vale para os agentes do Studio. O modo autônomo continua só com o sandbox: o agente construtor não usa MCP.
+
+#### Colar a configuração do Cursor, do Claude Desktop ou do VS Code
+
+No botão **+** (Tools ou MCP Servers), a seção **Colar configuração** aceita o trecho do `mcp.json`:
+
+```json
+{ "mcpServers": { "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp"] } } }
+```
+
+Clique em **Analisar** para ver o que será instalado e em **Instalar** para confirmar. A Factory não confia no que foi colado:
+
+- **Reconhecido** (hoje: Context7 e Raciocínio em etapas) vira o item do catálogo, na versão revisada e com o endereço oficial. O `npx` colado não roda.
+- **URL** (`url` e `headers`) passa pela checagem de rede: só https e só endereço público.
+- **Comando** fora do catálogo só com `SUPER_FACTORY_MCP_COMANDO=1`, como antes. Sem versão fixa (`@1.2.3`), a tela avisa.
+- Valores de `env` e de `headers` vão para o cofre criptografado e nunca voltam à tela nem ao arquivo de definição.
+- `autoApprove` não existe aqui: ferramenta que altera algo continua pedindo a sua aprovação. Merge e deploy seguem bloqueados.
+- Até 5 servidores por colagem; aceita `mcpServers`, `servers`, o servidor solto e vírgula sobrando.
+
+## Operar a Factory
+
+Instalar, publicar e proteger o acesso.
+
+### Deploy numa VPS
 
 Um kit em `deploy/` instala a Super Factory numa VPS Ubuntu 22.04 ou 24.04, com o modo autônomo ligado. O instalador olha o que a VPS já tem e escolhe o caminho sozinho:
 
@@ -230,15 +471,7 @@ sudo bash /opt/super-factory/deploy/atualizar.sh
 
 **Acesso à VPS.** Prefira chave SSH a senha de root: crie a chave no seu computador com `ssh-keygen -t ed25519`, cadastre a chave pública no painel da hospedagem e desligue `PasswordAuthentication` no `/etc/ssh/sshd_config`.
 
-## Modo autônomo, fase por fase
-
-No Studio, em **Workflows → autonomo**, o canvas acende uma fase de cada vez: triar o card, abrir o sandbox, clonar e preparar, construir e testar, revisar e enviar, abrir o pull request. Um painel sobre o canvas mostra a fase atual com um verbo girando (Clonando…, Rodando os testes…, Procurando segredo…), e o nó que está rodando ganha contorno e a mesma etiqueta.
-
-Se o card parar, o nó da fase fica vermelho com o motivo, e as fases seguintes não começam. O estado do card continua salvo no quadro.
-
-Para conhecer o fluxo sem tocar repositório, marque **ensaio** no formulário: as mesmas fases rodam com um sandbox de mentira, sem rede e sem chave.
-
-## Chaves pelo painel
+### Chaves pelo painel
 
 Para o time não precisar de SSH nem de editor de texto, o Studio tem o botão **Chaves e acessos** (canto inferior direito). Ele abre um popup para colar `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, `AZURE_DEVOPS_ORG`, `AZURE_DEVOPS_PAT` e, se quiser, `OPENAI_API_KEY` e `GOOGLE_API_KEY`. A mesma tela abre direto em `/configuracoes`.
 
@@ -250,23 +483,7 @@ Para o time não precisar de SSH nem de editor de texto, o Studio tem o botão *
 
 Quem entra na Factory com o login pode trocar estas chaves: use contas e tokens com o mínimo de permissão.
 
-## Ler uma branch e organizar o GitHub Project
-
-O Chief of Staff **executa** o que não exige mudar código, em vez de só relatar que não consegue. Peça no chat, por exemplo: "analise a branch `trabalho-backlog` do repositório X e organize tudo no Project `https://github.com/users/dono/projects/3`".
-
-- **Ler o repositório:** `listarBranchesGithub`, `listarArquivosGithub` e `lerArquivoGithub`. Só leitura, sem token em repositório público, com `GITHUB_TOKEN` no privado. Segredos dentro dos arquivos são redigidos, e o conteúdo vem marcado como dado de terceiros: uma instrução escrita num arquivo nunca vira ordem para o agente.
-- **Ler o Project:** `lerProjetoGithub` devolve as colunas do campo de status e os itens de cada uma, com o id de cada item.
-- **Organizar o Project:** `organizarProjetoGithub` move itens entre colunas, adiciona issues, pull requests e rascunhos, e ordena, em lotes de até 40 ações. Não exclui nada, e uma ação que falha não derruba as outras.
-- **Token do Project:** Project de **usuário** só aceita token **clássico** com os escopos `repo` e `project`; token fine-grained cobre apenas Project de organização. Cole em **Settings → Chaves e acessos → GitHub: token do Project**. O painel testa o token e avisa se faltar o escopo. Sem essa chave, vale o `GITHUB_TOKEN`.
-- Os papéis Architect, QA, Docs e Security só **leem** (repositório e Project). Quem escreve no Project é o Chief of Staff e o Integrations.
-- A conversa com o agente tem até 16 passos por vez para o Chief of Staff, o bastante para organizar um quadro inteiro.
-
-## Métricas, logs e datasets no Studio
-
-- **Metrics e Logs** usam um arquivo **DuckDB** (`SUPER_FACTORY_OBS_DB`; no container, `/data/observabilidade.duckdb`, no mesmo volume). O banco principal (agentes, memória, workflows) continua no LibSQL. Se o DuckDB não abrir, a Factory sobe sem métricas e avisa no log. Os traces antigos ficavam no LibSQL e não aparecem mais no Studio; os novos passam a valer daqui para a frente.
-- **Datasets** abre com o conjunto **Critérios de aceite (triagem)**: casos do lint com o veredito esperado. É criado uma vez e não é sobrescrito se você editar. **Experiments** e **Review Queue** começam vazios de propósito: Experiments nasce quando você roda um conjunto contra um agente ou workflow (gasta chamadas de modelo, por isso nada roda sozinho), e a Review Queue recebe o que for marcado para revisão.
-
-## Login e lista de espera
+### Login e lista de espera
 
 A Factory tem login próprio (GitHub OAuth) e uma lista de espera com qualificação, gravada no nosso banco (LibSQL, o mesmo `SUPER_FACTORY_DB`).
 
@@ -288,159 +505,19 @@ O instalador antigo põe um login básico do Traefik na frente de tudo, o que es
 
 Por que GitHub e não Composio: o Composio guarda credenciais de agentes em apps de terceiros (agir no GitHub ou no Gmail em nome de alguém); não é um provedor de login do seu produto. Para empresas que não usam GitHub, o próximo provedor natural é Microsoft Entra ou Google.
 
-## Verbos e segundos no chat do Studio
+## A página inicial
 
-Enquanto um agente trabalha, uma linha acima do campo de texto mostra um verbo do projeto e os segundos, como no Claude Code: `✻ Conferindo evidência… (12s)`. Cada agente tem o próprio vocabulário (o QA fala de evidência e `NOT_RUN`, o Security de segredo e gate, o PR Review de diff e critérios, o Chief de quadro e onda), e quando a mensagem já mostra o nome de uma ferramenta o verbo diz o que ela faz (`Importando as issues etiquetadas…`, `Criando o Project…`). Quando o agente termina, a mensagem ganha `✻ Trabalhou por 1m 15s`; a nota volta quando a conversa é reaberta no mesmo navegador. O Studio só mostra um ponto pulsando nessa hora, então a linha é da Factory (`src/super-factory/tempo.ts`). O tempo é guardado só no navegador de quem usou, e o ícone não gira para quem pede menos movimento.
+A landing é a porta de entrada pública: vídeo de apresentação, FAQ e SEO.
 
-## Próxima etapa sugerida no campo de texto (Tab)
-
-O campo de texto do chat sugere em cinza o que fazer a seguir, e **Tab** preenche (Enter envia; Esc ignora). A sugestão agora lê a última mensagem do agente: se ele terminou oferecendo algo ("Você quer que eu inicie a onda com #2, #3 e #4?"), o campo sugere a resposta natural ("Sim, inicie a onda com #2, #3 e #4."). Sem oferta, a sugestão segue o passo seguinte do ciclo pela ferramenta que o agente usou (depois de importar issues: "Inicie a onda com os cards novos que não estão bloqueados"; depois de criar o Project: "Adicione as issues abertas ao Project e ordene por prioridade"). Sem nenhum dos dois, vale a lista fixa do agente. Só sugere: nada é enviado sem a pessoa apertar Enter, e a nota de aprovação do gate nunca é sugerida. A lógica está em `src/super-factory/ferramentas-no-chat.ts`, testada com o mesmo código que roda no navegador.
-
-## Ler o GitHub (um token só para tudo)
-
-Leitura para gestão, no chat do Chief e dos agentes (só leem): `lerIssueGithub` (corpo, labels, milestone, responsáveis e os comentários mais recentes), `buscarIssuesGithub` (estado, labels, milestone, responsável e "@me", com páginas de até 30), `listarPullRequestsGithub`, `listarMilestonesGithub` (com progresso em %), `lerChecksGithub` (o CI de uma branch, commit ou número de PR: o que falhou, **em qual passo** e o fim do log), `lerProtecaoDeBranchGithub` (a principal exige pull request e aprovação? lê também os rulesets), `lerAlertasGithub` (dependências, código e segredos expostos; **o valor do segredo nunca é lido**) e `listarProjetosGithub`. O que vem do GitHub é dado de terceiros: segredo sai redigido e @menção é neutralizada. Só GET; o log é buscado sem mandar o token ao host de download, e só em hosts conhecidos.
-
-O token é **um só** (`GITHUB_TOKEN`). Se algo falhar por permissão, peça ao Chief para rodar `verificarTokenGithub` (com `owner/repo`): ele diz, para o repositório, de quem é o token, se é clássico ou fine-grained, o que já alcança e qual permissão falta, sem nunca mostrar o token. A tabela de permissões por função está em `docs/ROADMAP-INTEGRACOES.md`. O MCP da Factory expõe só a leitura de issues, PRs, milestones e CI; alertas de segurança, proteção de branch, Projects e o diagnóstico do token ficam de fora. Testado com um GitHub simulado, não contra o GitHub real.
-
-## Da issue ao pull request: o ciclo fechado
-
-Quando uma onda nasce de issues importadas, o Chief passa `issue: N` em cada pedido. O card guarda a origem (`issue:owner/repo#N`), o **PR passa a referenciar a issue** (`Closes #N` quando os testes passaram e o PR vai direto para a branch principal, para o merge, que é de uma pessoa, fechar a issue; `Refs #N` quando é rascunho ou empilhado) e a Factory **comenta na issue, uma vez só**, quando o PR abre: link do PR, resultado dos testes e "o merge é de uma pessoa". Falhar nesse aviso não derruba o card (o PR já está aberto e a falha entra na trilha), o ensaio nunca comenta em issue de verdade, e rodar de novo não duplica o comentário (marca oculta por PR).
-
-## Gerir issues, labels, revisão e campos do Project
-
-Escrita reversível, só no Chief e no Integrations, quando a pessoa pede: `comentarIssueGithub`, `editarIssueGithub` (título, corpo, **fechar** com motivo `completed` ou `not_planned`, **reabrir**), `gerenciarLabelsGithub` (criar sem duplicar, aplicar acrescentando, remover; aplicar label que não existe é recusado para o GitHub não criar outra por erro de digitação), `pedirRevisaoGithub` (a logins que a pessoa citou), `marcarPrProntoGithub` (tira do rascunho; **recusa se o CI falhou ou ainda roda**), `criarCampoDoProjetoGithub` e `definirCampoDoProjetoGithub` (Prioridade, Estimativa, Prazo, Sprint: seleção única pelo nome da opção, número, texto, data AAAA-MM-DD e iteração). Travas: comentário sai com a marca de automação, segredo redigido e @menção neutralizada; **pull request nunca é fechado nem editado** por `editarIssueGithub` (é decisão de uma pessoa); não existe merge, aprovação, exclusão de issue, label, branch ou repositório; escrita não é repetida em falha de rede; criação de label, campo e milestone não duplica nem com dois pedidos ao mesmo tempo; a resposta do GitHub é conferida (ele ignora em silêncio revisor ou responsável sem acesso). Fora do MCP. Testado com um GitHub simulado, não contra o GitHub real.
-
-## Milestone e responsável (assignee)
-
-No chat do Chief: "crie o milestone Beta interno em acme/pedidos, vencendo em 2026-12-15, coloque as issues #2, #3 e #4 nele e atribua a mim". Duas ferramentas, só do Chief e do Integrations: `criarMilestoneGithub` (não duplica: se já existe um milestone aberto com o mesmo título, usa esse; a criação nunca é repetida em falha de rede e dois pedidos simultâneos criam um só) e `atribuirIssuesGithub` (até 40 issues por vez, milestone por número ou título, responsáveis por login; **"@me" é o dono do token**). O responsável é **acrescentado**, nunca substitui os que já existem, e a resposta do GitHub é conferida: ele ignora em silêncio quem não tem acesso ao repositório, e a Factory avisa em vez de dizer que deu certo. Uma issue que falha não derruba as outras. Atribuir notifica quem recebe, então o Chief só atribui a quem a pessoa citou. Precisa de `GITHUB_TOKEN` com escrita em Issues (clássico com `repo`, ou fine-grained com Issues: Read and write). Não fecha issue, não comenta e não faz merge; as ferramentas não ficam no MCP da Factory (são escrita). Testado com um GitHub simulado, não contra o GitHub real.
-
-## Criar o GitHub Project
-
-No chat do Chief: "crie o Project Backlog Super Factory em juliopessan". A ferramenta `criarProjetoGithub` cria o Project v2 (usuário ou organização) com o campo Status (Todo, In Progress, Done) e devolve a referência `dono/número`; em seguida o Chief adiciona as issues e ordena com `organizarProjetoGithub`. Se já existe um Project aberto com o mesmo título, devolve esse e **não cria outro**; a escrita nunca é repetida. Opcionalmente liga o Project a um repositório. A API do GitHub não escolhe o modelo nem o layout: para ver em colunas, troque a visão para **Board** na tela do Project. Precisa de `GITHUB_PROJECT_TOKEN` (ou `GITHUB_TOKEN`) clássico com os escopos `project` e `repo` para Project de usuário.
-
-## Gatilho de issues
-
-No chat do Chief: "importe as issues etiquetadas de acme/pedidos". A ferramenta `importarIssuesGithub` traz as issues abertas com a etiqueta `super-factory` (ou outra, se você pedir) e cria um card para cada uma, sem repetir as que já viraram card. Os critérios saem da seção "Critérios" da issue ou da lista de tarefas (`- [ ] ...`); sem critério observável o card nasce **bloqueado**, com o motivo, e uma pessoa completa.
-
-Duas travas de segurança: só entra issue **etiquetada** (etiquetar exige permissão de triagem no repositório: é a decisão da pessoa; quem só abriu a issue não faz a Factory trabalhar), e importar **só cria o card**. Iniciar a onda continua sendo um pedido seu, porque o texto da issue é dado de terceiros. Segredo na issue é redigido, @menção é neutralizada e a origem fica marcada no card. Precisa de `GITHUB_TOKEN`; sem ele nada é importado. A varredura é sob demanda (até 10 issues por vez): ainda não há agendamento automático.
-
-## Vídeo da landing: o som
+### Vídeo da landing: o som
 
 O vídeo de apresentação (45 s) tem áudio. Na landing ele começa **mudo**, porque os navegadores bloqueiam som sem um gesto da pessoa, e o botão **Ativar som** (**Turn sound on** em `/en`), no canto do vídeo, liga e desliga o som. Quem pede menos movimento recebe os controles nativos do navegador. Um teste confere que o arquivo tem faixa de áudio e que o botão existe nas duas línguas, para o vídeo não voltar a ficar mudo por esquecimento.
 
-## Quadro no Studio
-
-Na tela **Agents** do Studio, logo abaixo do desenho do time, aparece o **Quadro**: as sete colunas (backlog, pronto, construindo, QA, revisão, bloqueado, concluído) com os cards, a onda, o desfecho e o link do pull request. Card de um épico em pilha mostra "sobre C-1". A tela atualiza sozinha a cada 8 s e também abre em tela cheia em `/quadro`. É somente leitura (`GET /factory/quadro`) e fica atrás do mesmo login do Studio.
-
-Acima das colunas fica a faixa de **métricas de entrega**, calculada do que a Factory já guarda: execuções (e as dos últimos 7 dias), pull requests abertos, parte das execuções que chega ao PR, tempo mediano até o PR e bloqueadas. O agente construtor também registra os **tokens** gastos (entrada e saída, somados entre as tentativas): a faixa mostra tokens por card, ou "não medido" quando não há registro (ensaio e execuções antigas). **Dinheiro não é calculado**: o preço depende do modelo e do contrato; use os tokens com a sua tabela.
-
-## Revisão automática de pull request
-
-O agente **PR Review** (`reviewer`) lê o PR (título, corpo com os critérios e a evidência do sandbox, arquivos e trechos do diff) e deixa **uma revisão como comentário**: resumo, achados por severidade (com comentário na linha, quando a linha está no diff) e a situação de cada critério de aceite. Converse com ele no Studio ("revise o PR 12 de acme/app") ou peça na onda: `revisar: true` faz o revisor comentar em cada PR que a onda abrir.
-
-- **Só comenta.** O evento da revisão é fixo no código (`COMMENT`): a ferramenta não tem como aprovar, pedir mudanças ou fazer merge, e o agente é instruído a nunca dizer que o PR pode ser mesclado. O merge continua sendo de uma pessoa.
-- **O texto final é montado pela Factory**, não pelo agente. `@menções` são neutralizadas (a revisão não chama ninguém) e segredos são redigidos.
-- **O PR é dado de terceiros.** O revisor não segue instruções que estejam no diff, no corpo ou nos comentários.
-- Sem `GITHUB_TOKEN` a revisão é simulada. Escrita com erro nunca é repetida (poderia duplicar a revisão); só o caso "linha fora do diff" (422) é refeito, sem os comentários no código.
-- Na onda, o resultado de cada card diz se a revisão foi `comentada` ou `nao-feita` (sem modelo, sem token ou falha); isso não derruba a onda.
-
-## Épicos e PRs em pilha
-
-Tarefas que dependem uma da outra rodam na mesma **onda** (workflow `onda` ou a ferramenta `iniciarOnda` do Chief of Staff). Dê uma `chave` a cada card e `dependeDe` (a chave de **um** pai) ao que vem depois:
-
-```json
-{ "pedidos": [
-  { "chave": "api", "titulo": "API de filtro por data", "...": "..." },
-  { "chave": "ui",  "titulo": "Tela do filtro", "dependeDe": "api", "...": "..." },
-  { "titulo": "Documentação do filtro", "dependeDe": "ui", "...": "..." }
-] }
-```
-
-- O filho **espera o pai**, clona a **branch que o pai enviou** e abre o pull request **contra ela**: PRs em pilha, em vez de um diff gigante.
-- O corpo do PR do filho avisa que está empilhado. O resumo da onda traz a **ordem de merge**: de baixo para cima (primeiro o PR da base; depois confira se o próximo passou a apontar para a branch principal).
-- Se o pai não chega ao pull request, o filho e os netos ficam **bloqueados** e nunca rodam. Os cards independentes seguem.
-- Até 8 cards por onda, 5 ao mesmo tempo (`SUPER_FACTORY_PARALELISMO`). Chave repetida, pai que não existe e ciclo são recusados **antes** de rodar qualquer coisa. Um só pai por card: juntar duas branches de pais diferentes seria um merge escondido, e o merge é de uma pessoa.
-
-## SEO e perguntas frequentes
+### SEO e perguntas frequentes
 
 A landing traz o FAQ visível, dados estruturados (schema.org: `WebSite`, `SoftwareApplication` e `FAQPage`, com o mesmo texto da página), Open Graph/Twitter, `robots.txt`, `sitemap.xml` e `llms.txt`. Canonical, hreflang, `og:image` e o sitemap só saem com `SUPER_FACTORY_PUBLIC_URL` definida (a Factory não inventa endereço). O FAQ vive em `src/super-factory/seo.ts`.
 
-## Menu `/` e `@` no chat
-
-No chat de qualquer agente, digite **`/`** no começo da mensagem para ver workflows, atalhos e skills, ou **`@`** em qualquer ponto para referenciar um card, um pull request ou o repositório usado por último. Setas navegam, **Enter** ou **Tab** escolhem, **Esc** fecha.
-
-- **`/` só preenche a mensagem** com um modelo. Quem executa é o agente, com as mesmas ferramentas e travas de sempre; merge e deploy não aparecem no menu. No Chief, `/autonomo` e `/onda` viram pedidos para `iniciarOnda`; nos outros agentes, os workflows abrem a tela do workflow no Studio.
-- **`@` coloca só o identificador** (`C-12`), nunca o título do card, que é texto de terceiros.
-- O menu lê as skills e os cards do servidor (`/factory/menu`, só leitura): skill nova aparece sozinha.
-- `SUPER_FACTORY_MENU=0` desliga o menu sem mexer no resto.
-
-Para o beta interno, veja [docs/BETA.md](docs/BETA.md): checklist de pré-voo, roteiro de demo, limites conhecidos e como voltar atrás.
-
-## Time de agentes animado
-
-Na tela **Agents** do Studio, o espaço abaixo dos cards mostra **Como o time trabalha**: o Chief of Staff no topo delegando para o time (Architect, Frontend, Backend, Construtor, QA, Security, Docs, Integrations) e, embaixo, o **merge**, o único nó humano. Um pulso percorre o ciclo a cada 12 s e cada agente acende na sua vez; o merge pulsa em âmbar esperando uma pessoa. Passe o mouse para ver o papel e clique para abrir o chat do agente. Aparece nas visões em cards e em lista, acompanha o tema claro/escuro e fica parado com `prefers-reduced-motion`. O desenho é fixo no código (`src/super-factory/time-animado.ts`): ao criar um agente novo, inclua-o lá.
-
-## Conversa com o agente
-
-O Studio abre uma conversa nova toda vez que você volta para o agente, e a anterior fica na lista de threads. A Factory lembra a última conversa de cada agente (neste navegador) e a reabre quando você volta pelo menu ou pela lista. O trabalho do agente continua no servidor enquanto você está em outra tela: ao voltar, a conversa mostra a pergunta, o botão de parar indica que ainda está rodando e a resposta aparece quando termina. **New Thread** continua começando uma conversa nova.
-
-## Paralelismo
-
-- **Vários cards ao mesmo tempo:** o workflow **onda** (ou a ferramenta `iniciarOnda` do Chief of Staff) roda de 1 a 5 cards independentes juntos, cada um com sandbox, branch e pull request próprios. `SUPER_FACTORY_PARALELISMO` (padrão 3) limita quantos rodam simultâneos, porque cada card abre um container e chama o modelo. Um card que para não derruba os outros. Em ensaio, 3 cards levam o tempo de 1.
-- **Dentro de um card** as fases seguem em ordem de propósito: clonar, instalar, escrever, testar, enviar e abrir o PR dependem uma da anterior.
-- **Agentes:** leituras independentes do mesmo passo rodam juntas (até 4). `compararBranchesGithub` resume até 20 branches numa chamada, no lugar de ler branch por branch.
-- **Escrita no GitHub Project** é sempre uma por vez no mesmo Project, como o GitHub recomenda.
-- **Logs** do Studio mostram uma linha por fase do autônomo, por card da onda e por chamada das ferramentas de GitHub.
-
-## Uma decisão humana: o merge
-
-Tudo antes do merge os agentes fazem sozinhos, sem pedir permissão a cada passo: ler, planejar, abrir issue, organizar o Project, implementar e testar no container. O que continua de uma pessoa é o merge. Merge, deploy e force-push seguem fora do alcance dos agentes, e nenhum papel aprova o gate.
-
-## Sugestões com Tab
-
-Para quem não é técnico e não sabe o que escrever, os campos do Studio mostram uma **sugestão em cinza** quando estão vazios, no estilo do Claude Code. Aperte **Tab** para preencher e **Esc** para ignorar. Com teclado não há dica na tela: o texto em cinza basta. No celular, que não tem Tab, aparece um botão sobre o campo e tocar nele preenche.
-
-- **Formulário dos workflows:** título, descrição e critérios vêm de exemplos prontos, escritos para passar na triagem da Factory. O repositório, o branch de trabalho e o aprovador repetem o que a própria pessoa usou da última vez. O branch base sugere `main`.
-- **Chat de cada agente:** a sugestão é a próxima pergunta útil para aquele papel, e muda a cada mensagem enviada.
-- **Nada é inventado:** repositório e aprovador só sugerem o que você já digitou. A nota de aprovação de um gate **nunca** é sugerida, para ninguém aprovar sem ler.
-- **O histórico fica no navegador** (`localStorage`), não vai para o servidor.
-
-## Ferramentas (MCP) que o time instala
-
-As chaves ficam em **Settings → Chaves e acessos**. As ferramentas (MCP) abrem pelo botão **+** das páginas **Tools** e **MCP Servers** do Studio. Cada pessoa conecta aos agentes da Factory as ferramentas que ajudam no processo, sem SSH e sem mexer em arquivo.
-
-- **Catálogo curado, versões fixas:** Microsoft Learn (documentação do Azure, sem chave), Context7 (documentação de bibliotecas), GitHub (leitura de repositórios, issues e PRs), Azure DevOps (work items, repositórios, builds) e Raciocínio em etapas.
-- **Servidor remoto:** qualquer MCP publicado em https. A URL precisa ser pública; endereço da rede interna, IP e nome interno são recusados. O token vai criptografado, nunca na URL.
-- **Comando no servidor:** só para o administrador, com `SUPER_FACTORY_MCP_COMANDO=1` no `.env`. Rodar um comando é executar código dentro da Factory, por isso a tela não liga isso sozinha.
-- **Testa antes de gravar:** a Factory conecta, lista as ferramentas e só então instala. Credencial recusada nunca instala. Na primeira vez, o `npx` baixa o pacote e pode levar até um minuto.
-- **Cada ferramenta liga e desliga** na própria tela, com um selo: *somente leitura*, *pede aprovação* ou *bloqueada*.
-
-O que protege o processo:
-
-- **Merge, deploy, publicação e aprovação nunca chegam a um agente.** Uma ferramenta com esse jeito, como `merge_pull_request`, fica bloqueada mesmo que o servidor a ofereça.
-- **O que não é declarado somente leitura pede a sua aprovação a cada uso.** O papel Security só recebe ferramentas de leitura.
-- **As chaves da Factory não vazam para o MCP.** O subprocesso só enxerga as variáveis dele; o token do MCP mora no cofre criptografado e só sai dali para conectar.
-- **Um MCP quebrado não derruba nada.** Cada um tem a própria conexão; o que falha fica de fora, com o motivo na tela.
-
-Vale para os agentes do Studio. O modo autônomo continua só com o sandbox: o agente construtor não usa MCP.
-
-### Colar a configuração do Cursor, do Claude Desktop ou do VS Code
-
-No botão **+** (Tools ou MCP Servers), a seção **Colar configuração** aceita o trecho do `mcp.json`:
-
-```json
-{ "mcpServers": { "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp"] } } }
-```
-
-Clique em **Analisar** para ver o que será instalado e em **Instalar** para confirmar. A Factory não confia no que foi colado:
-
-- **Reconhecido** (hoje: Context7 e Raciocínio em etapas) vira o item do catálogo, na versão revisada e com o endereço oficial. O `npx` colado não roda.
-- **URL** (`url` e `headers`) passa pela checagem de rede: só https e só endereço público.
-- **Comando** fora do catálogo só com `SUPER_FACTORY_MCP_COMANDO=1`, como antes. Sem versão fixa (`@1.2.3`), a tela avisa.
-- Valores de `env` e de `headers` vão para o cofre criptografado e nunca voltam à tela nem ao arquivo de definição.
-- `autoApprove` não existe aqui: ferramenta que altera algo continua pedindo a sua aprovação. Merge e deploy seguem bloqueados.
-- Até 5 servidores por colagem; aceita `mcpServers`, `servers`, o servidor solto e vírgula sobrando.
-
+---
 
 ## Por dentro
 
@@ -449,7 +526,8 @@ Clique em **Analisar** para ver o que será instalado e em **Instalar** para con
 | Caminho | O que guarda |
 | --- | --- |
 | `src/super-factory/` | Landing, marca SF, agentes, ferramentas e o workflow `sdlc` |
-| `src/factory/` | Quadro, gates, trilha, guardas de segredo, GitHub e Azure DevOps |
+| `src/factory/` | Quadro, gates, trilha, guardas de segredo, GitHub (leitura, escrita e gatilho de issues), Azure DevOps e métricas |
+| `deploy/` | Instalador, atualizador, login e a imagem do sandbox com Python |
 | `src/scripts/check.ts` | Checagem do ciclo, sem shell e sem suíte de produto |
 | `src/scripts/e2e.ts` | Teste de ponta a ponta, pela API e no navegador |
 | `factory.json` | Manifesto: estágios, o gate do merge, oito papéis, evidência |
@@ -472,7 +550,7 @@ O `npm run e2e` precisa da porta 4721 livre (ou `E2E_REUSE=1` para usar o servid
 
 Copie `.env.example` para `.env` só na sua máquina. O `.env` não entra no repositório.
 
-- **GitHub.** Sem `GITHUB_TOKEN`, listar ou abrir issue devolve a amostra e a nota `Simulado`. Com o token, a chamada vai para `https://api.github.com`. No `sdlc`, o pull request sai como rascunho; no `autonomo`, sai pronto para revisão. Não há endpoint de merge. Para o modo autônomo, use um *fine-grained token* só nos repositórios que a Factory pode tocar, com **Contents: Read and write**, **Pull requests: Read and write** e **Issues: Read and write**.
+- **GitHub.** Sem `GITHUB_TOKEN`, listar ou abrir issue devolve a amostra e a nota `Simulado`. Com o token, a chamada vai para `https://api.github.com`. No `sdlc`, o pull request sai como rascunho; no `autonomo`, sai pronto para revisão. Não há endpoint de merge. Para o modo autônomo, use um *fine-grained token* só nos repositórios que a Factory pode tocar, com **Contents: Read and write**, **Pull requests: Read and write** e **Issues: Read and write**. O token é **um só para todas as funções**: as permissões de cada uma (leitura, escrita em issues, CI, alertas de segurança, proteção de branch, Project) estão na tabela de [docs/ROADMAP-INTEGRACOES.md](docs/ROADMAP-INTEGRACOES.md), e `verificarTokenGithub` diz o que falta.
 - **Azure DevOps.** Sem `AZURE_DEVOPS_ORG` e `AZURE_DEVOPS_PAT` juntos, fica simulado. Com os dois, work items e pull requests usam `https://dev.azure.com`. O repositório vai no campo do ciclo como `projeto/repositorio`. Para o modo autônomo, crie o PAT só na organização, com validade curta, e os escopos **Code: Read & write** (clone, push e pull request) e **Work Items: Read & write**.
 - **Anthropic.** `ANTHROPIC_API_KEY` é obrigatória no modo autônomo: é o agente construtor que escreve o código. `SUPER_FACTORY_BUILDER_MODEL` troca o modelo dele.
 - **Implementador neutro.** O padrão é o agente construtor da Factory (`SUPER_FACTORY_IMPLEMENTADOR=agente`). Com `SUPER_FACTORY_IMPLEMENTADOR=comando` e `SUPER_FACTORY_IMPLEMENTADOR_COMANDO`, quem escreve o código é uma CLI de agente externa, dentro do container do card. O pedido (título, descrição, critérios e a falha da tentativa anterior) fica no arquivo `$SF_PEDIDO`, fora do repositório: o texto do card nunca entra no comando de shell. `SUPER_FACTORY_IMPLEMENTADOR_ENV` lista as variáveis que vão para o container (nunca `GITHUB_TOKEN`, `AZURE_DEVOPS_PAT`, `SUPER_FACTORY_*` nem `FACTORY_*`). A imagem do sandbox precisa ter a CLI e a rede precisa alcançar o serviço dela. Só o operador escolhe, pelo `.env`: o chat e os agentes não. Nada muda no resto: testes no sandbox, PR, revisão e merge humano. O gasto de tokens de um agente externo não é medido. Configuração inválida para o card com a mensagem do que corrigir. Esta troca **não foi testada com uma CLI real** nesta VPS: os testes usam um sandbox de mentira.
@@ -499,7 +577,7 @@ O Studio mostra o servidor MCP `super-factory` e a Factory, com um modo para cad
 
 Em volta do modelo, cada agente tem camadas que valem em toda chamada, escritas no código e não no prompt:
 
-- **Aprovação nas escritas externas.** `criarIssueGithub` e `criarWorkItemAzure` param no chat e só rodam quando uma pessoa aprova. Por isso ficam fora do servidor MCP, que não tem como pedir essa aprovação.
+- **Escrita externa com travas no código, sem aprovação a cada uso.** Só o merge é decisão humana, então ferramentas como `criarIssueGithub`, `comentarIssueGithub`, `editarIssueGithub` e `gerenciarLabelsGithub` rodam quando o agente as chama a pedido da pessoa. Em troca, validam tudo antes de falar com a rede, nunca repetem uma escrita, não duplicam (milestone, label, campo, comentário), conferem a resposta do GitHub e redigem segredo e @menção. Ficam fora do servidor MCP, que não passa pelo login do Studio.
 - **Falhas transitórias.** A chamada ao modelo tenta de novo até 2 vezes. O modelo é um só, para o Studio continuar mostrando o seletor de provedor e modelo no chat. Leituras no GitHub e no Azure DevOps repetem em erro de rede, 429 ou 5xx, respeitando o `Retry-After` até 5 s. Escritas tentam uma vez só, para não abrir a mesma issue duas vezes.
 - **Contexto.** Na entrada, dados pessoais e segredos saem do texto e o histórico é cortado em 32 mil tokens.
 - **Guarda na saída.** Se um agente escrever que fez merge, deploy ou aprovou um gate, a frase é trocada por um aviso. Negações como "nenhum merge foi feito" passam intactas.
