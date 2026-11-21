@@ -44,6 +44,7 @@ export function depsDeEnsaio(): DepsAutonomo {
       return { resumo: 'Ensaio: nenhum código de verdade foi escrito.' }
     },
     credenciais: { githubToken: 'ensaio', azureOrg: 'ensaio', azurePat: 'ensaio' },
+    comentarNaDemanda: false,
     github: {
       token: 'ensaio',
       fetch: (async () => {

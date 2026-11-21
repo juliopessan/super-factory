@@ -4,10 +4,13 @@
 
 import { criarRascunhoAzure, type AzureDeps } from './azure.ts'
 import { criarRascunhoGithub, type GithubDeps } from './github.ts'
+import { comentarIssueGithub } from './github-escrita.ts'
+import { chaveDaIssue } from './gatilhos.ts'
 import { dividirAzure, dividirRepositorio, segmento, validarBranch, varrerSegredos } from './guards.ts'
 import { especificar, iniciar, parar } from './pipeline.ts'
 import { PASTA_DO_REPOSITORIO, type Execucao, type Executor } from './sandbox.ts'
-import type { Estado, PedidoBruto } from './schemas.ts'
+import type { Card, Estado, PedidoBruto } from './schemas.ts'
+import { persistir } from './store.ts'
 
 export type Credenciais = {
   githubToken?: string
@@ -37,6 +40,8 @@ export type DepsAutonomo = {
   github?: GithubDeps
   azure?: AzureDeps
   tentativas?: number
+  /** Comenta na issue de origem quando o PR abre. O ensaio desliga: nada pode tocar um repositório de verdade. Padrão: liga. */
+  comentarNaDemanda?: boolean
 }
 
 const AUTOR = 'Super Factory <factory@super-factory.local>'
@@ -326,6 +331,14 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         '',
         estado.card.descricao,
         '',
+        ...(issueDeOrigem(estado.card)
+          ? [
+              '### Demanda de origem',
+              // Com os testes verdes e o PR direto na branch principal, o merge (de uma pessoa) fecha a issue. Em rascunho ou empilhado, só referencia.
+              passou && !contexto.pilha ? `Closes #${issueDeOrigem(estado.card)}` : `Refs #${issueDeOrigem(estado.card)}`,
+              '',
+            ]
+          : []),
         '### Critérios de aceite',
         ...estado.card.criterios.map((criterio) => `- [ ] ${criterio}`),
         '',
@@ -363,6 +376,18 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       }
       if (!pr.ok) return { ...contexto, estado: parar(estado, pr.nota) }
       estado = anotarAuto(estado, 'human-review', `${pr.nota} Aguardando revisão humana para o merge.`)
+      // Avisa na issue de origem, uma vez só (comentário com marcador). Falhar aqui não derruba o card: o PR já está aberto.
+      const origem = issueDeOrigem(estado.card)
+      if (origem && pr.modo === 'live' && pr.url && deps.comentarNaDemanda !== false) {
+        const aviso = await comentarIssueGithub(
+          estado.card.repositorio,
+          origem,
+          [`A Super Factory abriu o pull request ${pr.url} para esta issue.`, '', `- Testes no sandbox: **${check.resultado}** (\`${check.comando ?? 'nenhum'}\`).`, `- ${passou ? 'Pronto para revisão.' : 'Aberto como rascunho: os testes não passaram.'}`, '- O merge é de uma pessoa.'].join('\n'),
+          deps.github,
+          { marcador: `pr:${pr.url}` },
+        )
+        estado = anotarAuto(estado, 'human-review', aviso.ok ? (aviso.jaExistia ? `A issue #${origem} já tinha o aviso deste PR.` : `Avisei na issue #${origem}.`) : `Não consegui avisar na issue #${origem}: ${aviso.nota}`, 'reported')
+      }
       return { ...contexto, estado: { ...estado, desfecho: 'em-andamento' } }
     },
   },
@@ -385,13 +410,27 @@ export function marcarEnsaio(estado: Estado): Estado {
   return anotarAuto({ ...estado, entrega }, estado.estagio, 'ENSAIO: percurso simulado, com sandbox de mentira. Nenhum repositório foi tocado.', 'reported')
 }
 
-export function contextoInicial(pedido: PedidoBruto): ContextoAutonomo {
-  return { estado: iniciar(pedido), branch: null, verificacao: null, estatistica: null }
+/** Número da issue de origem do card (GitHub), a partir da chave que o gatilho e a onda gravam em itemExterno. Só vale no mesmo repositório do card. */
+export function issueDeOrigem(card: Pick<Card, 'itemExterno' | 'repositorio' | 'provedor'>): number | null {
+  if (card.provedor !== 'github' || !card.itemExterno) return null
+  const achado = /^issue:([A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100})#(\d{1,7})$/.exec(card.itemExterno)
+  if (!achado || (achado[1] as string).toLowerCase() !== card.repositorio.toLowerCase()) return null
+  return Number(achado[2])
+}
+
+/** Liga o card à issue de onde veio o pedido: o PR passa a referenciá-la e a Factory avisa nela. */
+function ligarAIssue(estado: Estado, issue?: number): Estado {
+  if (!issue || !Number.isInteger(issue) || issue < 1 || estado.card.provedor !== 'github') return estado
+  return persistir({ ...estado, card: { ...estado.card, itemExterno: chaveDaIssue(estado.card.repositorio, issue) } })
+}
+
+export function contextoInicial(pedido: PedidoBruto, issue?: number): ContextoAutonomo {
+  return { estado: ligarAIssue(iniciar(pedido), issue), branch: null, verificacao: null, estatistica: null }
 }
 
 /** Leva um pedido do card ao pull request. Para no primeiro bloqueio e explica. */
-export async function executarAutonomo(pedido: PedidoBruto, deps: DepsAutonomo, opcoes: { pilha?: string } = {}): Promise<ResultadoAutonomo> {
-  let contexto: ContextoAutonomo = { ...contextoInicial(pedido), pilha: opcoes.pilha ?? null }
+export async function executarAutonomo(pedido: PedidoBruto, deps: DepsAutonomo, opcoes: { pilha?: string; issue?: number } = {}): Promise<ResultadoAutonomo> {
+  let contexto: ContextoAutonomo = { ...contextoInicial(pedido, opcoes.issue), pilha: opcoes.pilha ?? null }
   const sessao: SessaoAutonomo = { executor: null }
   try {
     for (const fase of FASES_AUTONOMO) {
