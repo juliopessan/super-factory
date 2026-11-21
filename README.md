@@ -29,7 +29,7 @@ Para quem prefere aprovar a entrega antes de abrir o pull request, o workflow `s
 | **Escolher** | Importa as issues que você etiquetou e cria um card para cada uma. Sem critério observável, o card nasce bloqueado, com o motivo. | [Gatilho de issues](#gatilho-de-issues) |
 | **Organizar** | Cria milestone, atribui responsável, mexe em labels, cria o Project e seus campos (Prioridade, Estimativa, Prazo). Comenta e fecha issues quando você pede. | [Gestão do GitHub](#gestão-do-github) |
 | **Conferir** | Lê issues, pull requests, o CI (com o passo que falhou e o fim do log), a proteção de branch, os alertas de segurança e o alcance do token. | [Ler o GitHub](#ler-o-github-um-token-só-para-tudo) |
-| **Implementar** | Um container por card (Node ou Python), os testes do seu repositório, épicos em PRs empilhados, até 5 cards ao mesmo tempo. | [Modo autônomo](#modo-autônomo-do-pedido-ao-pull-request) |
+| **Implementar** | Um container por card (Node ou Python), baseline, testes, lint, typecheck e build do seu repositório, vermelho→verde em bug, épicos em PRs empilhados, até 5 cards ao mesmo tempo. | [Modo autônomo](#modo-autônomo-do-pedido-ao-pull-request) |
 | **Entregar** | O PR referencia a issue de origem e a Factory avisa nela. O PR Review comenta o PR: só comenta, nunca aprova. | [O ciclo fechado](#da-issue-ao-pull-request-o-ciclo-fechado) · [Revisão](#revisão-automática-de-pull-request) |
 | **Decidir** | **Merge, deploy, fechar ou aprovar PR: uma pessoa.** | [O que a Factory se recusa a fazer](#o-que-a-factory-se-recusa-a-fazer) |
 | **Acompanhar** | Quadro por coluna, métricas de entrega, time animado e o motivo de cada parada. | [Acompanhar o trabalho](#acompanhar-o-trabalho) |
@@ -256,6 +256,19 @@ No Studio, em **Workflows → autonomo**, o canvas acende uma fase de cada vez: 
 Se o card parar, o nó da fase fica vermelho com o motivo, e as fases seguintes não começam. O estado do card continua salvo no quadro.
 
 Para conhecer o fluxo sem tocar repositório, marque **ensaio** no formulário: as mesmas fases rodam com um sandbox de mentira, sem rede e sem chave.
+
+### Verificação de verdade
+
+Confiança em agente vem de verificação, não de prompt. Além de rodar o teste do repositório, o modo autônomo observa:
+
+- **Baseline.** Antes de mudar qualquer coisa, a Factory roda os testes, o lint, o typecheck e o build. Assim uma falha que já existia não é culpa do card, e uma regressão não passa por falha antiga.
+- **Lint, typecheck e build como checks separados** (a partir dos scripts do `package.json`, de `go vet`/`go build` e de `dotnet build`), cada um com a evidência. Uma regressão deixa o PR em rascunho, com o motivo; uma falha que já existia no baseline vira só uma nota.
+- **Vermelho→verde, em card de bug.** O teste que a mudança trouxe precisa **falhar sem a correção e passar com ela**: a Factory guarda o código da correção (stash), roda os testes de novo, devolve o código e confere que tudo voltou. Se o teste passa sem a correção, ele não prova o conserto e o PR sai em rascunho. Bug sem teste novo vira aviso no PR.
+- **Convenções do repositório.** `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md` e as regras do Cursor, lidos do repositório clonado (com segredo redigido), entram no pedido do construtor junto com as regras do cliente. São texto do projeto: não mudam as regras de segurança do construtor.
+- **Trilha e ancoragem.** O que o construtor leu, escreveu e rodou fica no card (redigido). A Factory compara isso com o que ele afirma e deixa notas no PR (**Pontos de atenção**): escreveu sem ler nada, citou um arquivo que nunca abriu, disse que os testes passam sem tê-los rodado. Só nota: quem decide é a pessoa.
+- **Revisor com modelo de mais raciocínio.** Um juiz do mesmo modelo que escreveu o código tende a concordar com ele. O PR Review usa `claude-opus-5-5` quando há `ANTHROPIC_API_KEY` (`SUPER_FACTORY_REVIEWER_MODEL` troca; `mesmo` usa o do chat).
+
+Tudo isso custa tempo de execução: `SUPER_FACTORY_VERIFICACAO=minima` volta ao teste único para suítes muito longas. Plano e o que vem depois (navegador no sandbox, mapa de funcionalidades, evals): [docs/ROADMAP-VERIFICACAO.md](docs/ROADMAP-VERIFICACAO.md).
 
 ### Gatilho de issues
 

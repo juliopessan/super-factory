@@ -26,6 +26,8 @@ export function depsDoAmbiente(): DepsAutonomo {
   return {
     criarExecutor: (cardId) => criarExecutorDocker({ cardId }),
     implementador: config.id === 'comando' ? implementadorDeComando(config) : implementadorComAgente,
+    // No ambiente real a verificação é completa. SUPER_FACTORY_VERIFICACAO=minima volta ao teste único, para suítes muito longas.
+    verificacaoCompleta: process.env.SUPER_FACTORY_VERIFICACAO?.trim().toLowerCase() !== 'minima',
     credenciais: {
       githubToken: process.env.GITHUB_TOKEN,
       azureOrg: process.env.AZURE_DEVOPS_ORG,
@@ -48,7 +50,15 @@ const contextoSchema = z.object({
   ensaio: z.boolean(),
   estado: estadoSchema,
   branch: z.string().nullable(),
-  verificacao: z.object({ instalar: z.string().nullable(), verificar: z.string().nullable(), origem: z.string() }).nullable(),
+  verificacao: z
+    .object({
+      instalar: z.string().nullable(),
+      verificar: z.string().nullable(),
+      origem: z.string(),
+      extras: z.array(z.object({ nome: z.enum(['lint', 'typecheck', 'build']), comando: z.string() })).optional(),
+    })
+    .nullable(),
+  convencoes: z.string().nullable().optional(),
   estatistica: z.string().nullable(),
   pilha: z.string().nullable().optional(),
 })

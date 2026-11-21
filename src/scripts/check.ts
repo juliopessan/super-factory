@@ -516,7 +516,8 @@ assert.equal(leituraGithub.ok, true)
 assert.equal(chamadasGithub, 2)
 
 const fonteAgentes = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'super-factory', 'agents', 'factory.ts'), 'utf8')
-assert.match(fonteAgentes, /model: \(\) => modeloConfigurado\(\),/, 'modelo único: o Studio mostra o seletor de provedor')
+assert.match(fonteAgentes, /model: opcoes\.modelo \?\? \(\(\) => modeloConfigurado\(\)\),/, 'modelo único (o Studio mostra o seletor de provedor) para todos os agentes que não pedem outro')
+assert.equal((fonteAgentes.match(/modelo: \(\) => modeloDoRevisor\(\)/g) ?? []).length, 1, 'só o revisor tem modelo próprio')
 assert.match(fonteAgentes, /maxRetries: 2,/)
 
 const { guardarTexto, guardaDeSaida, AVISO_SAIDA } = await import('../super-factory/processors/guarda-saida.ts')
@@ -3353,6 +3354,178 @@ assert.equal(
   // o ensaio nunca comenta numa issue de verdade
   const { depsDeEnsaio } = await import('../super-factory/workflows/ensaio.ts')
   assert.equal(depsDeEnsaio().comentarNaDemanda, false)
+}
+
+// --- Lote A: baseline, lint/typecheck/build, vermelho→verde, convenções, trilha do construtor e revisor com modelo próprio
+{
+  const v = await import('../factory/verificacao.ts')
+  const { acoesDasChamadas } = await import('../super-factory/agents/construtor.ts')
+  const { modeloDoRevisor } = await import('../super-factory/model.ts')
+  const { depsDoAmbiente } = await import('../super-factory/workflows/autonomo.ts')
+
+  // extras descobertos
+  assert.deepEqual(v.extrasDoNode({ test: 'x', lint: 'eslint .', 'type-check': 'tsc', build: 'vite build' }, 'npm', 'npm run test'), [{ nome: 'lint', comando: 'npm run lint' }, { nome: 'typecheck', comando: 'npm run type-check' }, { nome: 'build', comando: 'npm run build' }])
+  assert.deepEqual(v.extrasDoNode({ lint: 'x' }, 'pnpm', 'pnpm run lint'), [], 'o comando que já é o de teste não se repete')
+  assert.deepEqual(v.extrasDoNode({ test: 'x' }, 'npm', 'npm run test'), [])
+  const descoberta = await descobrirVerificacao(criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'package.json\npackage-lock.json' } : c === 'cat package.json' ? { saida: JSON.stringify({ scripts: { test: 'node --test', lint: 'eslint .', build: 'tsc' } }) } : {})))
+  assert.deepEqual(descoberta.extras?.map((e) => e.nome), ['lint', 'build'])
+  assert.deepEqual((await descobrirVerificacao(criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'go.mod' } : {})))).extras?.map((e) => e.comando), ['go vet ./...', 'go build ./...'])
+  assert.deepEqual((await descobrirVerificacao(criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'App.sln' } : {})))).extras?.map((e) => e.comando), ['dotnet build --no-restore'])
+
+  // classificação de arquivos
+  assert.deepEqual(v.classificarArquivos(['src/a.ts', 'src/a.test.ts', 'tests/x.py', 'pkg/foo_test.go', 'README.md', 'package-lock.json', 'app/Foo.cs', 'app/FooTests.cs', 'test_api.py', 'src/__tests__/b.js', 'yarn.lock']), { testes: ['src/a.test.ts', 'tests/x.py', 'pkg/foo_test.go', 'app/FooTests.cs', 'test_api.py', 'src/__tests__/b.js'], fontes: ['src/a.ts', 'app/Foo.cs'] }, 'documentação e lockfile não são código')
+  for (const ruim of ['../x', '/etc/passwd', "a'b", 'a;b', 'a$(x)', '', 'a`b', 'a\nb']) assert.equal(v.caminhoDeArquivoSeguro(ruim), false, JSON.stringify(ruim))
+  assert.equal(v.caminhoDeArquivoSeguro('src/meu arquivo.ts'), true)
+
+  // veredito: regressão x falha antiga
+  const ck = (nome: string, resultado: 'PASS' | 'FAIL' | 'NOT_RUN') => ({ nome, resultado, comando: 'x', evidencia: 'e' })
+  assert.deepEqual(v.veredito({ checks: [ck('testes-no-sandbox', 'PASS')] }), { passou: true, motivos: [], notas: [] })
+  assert.deepEqual(v.veredito({ checks: [ck('testes-no-sandbox', 'FAIL')] }).motivos, ['os testes não passaram'])
+  assert.equal(v.veredito({ checks: [] }).passou, false, 'sem teste rodado não é "pronto"')
+  assert.deepEqual(v.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('lint', 'FAIL'), ck('baseline:lint', 'PASS')] }).motivos, ['lint falhou e não falhava antes da mudança'], 'regressão de lint')
+  const antigo = v.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('lint', 'FAIL'), ck('baseline:lint', 'FAIL')] })
+  assert.equal(antigo.passou, true, 'lint que já falhava não derruba o card')
+  assert.match(antigo.notas[0] ?? '', /já falhava antes da mudança/)
+  assert.equal(v.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('build', 'FAIL')] }).passou, false, 'sem baseline, a falha conta')
+  assert.match(v.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('vermelho-verde', 'FAIL')] }).motivos[0] ?? '', /não prova o conserto/)
+  assert.equal(v.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('vermelho-verde', 'NOT_RUN')] }).passou, true, 'bug sem teste novo é aviso, não bloqueio')
+  assert.match(v.veredito({ checks: [ck('testes-no-sandbox', 'PASS'), ck('baseline:testes', 'FAIL')] }).notas[0] ?? '', /já falhava.*agora passa/)
+
+  // auditoria do construtor
+  const acao = (ferramenta: string, alvo: string, tentativa = 1) => ({ tentativa, ferramenta, alvo })
+  assert.deepEqual(v.auditarAcoes('mudei tudo', []), [], 'sem trilha (ex.: CLI externa) não há o que auditar')
+  assert.match(v.auditarAcoes('ok', [acao('escreverArquivo', 'src/a.ts')])[0]?.texto ?? '', /escreveu arquivos sem ler/)
+  assert.equal(v.auditarAcoes('ok', [acao('lerArquivo', 'src/a.ts'), acao('escreverArquivo', 'src/a.ts')]).length, 0)
+  const cita = v.auditarAcoes('Corrigi src/filtro.ts e src/outro/util.ts', [acao('lerArquivo', 'src/filtro.ts'), acao('escreverArquivo', 'src/filtro.ts')])
+  assert.match(cita[0]?.texto ?? '', /cita `src\/outro\/util\.ts`/)
+  assert.ok(!(cita[0]?.texto ?? '').includes('src/filtro.ts'), 'arquivo que ele leu não é acusado')
+  assert.match(v.auditarAcoes('Os testes passaram.', [acao('lerArquivo', 'a.ts')])[0]?.texto ?? '', /não rodou nenhum comando/)
+  assert.equal(v.auditarAcoes('Os testes passaram.', [acao('lerArquivo', 'a.ts'), acao('executarComando', 'npm test')]).length, 0)
+  assert.ok(v.auditarAcoes('x', [acao('escreverArquivo', 'a.ts')]).every((a) => a.severidade === 'note' && a.id.startsWith('ANC-')), 'só nota: quem decide é a pessoa')
+  // a trilha vem das chamadas de ferramenta, com segredo redigido
+  const trilha = acoesDasChamadas([
+    { payload: { toolName: 'lerArquivo', args: { caminho: 'src/a.ts' } } },
+    { payload: { toolName: 'executarComando', args: { comando: `curl -H "Authorization: ${TOKEN_TESTE}"   x` } } },
+    { payload: { toolName: 'outraCoisa', args: {} } },
+    {},
+  ])
+  assert.deepEqual(trilha.map((a) => a.ferramenta), ['lerArquivo', 'executarComando'], 'só as ferramentas conhecidas')
+  assert.ok(!JSON.stringify(trilha).includes(TOKEN_TESTE), 'segredo no comando sai redigido')
+
+  // convenções do repositório
+  assert.equal(await v.lerConvencoes(criarExecutorFalso(() => ({ saida: '' }))), null)
+  const conv = await v.lerConvencoes(criarExecutorFalso((c) => (c.startsWith('for f in AGENTS.md') ? { saida: `### AGENTS.md\nUse tabs. Token: ${TOKEN_TESTE}\n### CONTRIBUTING.md\nRode npm test.` } : {})))
+  assert.match(conv ?? '', /### AGENTS\.md[\s\S]*### CONTRIBUTING\.md/)
+  assert.ok(!(conv ?? '').includes(TOKEN_TESTE), 'segredo nas convenções sai redigido')
+
+  // fases completas, com o sandbox simulado
+  const roteiro = (o: { testes?: number[]; lint?: number[]; build?: number[]; arquivos?: string; semCorrecao?: number; restaura?: boolean; convencoes?: string } = {}) => {
+    const base = roteiroNode()
+    const n = { teste: 0, lint: 0, build: 0, ls: 0 }
+    return (c: string) => {
+      if (c === 'cat package.json') return { saida: JSON.stringify({ scripts: { test: 'node --test', lint: 'eslint .', build: 'tsc' } }) }
+      if (c === 'npm run test') return { codigo: o.testes?.[n.teste++] ?? 0, saida: 'saída dos testes' }
+      if (c === 'npm run lint') return { codigo: o.lint?.[n.lint++] ?? 0, saida: 'saída do lint' }
+      if (c === 'npm run build') return { codigo: o.build?.[n.build++] ?? 0, saida: 'saída do build' }
+      if (c === 'git ls-files -m -o --exclude-standard') { n.ls++; return { saida: o.restaura === false && n.ls > 1 ? 'src/filtro.js' : (o.arquivos ?? 'src/filtro.js\ntests/filtro.test.js') } }
+      if (c.startsWith('git stash push')) return { codigo: o.semCorrecao ?? 1, saida: 'FAIL sem a correção' }
+      if (c.startsWith('for f in AGENTS.md')) return { saida: o.convencoes ?? '' }
+      return base(c)
+    }
+  }
+  const pedidoBug = { ...pedidoAuto, descricao: 'Bug: o filtro da API de pedidos falha quando a data vem só com o dia. Precisa aceitar intervalo com hora e recusar fim anterior ao início.' }
+  const rodarA = async (o: Parameters<typeof roteiro>[0], opcoes: { completa?: boolean; naoEBug?: boolean; implementador?: Parameters<typeof executarAutonomo>[1]['implementador'] } = {}) => {
+    const g = githubFalso()
+    const exec = criarExecutorFalso(roteiro(o))
+    const r = await executarAutonomo(opcoes.naoEBug ? pedidoAuto : pedidoBug, { criarExecutor: async () => exec, implementador: opcoes.implementador ?? (async () => ({ resumo: 'ok' })), credenciais: { githubToken: TOKEN_TESTE }, github: g.deps, verificacaoCompleta: opcoes.completa ?? true })
+    return { r, g, exec, corpo: String(g.chamadas[0]?.corpo.body ?? ''), rascunho: g.chamadas[0]?.corpo.draft }
+  }
+  const nomes = (r: Awaited<ReturnType<typeof executarAutonomo>>) => r.estado.checks.map((c) => `${c.nome}:${c.resultado}`)
+
+  // bug, tudo verde, vermelho→verde provado
+  let t = await rodarA({})
+  assert.equal(t.r.estado.parado, false, t.r.estado.motivo ?? '')
+  assert.equal(t.r.estado.card.rota, 'bug', 'o card do teste é um bug')
+  assert.deepEqual(nomes(t.r).sort(), ['baseline:build:PASS', 'baseline:lint:PASS', 'baseline:testes:PASS', 'build:PASS', 'lint:PASS', 'testes-no-sandbox:PASS', 'vermelho-verde:PASS'])
+  assert.equal(t.rascunho, false, 'tudo verde: pronto para revisão')
+  assert.match(t.corpo, /Vermelho→verde \(`npm run test`\) → \*\*PASS\*\*/)
+  assert.match(t.corpo, /lint \(`npm run lint`\) → \*\*PASS\*\* \(antes da mudança: PASS\)/)
+  assert.match(t.corpo, /Teste: `npm run test` → \*\*PASS\*\* \(antes da mudança: PASS\)/)
+  assert.ok(t.exec.comandos.some((c) => c.startsWith("git stash push -u -q -- 'src/filtro.js'") && c.includes('git stash pop -q')), 'tira só o código, guarda e devolve')
+  assert.ok(!t.exec.comandos.some((c) => c.includes('tests/filtro.test.js') && c.startsWith('git stash')), 'o teste fica no lugar')
+  assert.ok(t.r.estado.trilha.some((e) => /Baseline antes da mudança: testes PASS, lint PASS, build PASS/.test(e.resumo)))
+  // o teste novo passa mesmo sem a correção: não prova nada, vira rascunho
+  t = await rodarA({ semCorrecao: 0 })
+  assert.equal(t.r.estado.checks.find((c) => c.nome === 'vermelho-verde')?.resultado, 'FAIL')
+  assert.equal(t.rascunho, true)
+  assert.match(t.corpo, /Aberto como rascunho: o teste novo passa mesmo sem a correção/)
+  // bug sem teste novo: aviso, não bloqueio
+  t = await rodarA({ arquivos: 'src/filtro.js' })
+  assert.equal(t.r.estado.checks.find((c) => c.nome === 'vermelho-verde')?.resultado, 'NOT_RUN')
+  assert.equal(t.rascunho, false)
+  assert.match(t.corpo, /### Pontos de atenção\n- O card é um bug, mas nenhum teste foi adicionado/)
+  assert.ok(!t.exec.comandos.some((c) => c.startsWith('git stash push')), 'sem teste novo não há o que comparar')
+  // regressão de lint x lint que já falhava
+  t = await rodarA({ lint: [0, 1] })
+  assert.equal(t.rascunho, true)
+  assert.match(t.corpo, /lint falhou e não falhava antes da mudança/)
+  t = await rodarA({ lint: [1, 1] })
+  assert.equal(t.rascunho, false, 'lint que já falhava não bloqueia')
+  assert.match(t.corpo, /lint já falhava antes da mudança \(baseline\)/)
+  // suíte que já falhava e agora passa
+  t = await rodarA({ testes: [1, 0] })
+  assert.equal(t.rascunho, false)
+  assert.match(t.corpo, /a suíte já falhava antes da mudança e agora passa/)
+  // card que não é bug: roda baseline e extras, mas não há vermelho→verde
+  t = await rodarA({}, { naoEBug: true })
+  assert.equal(t.r.estado.card.rota, 'clear')
+  assert.ok(!nomes(t.r).some((n) => n.startsWith('vermelho-verde')) && !t.exec.comandos.some((c) => c.startsWith('git stash')), 'vermelho→verde é só para bug')
+  assert.equal(t.rascunho, false)
+  // verificação completa desligada: nada de baseline, extras ou vermelho→verde
+  t = await rodarA({ testes: [0] }, { completa: false })
+  assert.deepEqual(nomes(t.r), ['testes-no-sandbox:PASS'])
+  assert.ok(!t.exec.comandos.some((c) => c === 'npm run lint' || c.startsWith('git stash')))
+  // se o código não volta ao lugar, o card para em vez de seguir com um repositório pela metade
+  t = await rodarA({ restaura: false })
+  assert.equal(t.r.estado.parado, true)
+  assert.match(t.r.estado.motivo ?? '', /Não consegui devolver o código ao lugar/)
+  assert.equal(t.g.chamadas.length, 0, 'e nenhum PR é aberto')
+  // convenções chegam ao implementador; trilha e ancoragem entram no card e no PR
+  let recebidas: string | null | undefined
+  t = await rodarA({ convencoes: '### AGENTS.md\nUse tabs.' }, { implementador: async ({ convencoes }) => { recebidas = convencoes; return { resumo: 'Corrigi src/outro.ts. Os testes passaram.', acoes: [{ tentativa: 0, ferramenta: 'escreverArquivo', alvo: 'src/filtro.js' }] } } })
+  assert.match(recebidas ?? '', /Use tabs/)
+  assert.ok(t.r.estado.trilha.some((e) => /Convenções do repositório lidas \(1 arquivo/.test(e.resumo)))
+  assert.deepEqual(t.r.estado.acoes, [{ tentativa: 1, ferramenta: 'escreverArquivo', alvo: 'src/filtro.js' }], 'a trilha do construtor fica no card, com a tentativa')
+  assert.deepEqual(t.r.estado.achados.map((a) => a.id), ['ANC-1', 'ANC-2', 'ANC-3'])
+  assert.match(t.corpo, /### Pontos de atenção[\s\S]*escreveu arquivos sem ler[\s\S]*cita `src\/outro\.ts`[\s\S]*não rodou nenhum comando/)
+  assert.equal(t.rascunho, false, 'ancoragem é nota, não bloqueio')
+
+  // revisor com modelo próprio
+  const salvo = { m: process.env.SUPER_FACTORY_REVIEWER_MODEL, a: process.env.ANTHROPIC_API_KEY, c: process.env.SUPER_FACTORY_MODEL, o: process.env.OPENAI_API_KEY, g: process.env.GOOGLE_API_KEY }
+  try {
+    delete process.env.SUPER_FACTORY_MODEL; delete process.env.OPENAI_API_KEY; delete process.env.GOOGLE_API_KEY
+    delete process.env.SUPER_FACTORY_REVIEWER_MODEL
+    process.env.ANTHROPIC_API_KEY = 'chave-de-teste'
+    assert.equal(modeloDoRevisor(), 'anthropic/claude-opus-5-5', 'com a chave da Anthropic, o revisor usa um modelo de mais raciocínio que o do construtor')
+    process.env.SUPER_FACTORY_REVIEWER_MODEL = 'google/gemini-3.8-flash'
+    assert.equal(modeloDoRevisor(), 'google/gemini-3.8-flash', 'o operador escolhe')
+    process.env.SUPER_FACTORY_REVIEWER_MODEL = 'MESMO'
+    assert.equal(modeloDoRevisor(), 'anthropic/claude-sonnet-5-5', '"mesmo" usa o modelo do chat')
+    delete process.env.SUPER_FACTORY_REVIEWER_MODEL
+    delete process.env.ANTHROPIC_API_KEY
+    assert.notEqual(modeloDoRevisor(), 'anthropic/claude-opus-5-5', 'sem a chave da Anthropic, não escolhe um modelo que ela não alcança')
+    // no ambiente real a verificação é completa, com a saída de emergência
+    delete process.env.SUPER_FACTORY_VERIFICACAO
+    assert.equal(depsDoAmbiente().verificacaoCompleta, true)
+    process.env.SUPER_FACTORY_VERIFICACAO = 'minima'
+    assert.equal(depsDoAmbiente().verificacaoCompleta, false)
+    delete process.env.SUPER_FACTORY_VERIFICACAO
+  } finally {
+    for (const [k, valor] of [['SUPER_FACTORY_REVIEWER_MODEL', salvo.m], ['ANTHROPIC_API_KEY', salvo.a], ['SUPER_FACTORY_MODEL', salvo.c], ['OPENAI_API_KEY', salvo.o], ['GOOGLE_API_KEY', salvo.g]] as const) {
+      if (valor === undefined) delete process.env[k]
+      else process.env[k] = valor
+    }
+  }
 }
 
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
