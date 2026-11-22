@@ -10,14 +10,17 @@ export type FerramentasDoSandbox = Record<Ferramenta, boolean>
 
 /** Pergunta ao container quais ferramentas existem nele. Um comando só. */
 export async function inspecionarSandbox(executor: Executor): Promise<FerramentasDoSandbox> {
-  const r = await executor.executar(`for c in ${FERRAMENTAS.join(' ')}; do if command -v "$c" >/dev/null 2>&1; then echo "$c=1"; else echo "$c=0"; fi; done`, { timeoutMs: 30_000 })
+  // cwd: /workspace existe na imagem pura. O padrão do executor (a pasta do repositório) só existe depois do clone.
+  const r = await executor.executar(`for c in ${FERRAMENTAS.join(' ')}; do if command -v "$c" >/dev/null 2>&1; then echo "$c=1"; else echo "$c=0"; fi; done`, { timeoutMs: 30_000, cwd: '/workspace' })
   const achou = Object.fromEntries(r.saida.split('\n').map((l) => l.trim().split('=')).filter((p) => p.length === 2)) as Record<string, string>
+  // Saída que não é a esperada é falha da inspeção, não "a imagem não tem nada": nunca vira BLOCKED por engano.
+  if (!FERRAMENTAS.every((f) => achou[f] === '0' || achou[f] === '1')) throw new Error(`não consegui inspecionar o sandbox (código ${r.codigo}): ${`${r.saida}\n${r.erro}`.trim().slice(0, 160) || 'sem saída'}`)
   return Object.fromEntries(FERRAMENTAS.map((f) => [f, achou[f] === '1'])) as FerramentasDoSandbox
 }
 
 /** Versão do Python do container, "3.13" (maior.menor). Null se não houver Python. */
 export async function versaoDoPythonNoSandbox(executor: Executor): Promise<string | null> {
-  const r = await executor.executar(`python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true`, { timeoutMs: 30_000 })
+  const r = await executor.executar(`python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true`, { timeoutMs: 30_000, cwd: '/workspace' })
   return /^\d+\.\d+$/.test(r.saida.trim()) ? r.saida.trim() : null
 }
 

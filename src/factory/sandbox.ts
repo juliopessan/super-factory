@@ -104,15 +104,17 @@ export async function criarExecutorDocker(opcoes: OpcoesDocker): Promise<Executo
 export function criarExecutorFalso(
   roteiro: (comando: string) => Partial<Execucao> | undefined,
   segredos: string[] = [],
-): Executor & { comandos: string[]; envs: Array<Record<string, string> | undefined>; encerrado: boolean } {
+): Executor & { comandos: string[]; envs: Array<Record<string, string> | undefined>; cwds: Array<string | undefined>; encerrado: boolean } {
   const executor = {
     tipo: 'falso' as const,
     comandos: [] as string[],
     encerrado: false,
     envs: [] as Array<Record<string, string> | undefined>,
-    async executar(comando: string, opcoes?: { env?: Record<string, string> }) {
+    cwds: [] as Array<string | undefined>,
+    async executar(comando: string, opcoes?: { env?: Record<string, string>; cwd?: string }) {
       executor.comandos.push(comando)
       executor.envs.push(opcoes?.env)
+      executor.cwds.push(opcoes?.cwd)
       const parcial = roteiro(comando) ?? {}
       return {
         comando: limparSaida(comando, segredos),
