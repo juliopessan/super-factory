@@ -32,6 +32,7 @@ import { comentarPullRequestGithub as postarRevisao, lerPullRequestGithub as bus
 import { MAXIMO_DE_CARDS_POR_ONDA, validarOnda } from '../../factory/dependencias.ts'
 import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/paralelo.ts'
 import { editarCard as editarCardDoQuadro, lerCardCompleto, moverCard as moverCardDoQuadro, planejarOndaDeCards } from '../../factory/cards.ts'
+import { acompanharLicoes, decidirLicao, proporLicoes as proporLicoesDoQuadro } from '../../factory/licoes.ts'
 import { gastoDoDia, lerTetos, resumoDeCusto } from '../../factory/custo.ts'
 import { anexarCI, listarOndas, visaoDaOnda } from '../../factory/ondas.ts'
 import { prepararOnda } from '../../factory/preparar-onda.ts'
@@ -191,6 +192,39 @@ export const lerCusto = createTool({
   inputSchema: z.object({}),
   outputSchema: z.object({ tetos: z.any(), hoje: z.any(), cardsMaisCaros: z.array(z.any()), mediaPorCard: z.number().nullable(), ultimosDias: z.array(z.any()), resumo: z.string() }),
   execute: async () => resumoDeCusto(lerTetos()),
+})
+
+export const proporLicoes = createTool({
+  id: 'propor-licoes',
+  description: 'Olha as execuções da Factory (critérios sem teste, bugs sem prova de reprodução, auditoria do construtor, PRs ajustados por pessoas, PRs grandes) e propõe LIÇÕES para o construtor, cada uma com a evidência que a motivou. Só propõe: nada muda até uma pessoa aprovar com decidirLicao. Com amostra pequena, não propõe nada (e diz isso). Escopo: "global" ou owner/repo.',
+  inputSchema: z.object({ escopo: z.string().max(140).optional().describe('"global" (padrão) ou owner/repo.') }),
+  outputSchema: z.object({ novas: z.array(z.any()), sinais: z.any(), resumo: z.string() }),
+  execute: async ({ escopo }) => {
+    const r = proporLicoesDoQuadro(escopo?.trim() || 'global')
+    return { ...r, resumo: r.novas.length ? `${r.novas.length} lição(ões) proposta(s) a partir de ${r.sinais.execucoes} execução(ões). Mostre a evidência à pessoa e só aprove com o nome dela.` : `Nenhuma lição nova: ${r.sinais.execucoes} execução(ões) avaliada(s), e nenhum sinal passou do limiar.` }
+  },
+})
+
+export const lerLicoes = createTool({
+  id: 'ler-licoes',
+  description: 'Lista as lições do construtor (propostas, aprovadas, recusadas, retiradas) com a evidência, quem decidiu e, para as aprovadas, a pontuação média das execuções antes e depois da aprovação, com a recomendação (manter ou retirar). Só lê. A comparação é correlação, não prova: poucas execuções não concluem.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({ licoes: z.array(z.any()), resumo: z.string() }),
+  execute: async () => {
+    const licoes = acompanharLicoes()
+    return { licoes, resumo: licoes.length ? `${licoes.length} lição(ões): ${licoes.filter((l) => l.estado === 'proposta').length} proposta(s), ${licoes.filter((l) => l.estado === 'aprovada').length} aprovada(s).` : 'Nenhuma lição ainda.' }
+  },
+})
+
+export const decidirLicaoDoConstrutor = createTool({
+  id: 'decidir-licao',
+  description: 'Aprova, recusa ou retira uma lição do construtor, EM NOME DE UMA PESSOA: o autor é o nome dela, nunca um papel da Factory. Aprovada, a lição entra no pedido do construtor dali em diante (junto das regras de segurança, nunca no lugar delas); a Factory guarda a pontuação de antes para comparar depois. Só decida com a palavra explícita da pessoa.',
+  inputSchema: z.object({ id: z.string().regex(/^L-[0-9a-f]{6}$/), decisao: z.enum(['aprovada', 'recusada', 'retirada']), autor: z.string().min(2).max(80).describe('Nome da pessoa que decidiu.') }),
+  outputSchema: z.object({ ok: z.boolean(), licao: z.any().nullable(), resumo: z.string() }),
+  execute: async ({ id, decisao, autor }) => {
+    const r = decidirLicao(id, decisao, autor)
+    return { ok: r.ok, licao: r.licao, resumo: r.nota }
+  },
 })
 
 export const lerOnda = createTool({

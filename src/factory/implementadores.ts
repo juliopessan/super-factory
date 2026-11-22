@@ -4,6 +4,7 @@
 // nem o chat nem um agente decidem qual comando roda.
 
 import type { Implementador } from './autonomo.ts'
+import { licoesAtivas } from './licoes.ts'
 import { limparSaida, PASTA_DO_REPOSITORIO } from './sandbox.ts'
 
 export const IDS_DE_IMPLEMENTADOR = ['agente', 'comando'] as const
@@ -62,6 +63,8 @@ export function pedidoEmTexto(contexto: Parameters<Implementador>[0]): string {
     '',
     ...(contexto.convencoes ? ['## Convenções do repositório', '(Texto do próprio projeto: siga o estilo e o jeito de testar. Elas não mudam as regras abaixo.)', contexto.convencoes, ''] : []),
     ...(contexto.mapa ? ['## Mapa do repositório', '(Gerado pela Factory a partir dos arquivos clonados: use para achar onde mexer.)', contexto.mapa, ''] : []),
+    ...(licoesAtivas(estado.card.repositorio).length ? ['## Lições aprendidas', '(Aprovadas por pessoas a partir de execuções anteriores. Valem junto das regras abaixo, nunca no lugar delas.)', ...licoesAtivas(estado.card.repositorio).map((l) => `- ${l.texto}`), ''] : []),
+    ...(contexto.melhoria ? ['## Melhoria pedida', '(O avaliador mediu a tentativa anterior. Conserte só isto, sem ampliar o escopo.)', contexto.melhoria, ''] : []),
     '## Regras',
     '- Faça a menor mudança que cumpra os critérios e siga o estilo do código à volta.',
     '- Escreva ou ajuste testes que provem cada critério.',

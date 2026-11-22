@@ -13,6 +13,7 @@ import type { Card, Estado, PedidoBruto } from './schemas.ts'
 import { auditarAcoes, extrasDoNode, lerConvencoes, rodarBaseline, rodarExtras, verificarVermelhoVerde, veredito, type AcaoDoConstrutor, type Verificacao } from './verificacao.ts'
 import { lerEstado, persistir } from './store.ts'
 import { escolherPasta, naPasta } from './projeto-pasta.ts'
+import { fraquezasDaTentativa, melhorou, pontuarTentativa, type ConfigDeMelhoria, type Melhorador } from './melhoria.ts'
 import { ErroDeTeto, mensagemDoTeto, restanteDeTokens, SEM_TETOS, type Tetos } from './custo.ts'
 import type { ExtraDeVerificacao } from './verificacao.ts'
 import { contagemDosCriterios, resultadoPorCriterio } from './criterios.ts'
@@ -38,6 +39,8 @@ export type Implementador = (contexto: {
   convencoes?: string | null
   /** Quanto o agente ainda pode gastar nesta tentativa (teto do card ou do dia, o menor). O implementador interrompe a geração ao chegar nele. */
   orcamento?: { tokens: number; nivel: 'card' | 'dia' } | null
+  /** Melhoria pedida pelo Improver depois de avaliar a tentativa anterior: conserte só o que ela lista. */
+  melhoria?: string | null
   /** Mapa do repositório (pastas, telas, rotas, entradas, testes), gerado do que foi clonado. */
   mapa?: string | null
 }) => Promise<{ resumo: string; uso?: { entrada: number; saida: number }; acoes?: AcaoDoConstrutor[]; /** Qual teste o construtor diz que cobre cada critério (posição começando em 1). */ criterios?: Array<{ n: number; testes: string[] }> }>
@@ -67,6 +70,9 @@ export type DepsAutonomo = {
   gastoDoDia?: () => number
   /** Anota o gasto de uma tentativa, para o teto do dia e o painel de custo. */
   registrarGasto?: (origem: string, tokens: number) => void
+  /** Melhoria recursiva (fraca): um Improver avalia a tentativa, o Worker refaz uma vez, e só fica o que pontua mais. Sem isto, desligada. */
+  melhoria?: ConfigDeMelhoria | null
+  melhorador?: Melhorador
 }
 
 const AUTOR = 'Super Factory <factory@super-factory.local>'
@@ -412,44 +418,132 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         estado = anotarAuto(estado, 'verification', teste ? `${verificacao.verificar} → código ${teste.codigo}.` : 'Sem comando de teste no repositório.')
         if (!teste || teste.codigo === 0) break
       }
-      const check = checkDoSandbox(teste, verificacao)
-      estado = { ...estado, checks: [...estado.checks.filter((item) => item.nome !== 'testes-no-sandbox'), check], evidencia: 'CURRENT', card: { ...estado.card, coluna: 'qa' } }
-      if (deps.verificacaoCompleta) {
-        // Lint, typecheck e build: cada um é um check, comparado com o baseline.
-        const extras = await rodarExtras(executor, verificacao.extras ?? [])
-        // Bug: o teste novo precisa falhar sem a correção e passar com ela.
-        const rv = check.resultado === 'PASS' ? await verificarVermelhoVerde(executor, verificacao, estado.card.rota) : null
-        if (rv && !rv.restaurou) return pararCom({ ...contexto, estado, verificacao }, 'Não consegui devolver o código ao lugar depois de rodar os testes sem a correção. O trabalho do construtor está guardado no stash do sandbox; rode o card de novo.')
-        // O app no navegador: sobe, abre, lê o console e guarda a captura de tela.
-        let appCheck: typeof estado.checks = []
-        if (deps.navegador && check.resultado === 'PASS') {
-          const app = await verificarAppNoNavegador(executor, gerenciadorDe(verificacao), true, verificacao.pasta ?? '').catch(() => null)
-          if (app) {
-            appCheck = [app.check]
-            let onde: string | null = null
-            if (app.captura.png) {
-              try {
-                onde = deps.guardarCaptura?.(estado.card.id, app.captura.png) ?? null
-              } catch {}
+      // Tudo o que o sandbox observa depois de uma tentativa: testes, lint/typecheck/build, vermelho→verde, app, critérios e ancoragem.
+      type Mapa = Array<{ n: number; testes: string[] }>
+      const avaliar = async (base: Estado, testeFinal: Execucao | null, mapa: Mapa | null, resumo: string): Promise<{ estado: Estado; erro?: string }> => {
+        let est = base
+        const check = checkDoSandbox(testeFinal, verificacao)
+        est = { ...est, checks: [...est.checks.filter((item) => item.nome !== 'testes-no-sandbox'), check], evidencia: 'CURRENT', card: { ...est.card, coluna: 'qa' } }
+        if (deps.verificacaoCompleta) {
+          // Lint, typecheck e build: cada um é um check, comparado com o baseline.
+          const extras = await rodarExtras(executor, verificacao.extras ?? [])
+          // Bug: o teste novo precisa falhar sem a correção e passar com ela.
+          const rv = check.resultado === 'PASS' ? await verificarVermelhoVerde(executor, verificacao, est.card.rota) : null
+          if (rv && !rv.restaurou) return { estado: est, erro: 'Não consegui devolver o código ao lugar depois de rodar os testes sem a correção. O trabalho do construtor está guardado no stash do sandbox; rode o card de novo.' }
+          // O app no navegador: sobe, abre, lê o console e guarda a captura de tela.
+          let appCheck: typeof est.checks = []
+          if (deps.navegador && check.resultado === 'PASS') {
+            const app = await verificarAppNoNavegador(executor, gerenciadorDe(verificacao), true, verificacao.pasta ?? '').catch(() => null)
+            if (app) {
+              appCheck = [app.check]
+              let onde: string | null = null
+              if (app.captura.png) {
+                try {
+                  onde = deps.guardarCaptura?.(est.card.id, app.captura.png) ?? null
+                } catch {}
+              }
+              if (onde) appCheck = [{ ...app.check, evidencia: `${app.check.evidencia}\nCaptura de tela guardada na Factory: ${onde}` }]
             }
-            if (onde) appCheck = [{ ...app.check, evidencia: `${app.check.evidencia}\nCaptura de tela guardada na Factory: ${onde}` }]
+          }
+          const novos = [...extras, ...(rv ? [rv.check] : []), ...appCheck]
+          const nomes = new Set(novos.map((c) => c.nome))
+          est = { ...est, checks: [...est.checks.filter((c) => !nomes.has(c.nome)), ...novos] }
+          if (novos.length > 0) est = anotarAuto(est, 'verification', `Verificações: ${novos.map((c) => `${c.nome} ${c.resultado}`).join(', ')}.`)
+        }
+        // Resultado por critério: o que o construtor apontou, conferido contra o diff e a suíte que o sandbox rodou.
+        {
+          const mudados = (await executor.executar('git ls-files -m -o --exclude-standard')).saida.split('\n').map((l) => l.trim()).filter(Boolean)
+          const criterios = resultadoPorCriterio({ criterios: est.card.criterios, mapa, arquivosMudados: mudados, checks: est.checks, parado: false, motivo: null })
+          est = { ...est, criterios }
+          if (criterios.length) est = anotarAuto(est, 'verification', `Critérios de aceite: ${contagemDosCriterios(criterios)}.`)
+        }
+        // O que o construtor afirmou contra o que fez.
+        const achadosDeAncoragem = auditarAcoes(resumo, est.acoes ?? [])
+        if (achadosDeAncoragem.length > 0) est = { ...est, achados: [...est.achados.filter((a) => !a.id.startsWith('ANC-')), ...achadosDeAncoragem] }
+        return { estado: est }
+      }
+      const primeira = await avaliar(estado, teste, mapaDeCriterios, ultimoResumo)
+      if (primeira.erro) return pararCom({ ...contexto, estado: primeira.estado, verificacao }, primeira.erro)
+      estado = primeira.estado
+      const check = estado.checks.find((c) => c.nome === 'testes-no-sandbox')!
+      // Melhoria (RSI fraco): o Improver olha a evidência e propõe outra abordagem; o Worker refaz; fica o que pontua mais.
+      if (deps.melhoria && deps.melhorador && check.resultado === 'PASS') {
+        for (let rodada = 1; rodada <= deps.melhoria.rodadas; rodada++) {
+          const antes = pontuarTentativa(estado)
+          const fraquezas = fraquezasDaTentativa(estado)
+          if (fraquezas.length === 0) break
+          const gastoAntes = (estado.uso?.entrada ?? 0) + (estado.uso?.saida ?? 0)
+          const resta = restanteDeTokens(deps.tetos ?? SEM_TETOS, gastoAntes, deps.gastoDoDia?.() ?? 0)
+          if (resta && resta.tokens <= 0) {
+            estado = anotarAuto(estado, 'verification', `Melhoria não tentada: ${mensagemDoTeto(resta.nivel, resta.gasto, resta.teto)}`)
+            break
+          }
+          // Foto do que já está bom: um commit provisório, desfeito logo depois, para poder voltar se a tentativa nova não valer.
+          const foto = await executor.executar("git add -A && git commit -q -m 'sf-snapshot'")
+          if (foto.codigo !== 0) break
+          const sha = (await executor.executar('git rev-parse HEAD')).saida.trim()
+          const manter = () => executor.executar(`git reset -q ${sha}~1`)
+          const voltar = () => executor.executar(`git reset -q --hard ${sha} && git clean -fdq && git reset -q ${sha}~1`)
+          const conferir = async () => (await executor.executar('git rev-parse HEAD')).saida.trim() === (await executor.executar(`git rev-parse ${sha}~1`)).saida.trim()
+          let proposta = ''
+          let usoDaRodada = { entrada: 0, saida: 0 }
+          try {
+            const m = await deps.melhorador({ estado, fraquezas, resumo: ultimoResumo, pontuacao: antes })
+            proposta = m.proposta
+            if (m.uso) {
+              usoDaRodada = { entrada: m.uso.entrada, saida: m.uso.saida }
+              deps.registrarGasto?.(`melhoria:${estado.card.id}`, m.uso.entrada + m.uso.saida)
+            }
+          } catch (erro) {
+            await manter()
+            estado = anotarAuto(estado, 'verification', `Melhoria não feita: o Improver falhou (${erro instanceof Error ? erro.message.slice(0, 120) : 'erro'}).`)
+            break
+          }
+          estado = { ...estado, uso: { entrada: (estado.uso?.entrada ?? 0) + usoDaRodada.entrada, saida: (estado.uso?.saida ?? 0) + usoDaRodada.saida } }
+          const restaDepois = restanteDeTokens(deps.tetos ?? SEM_TETOS, (estado.uso?.entrada ?? 0) + (estado.uso?.saida ?? 0), deps.gastoDoDia?.() ?? 0)
+          let refeito: Awaited<ReturnType<Implementador>> | null = null
+          let motivoDeNao = ''
+          if (restaDepois && restaDepois.tokens <= 0) motivoDeNao = mensagemDoTeto(restaDepois.nivel, restaDepois.gasto, restaDepois.teto)
+          else {
+            try {
+              refeito = await deps.implementador({ estado, executor, verificacao, tentativa: tentativas + rodada, falhaAnterior: null, convencoes: contexto.convencoes ?? null, mapa: contexto.mapa ?? null, melhoria: proposta, orcamento: restaDepois ? { tokens: restaDepois.tokens, nivel: restaDepois.nivel } : null })
+            } catch (erro) {
+              if (erro instanceof ErroDeTeto) {
+                estado = { ...estado, uso: { entrada: (estado.uso?.entrada ?? 0) + erro.uso.entrada, saida: (estado.uso?.saida ?? 0) + erro.uso.saida } }
+                deps.registrarGasto?.(`card:${estado.card.id}`, erro.uso.entrada + erro.uso.saida)
+                motivoDeNao = erro.message
+              } else motivoDeNao = `o Worker falhou (${erro instanceof Error ? erro.message.slice(0, 120) : 'erro'})`
+            }
+          }
+          if (!refeito) {
+            await voltar()
+            if (!(await conferir())) return pararCom({ ...contexto, estado, verificacao }, 'Não consegui devolver o código ao lugar depois de uma rodada de melhoria. Rode o card de novo.')
+            estado = anotarAuto({ ...estado, melhorias: [...(estado.melhorias ?? []), { rodada, antes: antes.pontos, depois: antes.pontos, aceita: false, proposta: proposta.slice(0, 600) }] }, 'verification', `Melhoria descartada: ${motivoDeNao}`)
+            break
+          }
+          if (refeito.uso) {
+            deps.registrarGasto?.(`card:${estado.card.id}`, refeito.uso.entrada + refeito.uso.saida)
+            estado = { ...estado, uso: { entrada: (estado.uso?.entrada ?? 0) + refeito.uso.entrada, saida: (estado.uso?.saida ?? 0) + refeito.uso.saida } }
+          }
+          const acoes2 = refeito.acoes?.length ? [...(estado.acoes ?? []), ...refeito.acoes.map((a) => ({ ...a, tentativa: tentativas + rodada }))].slice(-300) : estado.acoes
+          const teste2 = verificacao.verificar ? await executor.executar(verificacao.verificar, { timeoutMs: 20 * 60_000 }) : null
+          const nova = await avaliar({ ...estado, ...(acoes2 ? { acoes: acoes2 } : {}) }, teste2, refeito.criterios?.length ? refeito.criterios : mapaDeCriterios, refeito.resumo)
+          const depois = pontuarTentativa(nova.estado)
+          const registro = { rodada, antes: antes.pontos, depois: depois.pontos, proposta: proposta.slice(0, 600) }
+          if (!nova.erro && melhorou(antes, depois, nova.estado.checks.find((c) => c.nome === 'testes-no-sandbox')?.resultado)) {
+            await manter()
+            if (!(await conferir())) return pararCom({ ...contexto, estado, verificacao }, 'Não consegui devolver o código ao lugar depois de uma rodada de melhoria. Rode o card de novo.')
+            ultimoResumo = refeito.resumo
+            if (refeito.criterios?.length) mapaDeCriterios = refeito.criterios
+            estado = anotarAuto({ ...nova.estado, melhorias: [...(estado.melhorias ?? []), { ...registro, aceita: true }] }, 'verification', `Melhoria aceita: ${antes.pontos} → ${depois.pontos} pontos.`)
+          } else {
+            await voltar()
+            if (!(await conferir())) return pararCom({ ...contexto, estado, verificacao }, 'Não consegui devolver o código ao lugar depois de uma rodada de melhoria. Rode o card de novo.')
+            estado = anotarAuto({ ...estado, ...(acoes2 ? { acoes: acoes2 } : {}), melhorias: [...(estado.melhorias ?? []), { ...registro, aceita: false }] }, 'verification', `Melhoria descartada: ${antes.pontos} → ${depois.pontos} pontos${nova.erro ? ` (${nova.erro.slice(0, 80)})` : ''}. Ficou o resultado anterior.`)
+            break
           }
         }
-        const novos = [...extras, ...(rv ? [rv.check] : []), ...appCheck]
-        const nomes = new Set(novos.map((c) => c.nome))
-        estado = { ...estado, checks: [...estado.checks.filter((c) => !nomes.has(c.nome)), ...novos] }
-        if (novos.length > 0) estado = anotarAuto(estado, 'verification', `Verificações: ${novos.map((c) => `${c.nome} ${c.resultado}`).join(', ')}.`)
       }
-      // Resultado por critério: o que o construtor apontou, conferido contra o diff e a suíte que o sandbox rodou.
-      {
-        const mudados = (await executor.executar('git ls-files -m -o --exclude-standard')).saida.split('\n').map((l) => l.trim()).filter(Boolean)
-        const criterios = resultadoPorCriterio({ criterios: estado.card.criterios, mapa: mapaDeCriterios, arquivosMudados: mudados, checks: estado.checks, parado: false, motivo: null })
-        estado = { ...estado, criterios }
-        if (criterios.length) estado = anotarAuto(estado, 'verification', `Critérios de aceite: ${contagemDosCriterios(criterios)}.`)
-      }
-      // O que o construtor afirmou contra o que fez.
-      const achadosDeAncoragem = auditarAcoes(ultimoResumo, estado.acoes ?? [])
-      if (achadosDeAncoragem.length > 0) estado = { ...estado, achados: [...estado.achados.filter((a) => !a.id.startsWith('ANC-')), ...achadosDeAncoragem] }
       return { ...contexto, estado, verificacao }
     },
   },
@@ -519,6 +613,9 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         '',
         ...(estado.criterios?.length
           ? ['### Resultado por critério', ...estado.criterios.map((c) => `${c.n}. ${c.texto} → **${c.status}**\n   ${c.evidencia}`), '']
+          : []),
+        ...(estado.melhorias?.length
+          ? ['### Melhoria (Improver)', ...estado.melhorias.map((m) => `- Rodada ${m.rodada}: ${m.antes} → ${m.depois} pontos, **${m.aceita ? 'adotada' : 'descartada (ficou o resultado anterior)'}**. Proposta: ${m.proposta.replace(/\s+/g, ' ').slice(0, 300)}`), '']
           : []),
         '### Evidência do sandbox',
         `- Teste: \`${check.comando ?? 'nenhum'}\` → **${check.resultado}**${achado('baseline:testes') ? ` (antes da mudança: ${achado('baseline:testes')!.resultado})` : ''}`,

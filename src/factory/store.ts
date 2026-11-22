@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import type { Licao } from './licoes.ts'
 import type { Card, Estado, Evento } from './schemas.ts'
 
 export type FabricaEstado = {
@@ -11,6 +12,8 @@ export type FabricaEstado = {
   ledger: Evento[]
   /** Tokens gastos com modelo, por origem, dos últimos dias (teto de custo). */
   gastos?: Array<{ em: string; origem: string; tokens: number }>
+  /** Lições para o construtor (melhoria entre cards): propostas por sinais observados, aprovadas por uma pessoa. */
+  licoes?: Licao[]
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -75,6 +78,7 @@ export function lerEstado(): FabricaEstado {
     runs: bruto.runs ?? {},
     ledger: bruto.ledger,
     gastos: bruto.gastos ?? [],
+    licoes: bruto.licoes ?? [],
   }
 }
 

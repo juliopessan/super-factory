@@ -138,6 +138,17 @@ Cheque também o código: o PR do bug A deve mexer em `text.py` com um `strip()`
 | **Mover/editar** | `editarCard` no C com critérios observáveis, depois `moverCard` para `ready` | Edita, a triagem passa e só então vai para `ready` |
 | **Resultado do PR** | Feche um PR sem mesclar, mescle outro; rode `medirResultadoDosPrs` | `recusado` e `aceito` (ou `ajustado`) por PR |
 
+## 6b. Melhoria recursiva: comparar com e sem (depois do primeiro ensaio)
+
+Só depois de ter a linha de base do passo 4 (os mesmos cards, sem melhoria):
+
+1. No `.env`: `SUPER_FACTORY_MELHORIA=sim`. Reinicie.
+2. Crie issues novas iguais às A e B (ou use um fork limpo) e rode a mesma onda.
+3. Compare por card: a pontuação ("Melhoria (Improver): antes → depois" no PR), os critérios PASS e os tokens.
+4. Depois de algumas execuções, peça ao Chief `Proponha lições a partir das execuções` (`proporLicoes`). Aprove **uma** com o seu nome (`decidirLicao`) e rode mais cards; `lerLicoes` mostra a pontuação antes e depois.
+
+Esperado: a melhoria só roda quando há fraqueza medida (critério sem teste, bug sem prova); cada rodada aparece como adotada ou descartada; teste vermelho nunca é adotado; o custo extra cabe no teto. Se só gasta tokens sem subir a pontuação, desligue e me traga os números. Detalhes em [RSI.md](RSI.md).
+
 ## 7. Limpeza e o que me enviar
 
 Limpeza (no fork, é só apagar o fork): feche os PRs `factory/*` **sem mesclar**, apague as branches `factory/*`, feche as issues de ensaio, restaure os tetos do `.env` e rode `medirResultadoDosPrs`.
