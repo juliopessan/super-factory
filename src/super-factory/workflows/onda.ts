@@ -11,6 +11,7 @@ const chaveSchema = z.string().regex(PADRAO_DE_CHAVE, 'De 1 a 24 letras minúscu
 /** Um card da onda: o pedido de sempre, mais uma chave e, se for filho, a chave do pai. */
 export const pedidoDaOndaSchema = pedidoSchema.extend({
   issue: z.number().int().min(1).max(9_999_999).optional().describe('Número da issue (no mesmo repositório) de onde veio o pedido, quando veio de uma issue importada. O PR referencia a issue e a Factory comenta nela.'),
+  cardId: z.string().regex(/^C-\d+$/).optional().describe('Uso interno: o card que já está no quadro e que esta execução continua (iniciarOnda por cardIds preenche).'),
   chave: chaveSchema.optional().describe('Nome curto deste card dentro da onda. Obrigatório só para quem tem filho.'),
   dependeDe: chaveSchema.optional().describe('Chave do card pai (um só). Este card nasce da branch do pai e abre o pull request contra ela (PR em pilha). O pai roda primeiro.'),
 })

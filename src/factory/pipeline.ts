@@ -85,7 +85,8 @@ export function parar(estado: Estado, motivo: string): Estado {
   return anotar(proximo, 'observed', motivo, 'factory')
 }
 
-export function iniciar(bruto: PedidoBruto): Estado {
+/** A triagem de um pedido: o que o card vira (rota, lint, segredo, pedido perigoso) e por que bloqueia. Serve ao card novo e ao card editado. */
+export function triarPedido(bruto: PedidoBruto) {
   const pedido = normalizarPedido(bruto)
   validarPedido(pedido)
   const original = `${pedido.titulo}\n${pedido.descricao}\n${pedido.criterios.join('\n')}`
@@ -104,7 +105,13 @@ export function iniciar(bruto: PedidoBruto): Estado {
   if (rascunho) bloqueios.push(rascunho)
   if (rota === 'foggy' && bloqueios.length === 0) bloqueios.push('Pedido ainda nebuloso para sair do backlog.')
 
-  const cardId = alocarId('C')
+  return { pedido, titulo, descricao, criterios, segredos, lint, rota, bloqueios }
+}
+
+export function iniciar(bruto: PedidoBruto, existente?: { cardId: string; itemExterno?: string | null }): Estado {
+  const { pedido, titulo, descricao, criterios, segredos, rota, bloqueios } = triarPedido(bruto)
+  // Card que já existe no quadro: a execução parte dele, em vez de abrir um duplicado.
+  const cardId = existente?.cardId ?? alocarId('C')
   const atualizadoEm = agora()
   let estado: Estado = {
     runId: `R${cardId.slice(1)}`,
@@ -121,7 +128,7 @@ export function iniciar(bruto: PedidoBruto): Estado {
       branchBase: pedido.branchBase,
       branchHead: pedido.branchHead,
       onda: null,
-      itemExterno: null,
+      itemExterno: existente?.itemExterno ?? null,
     },
     estagio: 'triage',
     parado: bloqueios.length > 0,

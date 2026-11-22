@@ -31,6 +31,10 @@ import { avaliarMerge, iniciar } from '../../factory/pipeline.ts'
 import { comentarPullRequestGithub as postarRevisao, lerPullRequestGithub as buscarPullRequest, MAXIMO_DE_ACHADOS } from '../../factory/revisao.ts'
 import { MAXIMO_DE_CARDS_POR_ONDA, validarOnda } from '../../factory/dependencias.ts'
 import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/paralelo.ts'
+import { editarCard as editarCardDoQuadro, lerCardCompleto, moverCard as moverCardDoQuadro, planejarOndaDeCards } from '../../factory/cards.ts'
+import { prepararOnda } from '../../factory/preparar-onda.ts'
+import { preValidarSandbox } from '../../factory/preflight.ts'
+import { depsDoPreflight, ferramentasDaImagem, imagemDoSandbox } from '../preflight.ts'
 import { lerComentariosHumanos, medirResultadosDosPrs } from '../../factory/github-sinais.ts'
 import { calcularMetricas } from '../../factory/metricas.ts'
 import { minerarRegras } from '../../factory/regras.ts'
@@ -141,22 +145,90 @@ export const abrirCard = createTool({
 
 export const planejarOnda = createTool({
   id: 'planejar-onda',
-  description: 'Lista até cinco cards em ready. Não move card e não pula gate.',
+  description: 'Escolhe até cinco cards em ready para a próxima onda. Pula o que já está reservado por outra onda, o que você excluiu e o que é o mesmo trabalho de um card em build, qa, review ou done (diz quem e por quê). "escolher" fixa os IDs na ordem que você quer; "reservar" marca os escolhidos com o número da onda para não voltarem em planos seguintes. Não move card e não pula gate. Para executar, passe os IDs a iniciarOnda (cardIds).',
   inputSchema: z.object({
     limite: z.number().int().min(1).max(5).optional().describe('Quantos cards, no máximo cinco.'),
+    escolher: z.array(z.string().regex(/^C-\d+$/)).max(8).optional().describe('IDs que você quer, na ordem. Sem isto, vale a ordem de ready.'),
+    excluir: z.array(z.string().regex(/^C-\d+$/)).max(20).optional().describe('IDs a deixar de fora.'),
+    reservar: z.boolean().optional().describe('Marca os escolhidos como reservados por esta onda.'),
   }),
   outputSchema: z.object({
     onda: z.number(),
     limite: z.number(),
     cardIds: z.array(z.string()),
+    pulados: z.array(z.object({ id: z.string(), motivo: z.string() })),
+    reservado: z.boolean(),
     resumo: z.string(),
   }),
-  execute: async ({ limite }) => {
-    const plano = montarOnda(lerEstado().cards, limite ?? 3)
+  execute: async ({ limite, escolher, excluir, reservar }) => {
+    const plano = planejarOndaDeCards({ limite, escolher, excluir, reservar })
+    const pulou = plano.pulados.length ? ` Pulados: ${plano.pulados.map((p) => `${p.id} (${p.motivo})`).join('; ')}.` : ''
     return {
       ...plano,
-      resumo: plano.cardIds.length ? `Onda ${plano.onda}: ${plano.cardIds.join(', ')}.` : 'Nenhum card em ready.',
+      resumo: plano.cardIds.length ? `Onda ${plano.onda}${plano.reservado ? ' (reservada)' : ''}: ${plano.cardIds.join(', ')}.${pulou}` : `Nenhum card para a onda.${pulou}`,
     }
+  },
+})
+
+export const lerCard = createTool({
+  id: 'ler-card',
+  description: 'Lê um card do quadro pelo ID: descrição, critérios, repositório, branch base, issue de origem, duplicatas, e a execução mais recente (estágio, desfecho, motivo, checks, PR, resultado do PR, tokens e últimos eventos). Diz também se ele pode ser editado ou iniciado e, se não, por quê.',
+  inputSchema: z.object({ cardId: z.string().regex(/^C-\d+$/).describe('Ex.: C-8.') }),
+  outputSchema: z.object({ ok: z.boolean(), card: z.any().nullable(), issue: z.number().nullable(), duplicatas: z.array(z.any()), execucao: z.any().nullable(), podeEditar: z.boolean(), podeIniciar: z.boolean(), porQueNaoIniciar: z.string().nullable(), resumo: z.string() }),
+  execute: async ({ cardId }) => {
+    const lido = lerCardCompleto(cardId)
+    if (!lido) return { ok: false, card: null, issue: null, duplicatas: [], execucao: null, podeEditar: false, podeIniciar: false, porQueNaoIniciar: null, resumo: `Não achei o card ${cardId}.` }
+    const dup = lido.duplicatas.length ? ` Parecido com: ${lido.duplicatas.map((d) => `${d.id} (${d.coluna})`).join(', ')}.` : ''
+    return { ok: true, ...lido, resumo: `${lido.card.id} em ${lido.card.coluna}: ${lido.card.titulo}.${lido.execucao ? ` Execução ${lido.execucao.runId}: ${lido.execucao.desfecho}.` : ' Sem execução.'}${lido.podeIniciar ? ' Pode iniciar.' : ` Não inicia: ${lido.porQueNaoIniciar}`}${dup}` }
+  },
+})
+
+export const editarCard = createTool({
+  id: 'editar-card',
+  description: 'Corrige título, descrição, critérios ou branch base de um card em backlog, ready ou blocked. A triagem roda de novo sobre o texto novo (pode bloquear o card). Não coloca o card em ready: use moverCard. Card em execução ou entregue não se edita.',
+  inputSchema: z.object({
+    cardId: z.string().regex(/^C-\d+$/),
+    titulo: z.string().min(4).max(120).optional(),
+    descricao: z.string().min(20).max(4000).optional(),
+    criterios: z.array(z.string().min(3).max(500)).min(1).max(15).optional().describe('A lista inteira de critérios, que substitui a anterior.'),
+    branchBase: z.string().min(1).max(120).optional(),
+  }),
+  outputSchema: z.object({ ok: z.boolean(), card: z.any().nullable(), resumo: z.string() }),
+  execute: async ({ cardId, ...mudancas }) => {
+    const r = editarCardDoQuadro(cardId, mudancas)
+    return { ok: r.ok, card: r.card, resumo: r.nota }
+  },
+})
+
+export const moverCard = createTool({
+  id: 'mover-card',
+  description: 'Move um card entre backlog, ready e blocked. Para ready a triagem precisa passar; para blocked, diga o motivo. Libera a reserva de onda. Build, qa, review e done não se movem por aqui: são da execução e do merge humano.',
+  inputSchema: z.object({ cardId: z.string().regex(/^C-\d+$/), para: z.enum(['backlog', 'ready', 'blocked']), motivo: z.string().max(300).optional() }),
+  outputSchema: z.object({ ok: z.boolean(), card: z.any().nullable(), resumo: z.string() }),
+  execute: async ({ cardId, para, motivo }) => {
+    const r = moverCardDoQuadro(cardId, para, motivo)
+    return { ok: r.ok, card: r.card, resumo: r.nota }
+  },
+})
+
+export const validarSandbox = createTool({
+  id: 'validar-sandbox',
+  description: 'Confere, ANTES de iniciar uma onda, se a imagem do sandbox tem o que o repositório pede (git, Node/npm, Python/pip, Go, .NET). Resultado PASS, BLOCKED (falta algo: diz o conserto, não gaste a execução) ou NOT_RUN (não deu para conferir). Sem repositório, só lista as ferramentas da imagem.',
+  inputSchema: z.object({ repositorio: z.string().min(3).optional(), branch: z.string().max(120).optional() }),
+  outputSchema: z.object({ resultado: z.enum(['PASS', 'BLOCKED', 'NOT_RUN']), imagem: z.string(), ferramentas: z.record(z.string(), z.boolean()).nullable(), pilhas: z.array(z.string()), motivos: z.array(z.string()), resumo: z.string() }),
+  execute: async ({ repositorio, branch }) => {
+    const imagem = imagemDoSandbox()
+    if (!repositorio) {
+      try {
+        const ferramentas = await ferramentasDaImagem()
+        return { resultado: 'PASS' as const, imagem, ferramentas, pilhas: [], motivos: [], resumo: `Imagem ${imagem}: ${Object.entries(ferramentas).map(([k, v]) => `${k} ${v ? 'sim' : 'não'}`).join(', ')}.` }
+      } catch (erro) {
+        const m = erro instanceof Error ? erro.message.slice(0, 200) : 'erro'
+        return { resultado: 'NOT_RUN' as const, imagem, ferramentas: null, pilhas: [], motivos: [m], resumo: `Não consegui abrir o sandbox: ${m}` }
+      }
+    }
+    const r = await preValidarSandbox({ repositorio, branchBase: branch ?? 'main', provedor: 'github' }, depsDoPreflight())
+    return { resultado: r.resultado, imagem, ferramentas: r.ferramentas, pilhas: r.pilhas, motivos: r.motivos, resumo: r.motivos[0] ?? `O sandbox (${imagem}) cobre o que o repositório pede (${r.pilhas.join(', ')}).` }
   },
 })
 
@@ -893,12 +965,25 @@ export const iniciarOnda = createTool({
   id: 'iniciar-onda',
   description: `Dispara o modo autônomo para 1 a ${MAXIMO_DE_CARDS_POR_ONDA} cards, até ${PARALELISMO_MAXIMO} ao mesmo tempo: cada um ganha sandbox, branch e pull request próprios. Para tarefas que dependem uma da outra (um épico), dê "chave" a cada card e "dependeDe" (a chave do pai, uma só) ao que vem depois: o filho espera o pai, nasce da branch dele e abre um PR em pilha. Se o pai falha, o filho fica bloqueado. Devolve na hora, com o id da execução; o trabalho segue em segundo plano. Não faz merge nem deploy. Acompanhe com statusQuadro e lerLedger.`,
   inputSchema: z.object({
-    pedidos: z.array(pedidoDaOndaSchema).min(1).max(MAXIMO_DE_CARDS_POR_ONDA),
+    cardIds: z.array(z.string().regex(/^C-\d+$/)).min(1).max(MAXIMO_DE_CARDS_POR_ONDA).optional().describe('Cards que JÁ estão em ready no quadro (ex.: os que planejarOnda devolveu). A execução parte deles, sem abrir card novo. Cards em outra coluna, com PR, ou duplicados de trabalho ativo são pulados e explicados.'),
+    pedidos: z.array(pedidoDaOndaSchema).min(1).max(MAXIMO_DE_CARDS_POR_ONDA).optional().describe('Pedidos completos, para trabalho que ainda não está no quadro. Pode combinar com cardIds.'),
     ensaio: z.boolean().optional().describe('Só para demonstrar o fluxo: nada é clonado, escrito ou enviado.'),
     revisar: z.boolean().optional().describe('Quando os PRs abrirem, o agente revisor comenta em cada um (só comentário: nunca aprova nem trava o merge). Use quando a pessoa pedir revisão.'),
   }),
-  outputSchema: z.object({ ok: z.boolean(), runId: z.string().nullable(), nota: z.string() }),
-  execute: async (entrada, contexto) => {
+  outputSchema: z.object({
+    ok: z.boolean(),
+    runId: z.string().nullable(),
+    nota: z.string(),
+    iniciados: z.array(z.string()).optional(),
+    pulados: z.array(z.object({ id: z.string(), motivo: z.string() })).optional(),
+    bloqueados: z.array(z.object({ id: z.string(), motivos: z.array(z.string()) })).optional(),
+  }),
+  execute: async (bruto, contexto) => {
+    if ((bruto.cardIds?.length ?? 0) + (bruto.pedidos?.length ?? 0) > MAXIMO_DE_CARDS_POR_ONDA) return { ok: false, runId: null, nota: `Uma onda leva até ${MAXIMO_DE_CARDS_POR_ONDA} cards, somando cardIds e pedidos.` }
+    // Cards por ID viram pedidos sem abrir card novo; o sandbox é conferido antes de gastar qualquer execução.
+    const preparo = await prepararOnda({ cardIds: bruto.cardIds, pedidos: bruto.pedidos, ensaio: bruto.ensaio }, { preflight: depsDoPreflight() })
+    if (!preparo.ok) return { ok: false, runId: null, nota: preparo.nota, pulados: preparo.pulados, bloqueados: preparo.bloqueados }
+    const entrada = { pedidos: preparo.pedidos as unknown as z.infer<typeof pedidoDaOndaSchema>[], ensaio: bruto.ensaio, revisar: bruto.revisar }
     // Erro de chave ou de dependência volta agora, para o agente corrigir, e não depois de a onda já ter começado.
     try {
       validarOnda(entrada.pedidos.map((p) => ({ chave: p.chave ?? null, dependeDe: p.dependeDe ?? null })))
@@ -914,7 +999,10 @@ export const iniciarOnda = createTool({
     return {
       ok: true,
       runId,
-      nota: `Onda iniciada com ${entrada.pedidos.length} card(s), ${simultaneos} por vez${entrada.ensaio ? ' (ensaio)' : ''}${entrada.revisar && !entrada.ensaio ? ', com revisão automática dos PRs' : ''}${empilhados ? `, ${empilhados} deles empilhado(s) sobre outro (PRs em pilha: o merge segue de baixo para cima)` : ''}. Execução ${runId} em Workflows → onda. Cada card termina em pull request aguardando revisão humana.`,
+      iniciados: entrada.pedidos.map((p) => p.cardId ?? p.titulo),
+      pulados: preparo.pulados,
+      bloqueados: preparo.bloqueados,
+      nota: `${preparo.pulados.length || preparo.bloqueados.length ? `${preparo.nota} ` : ''}Onda iniciada com ${entrada.pedidos.length} card(s), ${simultaneos} por vez${entrada.ensaio ? ' (ensaio)' : ''}${entrada.revisar && !entrada.ensaio ? ', com revisão automática dos PRs' : ''}${empilhados ? `, ${empilhados} deles empilhado(s) sobre outro (PRs em pilha: o merge segue de baixo para cima)` : ''}. Execução ${runId} em Workflows → onda. Cada card termina em pull request aguardando revisão humana.`,
     }
   },
 })
