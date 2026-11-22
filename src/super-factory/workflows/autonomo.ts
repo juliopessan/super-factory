@@ -65,6 +65,7 @@ const contextoSchema = z.object({
       instalar: z.string().nullable(),
       verificar: z.string().nullable(),
       origem: z.string(),
+      pasta: z.string().optional(),
       extras: z.array(z.object({ nome: z.enum(['lint', 'typecheck', 'build']), comando: z.string() })).optional(),
     })
     .nullable(),

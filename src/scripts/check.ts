@@ -4641,6 +4641,131 @@ assert.equal(
   assert.ok(agG.includes('lerCusto') && agG.includes('teto de tokens por card, por onda e por dia'))
 }
 
+// --- Lote H: projeto em subpasta, Python (.[dev], ruff, versão) e a imagem do sandbox
+{
+  const pp = await import('../factory/projeto-pasta.ts')
+  const pre = await import('../factory/preflight.ts')
+  const { lerProjetoDoGithub } = await import('../super-factory/preflight.ts')
+
+  // escolher a pasta
+  assert.deepEqual(pp.escolherPasta(['package.json', 'src-maf/pyproject.toml']), { pasta: '', alternativas: [] }, 'manifesto na raiz ganha')
+  assert.deepEqual(pp.escolherPasta(['src-maf/pyproject.toml']), { pasta: 'src-maf', alternativas: [] })
+  assert.deepEqual(pp.escolherPasta(['backend/pyproject.toml', 'frontend/package.json', 'ops/Makefile']), { pasta: 'frontend', alternativas: ['backend', 'ops'] }, 'package.json decide; o resto vira alternativa')
+  assert.deepEqual(pp.escolherPasta(['docs/package.json', 'node_modules/x/package.json', '.github/package.json', 'tests/requirements.txt', 'scripts/Makefile']), null, 'pasta de apoio não é o projeto')
+  assert.equal(pp.escolherPasta(['a/b/package.json']), null, 'dois níveis abaixo é ambíguo demais')
+  assert.equal(pp.escolherPasta(['meu app/package.json']), null, 'nome de pasta inseguro para o shell')
+  assert.equal(pp.escolherPasta([]), null)
+  assert.equal(pp.escolherPasta(['app/App.sln'])?.pasta, 'app')
+  assert.equal(pp.versaoMinimaDoPython('[project]\nname="x"\nrequires-python = ">=3.13"\n'), '3.13')
+  assert.equal(pp.versaoMinimaDoPython("requires-python='>= 3.9'"), '3.9')
+  assert.equal(pp.versaoMinimaDoPython('requires-python = "~=3.11"'), null, 'só o piso (>=) é lido')
+  assert.equal(pp.versaoMinimaDoPython('# requires-python = ">=3.13"'), null, 'comentário não conta')
+  assert.deepEqual([pp.compararVersoes('3.11', '3.13') < 0, pp.compararVersoes('3.13', '3.13'), pp.compararVersoes('3.9', '3.10') < 0, pp.compararVersoes('3.14', '3.13') > 0], [true, 0, true, true])
+  assert.equal(pp.naPasta('npm test', ''), 'npm test')
+  assert.equal(pp.naPasta('npm test', 'src-maf'), "cd 'src-maf' && npm test")
+
+  // descobrir o projeto: Python em subpasta, como em juliopessan/src-amf-python
+  const roteiroPy = (o: { raiz?: string; busca?: string; pasta?: string; dev?: boolean; pytest?: boolean; ruff?: boolean } = {}) => (c: string) => {
+    if (c === 'ls -1a') return { saida: o.raiz ?? '.\n..\n.azure\n.git\n.github\ndocs\nsrc-maf' }
+    if (c.startsWith('for d in */')) return { saida: o.busca ?? 'src-maf/pyproject.toml' }
+    if (c === "cd 'src-maf' && ls -1a") return { saida: o.pasta ?? '.\n..\napp\ntests\npyproject.toml' }
+    if (c.includes("grep -qE '^dev")) return { saida: o.dev === false ? '' : 'sim' }
+    if (c.includes("grep -qiE 'pytest'")) return { saida: o.pytest === false ? '' : 'pytest' }
+    if (c.includes("grep -qiE 'ruff'")) return { saida: o.ruff === false ? '' : 'ruff' }
+    return {}
+  }
+  let v = await descobrirVerificacao(criarExecutorFalso(roteiroPy()))
+  assert.equal(v.pasta, 'src-maf')
+  assert.equal(v.instalar, "cd 'src-maf' && pip install -e '.[dev]'", 'instala o extra dev: é onde ficam pytest e ruff')
+  assert.equal(v.verificar, "cd 'src-maf' && python -m pytest -q")
+  assert.deepEqual(v.extras, [{ nome: 'lint', comando: "cd 'src-maf' && ruff check" }])
+  assert.match(v.origem, /^src-maf\/ · Python \(pytest\)$/)
+  v = await descobrirVerificacao(criarExecutorFalso(roteiroPy({ dev: false, ruff: false, pytest: false })))
+  assert.equal(v.instalar, "cd 'src-maf' && pip install -e .")
+  assert.equal(v.verificar, "cd 'src-maf' && python -m unittest discover")
+  assert.equal(v.extras, undefined, 'sem ruff declarado, sem lint')
+  // com requirements.txt: instala o que ele lista e o de teste
+  v = await descobrirVerificacao(criarExecutorFalso(roteiroPy({ busca: 'api/requirements.txt', pasta: 'x' }) as never))
+  assert.equal(v.pasta, 'api')
+  // mais de um projeto: escolhe um e diz os outros
+  const dois = criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'backend\nfrontend' } : c.startsWith('for d in */') ? { saida: 'backend/pyproject.toml\nfrontend/package.json' } : c === "cd 'frontend' && ls -1a" ? { saida: 'package.json\npackage-lock.json' } : c === "cd 'frontend' && cat package.json" ? { saida: JSON.stringify({ scripts: { test: 'vitest', lint: 'eslint .' } }) } : {}))
+  v = await descobrirVerificacao(dois)
+  assert.deepEqual([v.pasta, v.instalar, v.verificar], ['frontend', "cd 'frontend' && npm ci", "cd 'frontend' && npm run test"])
+  assert.match(v.origem, /^frontend\/ · package\.json \(npm\) \(também há: backend\)$/)
+  assert.deepEqual(v.extras, [{ nome: 'lint', comando: "cd 'frontend' && npm run lint" }])
+  // manifesto na raiz: nada de procurar em pasta
+  const naRaiz = criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'package.json\nsrc' } : c === 'cat package.json' ? { saida: '{"scripts":{"test":"x"}}' } : {}))
+  v = await descobrirVerificacao(naRaiz)
+  assert.equal(v.pasta, undefined)
+  assert.equal(v.verificar, 'npm run test')
+  assert.ok(!naRaiz.comandos.some((c) => c.startsWith('for d in */')), 'raiz com manifesto não varre subpastas')
+  assert.equal((await descobrirVerificacao(criarExecutorFalso((c) => (c === 'ls -1a' ? { saida: 'README.md\ndocs' } : {})))).origem, 'nenhum comando de teste encontrado')
+
+  // dica: a versão do Python da imagem
+  const { dicaDoSandbox } = await import('../factory/autonomo.ts')
+  const dica = dicaDoSandbox({ comando: 'pip install -e .', codigo: 1, saida: '', erro: "ERROR: Package 'myspark-maf' requires a different Python: 3.11.2 not in '>=3.13'", ms: 1, estourou: false })
+  assert.match(dica ?? '', /O projeto pede Python >=3\.13 e o sandbox tem 3\.11\.2[\s\S]*construir-sandbox\.sh --python 3\.13/)
+
+  // preflight: ter python3 não basta, a versão precisa servir
+  const tudo = { git: true, node: true, npm: true, python3: true, pip: true, go: true, dotnet: true }
+  const projeto = (py: string | null) => async () => ({ arquivos: ['pyproject.toml', 'tests'], pasta: 'src-maf', pythonMinimo: py })
+  const dp = (versao: string | null, py: string | null, extra: Record<string, unknown> = {}) => ({ imagem: 'super-factory-sandbox:latest', ferramentas: async () => tudo, arquivosDaRaiz: async () => null, projeto: projeto(py), versaoDoPython: async () => versao, ...extra })
+  const cardPy = { repositorio: 'juliopessan/src-amf-python', branchBase: 'main', provedor: 'github' }
+  let rp = await pre.preValidarSandbox(cardPy, dp('3.11', '3.13'))
+  assert.equal(rp.resultado, 'BLOCKED')
+  assert.match(rp.motivos[0] ?? '', /exige Python >= 3\.13 e a imagem do sandbox \(super-factory-sandbox:latest\) tem 3\.11\. Conserto: rode sudo bash \/opt\/super-factory\/deploy\/construir-sandbox\.sh --python 3\.13/)
+  rp = await pre.preValidarSandbox(cardPy, dp('3.13', '3.13'))
+  assert.deepEqual([rp.resultado, rp.pasta, rp.pilhas], ['PASS', 'src-maf', ['git', 'Python']])
+  assert.equal((await pre.preValidarSandbox(cardPy, dp('3.14', '3.13'))).resultado, 'PASS', 'mais novo serve')
+  assert.equal((await pre.preValidarSandbox(cardPy, dp('3.11', null))).resultado, 'PASS', 'projeto sem piso declarado: não bloqueia')
+  assert.equal((await pre.preValidarSandbox(cardPy, dp(null, '3.13'))).resultado, 'PASS', 'versão da imagem desconhecida: não bloqueia por palpite')
+  assert.equal((await pre.preValidarSandbox(cardPy, dp('3.11', '3.13', { versaoDoPython: async () => { throw new Error('x') } }))).resultado, 'PASS')
+  rp = await pre.preValidarSandbox(cardPy, dp('3.11', '3.13', { projeto: async () => ({ arquivos: ['package.json'], pasta: '', pythonMinimo: '3.13' }) }))
+  assert.equal(rp.resultado, 'PASS', 'projeto Node: o piso de Python não vale')
+  assert.equal((await pre.preValidarSandbox(cardPy, dp('3.11', '3.13', { projeto: async () => null }))).resultado, 'NOT_RUN')
+
+  // ler o projeto do GitHub: a subpasta e o requires-python
+  const arvore = ['.github/workflows/maf-ci.yml', 'README.md', 'docs/guia.md', 'src-maf/pyproject.toml', 'src-maf/tests/test_a.py', 'src-maf/frontend/package.json', 'src-maf/app/main.py']
+  const gh = (async (url: string) => {
+    const u = String(url)
+    if (/\/branches\/main$/.test(u)) return new Response(JSON.stringify({ commit: { commit: { tree: { sha: 'a'.repeat(40) } } } }), { status: 200 })
+    if (/\/git\/trees\//.test(u)) return new Response(JSON.stringify({ tree: arvore.map((path) => ({ path, type: 'blob', size: 10 })) }), { status: 200 })
+    if (/\/contents\/src-maf\/pyproject\.toml/.test(u)) return new Response(JSON.stringify({ type: 'file', size: 40, encoding: 'base64', content: Buffer.from('[project]\nrequires-python = ">=3.13"\n').toString('base64') }), { status: 200 })
+    return new Response('{}', { status: 404 })
+  }) as typeof fetch
+  const lido = await lerProjetoDoGithub('juliopessan/src-amf-python', 'main', { fetch: gh, token: TOKEN_TESTE })
+  assert.deepEqual(lido, { arquivos: ['pyproject.toml'], pasta: 'src-maf', pythonMinimo: '3.13' }, 'um nível: os arquivos da pasta src-maf, sem o frontend de dois níveis')
+  assert.equal(await lerProjetoDoGithub('juliopessan/src-amf-python', 'dev', { fetch: gh, token: TOKEN_TESTE }), null, 'branch que não existe')
+
+  // o fluxo todo, com o projeto em subpasta: baseline, lint e testes rodam dentro dela, e os comandos de git ficam na raiz
+  const g = githubFalso()
+  const comandos: string[] = []
+  const baseNode = roteiroNode()
+  const exec = criarExecutorFalso((c) => {
+    comandos.push(c)
+    const r = roteiroPy({ pasta: '.\n..\napp\ntests\npyproject.toml' })(c)
+    if (Object.keys(r).length) return r
+    if (c === "cd 'src-maf' && pip install -e '.[dev]'") return { saida: 'instalado' }
+    if (c === "cd 'src-maf' && python -m pytest -q") return { saida: '39 passed' }
+    if (c === "cd 'src-maf' && ruff check") return { saida: 'All checks passed!' }
+    return baseNode(c)
+  })
+  const feitoPy = await executarAutonomo(pedidoAuto, { criarExecutor: async () => exec, implementador: async () => ({ resumo: 'ok' }), credenciais: { githubToken: TOKEN_TESTE }, github: g.deps, verificacaoCompleta: true })
+  assert.equal(feitoPy.estado.parado, false, feitoPy.estado.motivo ?? '')
+  assert.equal(feitoPy.verificacao?.pasta, 'src-maf')
+  assert.deepEqual(feitoPy.estado.checks.map((c) => `${c.nome}:${c.resultado}`).sort(), ['baseline:lint:PASS', 'baseline:testes:PASS', 'lint:PASS', 'testes-no-sandbox:PASS'])
+  assert.ok(comandos.includes("cd 'src-maf' && pip install -e '.[dev]'") && comandos.includes("cd 'src-maf' && ruff check"), 'instalação e lint dentro da pasta do projeto')
+  assert.ok(comandos.includes('git status --porcelain') && comandos.includes('git add -A && git diff --cached'), 'o git segue na raiz do repositório')
+  assert.match(String(g.chamadas[0]?.corpo.body ?? ''), /Teste: `cd 'src-maf' && npm run test|Teste: `cd 'src-maf' && python -m pytest -q` → \*\*PASS\*\*/)
+
+  // ligação: o contexto do workflow guarda a pasta; a imagem sabe subir o Python novo
+  assert.ok(fs.readFileSync(new URL('../super-factory/workflows/autonomo.ts', import.meta.url), 'utf8').includes('pasta: z.string().optional()'), 'a pasta passa entre as fases do workflow')
+  const dock = fs.readFileSync(new URL('../../deploy/sandbox.Dockerfile', import.meta.url), 'utf8')
+  assert.ok(dock.includes('FROM python:${PYTHON_VERSION}-slim-bookworm AS python-novo') && dock.includes('USAR_PYTHON_NOVO') && dock.includes('ldconfig'))
+  const scr = fs.readFileSync(new URL('../../deploy/construir-sandbox.sh', import.meta.url), 'utf8')
+  assert.ok(scr.includes('--python)') && scr.includes('USAR_PYTHON_NOVO=') && scr.includes('python3 dela não é o'))
+}
+
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(

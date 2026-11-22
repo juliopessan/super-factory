@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto'
 import { redigirSegredos } from './guards.ts'
 import type { Executor } from './sandbox.ts'
 import type { Estado } from './schemas.ts'
+import { naPasta } from './projeto-pasta.ts'
 import { classificarArquivos } from './verificacao.ts'
 
 type Check = Estado['checks'][number]
@@ -216,9 +217,9 @@ export async function pararApp(executor: Executor): Promise<void> {
  * Sobe o app do repositório no sandbox, abre no Chromium e devolve o que viu. Não afirma nada que o navegador não mostrou:
  * página que carrega sem erro de console é PASS, qualquer erro ou app que não sobe é FAIL, repositório sem app web é NOT_RUN.
  */
-export async function verificarAppNoNavegador(executor: Executor, gerenciador: string, comTela: boolean): Promise<ResultadoDoApp> {
+export async function verificarAppNoNavegador(executor: Executor, gerenciador: string, comTela: boolean, pasta = ''): Promise<ResultadoDoApp> {
   const sem = (c: Check): ResultadoDoApp => ({ check: c, captura: { png: null } })
-  const pacote = await executor.executar('cat package.json')
+  const pacote = await executor.executar(naPasta('cat package.json', pasta))
   let scripts: Record<string, string> = {}
   try {
     scripts = (JSON.parse(pacote.saida) as { scripts?: Record<string, string> }).scripts ?? {}
@@ -232,7 +233,7 @@ export async function verificarAppNoNavegador(executor: Executor, gerenciador: s
   const portas = [...new Set([...(subir.porta ? [subir.porta] : []), ...PORTAS])]
   const comando = [
     `mkdir -p ${PASTA_DO_APP} && rm -f ${PASTA_DO_APP}/relatorio.json ${PASTA_DO_APP}/tela.png`,
-    `PORT=3000 BROWSER=none CI=1 setsid nohup ${subir.comando} > ${PASTA_DO_APP}/app.log 2>&1 &`,
+    `${pasta ? `cd '${pasta}' && ` : ''}PORT=3000 BROWSER=none CI=1 setsid nohup ${subir.comando} > ${PASTA_DO_APP}/app.log 2>&1 &`,
     `echo $! > ${PASTA_DO_APP}/pid`,
     `for i in $(seq 1 60); do for p in ${portas.join(' ')}; do c=$(curl -s -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:$p/); if [ "$c" != "000" ]; then echo "PORTA=$p"; exit 0; fi; done; sleep 1; done`,
     `echo SEM_PORTA; tail -n 15 ${PASTA_DO_APP}/app.log`,

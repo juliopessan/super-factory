@@ -13,6 +13,8 @@ export type Verificacao = {
   instalar: string | null
   verificar: string | null
   origem: string
+  /** Subpasta do projeto, quando o manifesto não está na raiz do repositório (os comandos já levam o "cd"). */
+  pasta?: string
   /** Lint, typecheck e build, quando o repositório os declara. Cada um vira um check separado, com baseline. */
   extras?: ExtraDeVerificacao[]
 }
