@@ -106,6 +106,8 @@ export const estadoSchema = z.object({
   /** O que aconteceu com o PR depois de aberto: mesclado como veio, mesclado com ajustes, recusado ou ainda aberto. */
   /** Resultado por critério de aceite, com a evidência observada. Ausente em execuções antigas. */
   criterios: z.array(z.object({ n: z.number(), texto: z.string(), status: z.enum(['PASS', 'FAIL', 'NOT_RUN', 'BLOCKED']), testes: z.array(z.string()), evidencia: z.string() })).max(30).optional(),
+  /** Rodadas de melhoria (Improver): a pontuação antes e depois e se a tentativa nova foi adotada. */
+  melhorias: z.array(z.object({ rodada: z.number(), antes: z.number(), depois: z.number(), aceita: z.boolean(), proposta: z.string() })).max(3).optional(),
   resultadoPr: z.object({ resultado: z.enum(['aceito', 'ajustado', 'recusado', 'aberto']), motivo: z.string(), commitsHumanos: z.number(), mudancasPedidas: z.number(), medidoEm: z.string() }).optional(),
   atualizadoEm: z.string(),
 })

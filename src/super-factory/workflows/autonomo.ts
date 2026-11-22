@@ -10,6 +10,8 @@ import {
   type FaseAutonomo,
   type SessaoAutonomo,
 } from '../../factory/autonomo.ts'
+import { lerConfigDeMelhoria } from '../../factory/melhoria.ts'
+import { melhoradorComAgente } from '../agents/melhorador.ts'
 import { gastoDoDia, lerTetos, registrarGasto } from '../../factory/custo.ts'
 import { guardarCapturaDoApp, guardarMapaDoRepositorio } from '../../factory/artefatos.ts'
 import { redigirSegredos } from '../../factory/guards.ts'
@@ -34,6 +36,9 @@ export function depsDoAmbiente(): DepsAutonomo {
     navegador: ['1', 'sim', 'true'].includes(process.env.SUPER_FACTORY_NAVEGADOR?.trim().toLowerCase() ?? ''),
     // Teto de custo em tokens (card e dia); o da onda vale no workflow onda. 0 desliga. Padrões em factory/custo.ts.
     tetos: lerTetos(),
+    // Melhoria recursiva (fraca): desligada por padrão; SUPER_FACTORY_MELHORIA=sim liga. Custa um Improver e uma tentativa a mais por card que tenha o que melhorar.
+    melhoria: lerConfigDeMelhoria(),
+    melhorador: melhoradorComAgente,
     gastoDoDia: () => gastoDoDia(),
     registrarGasto: (origem, tokens) => registrarGasto(origem, tokens),
     guardarMapa: (repositorio, mapa) => void guardarMapaDoRepositorio(repositorio, mapa),

@@ -87,6 +87,7 @@ export type CardCompleto = {
     pullRequestUrl: string | null
     resultadoPr: string | null
     tokens: number | null
+    melhorias: Array<{ rodada: number; antes: number; depois: number; aceita: boolean }>
     ultimosEventos: Array<{ tipo: string; resumo: string }>
   }
   /** Resultado por critério de aceite (PASS, FAIL, NOT_RUN ou BLOCKED), com a evidência. */
@@ -117,6 +118,7 @@ export function lerCardCompleto(cardId: string, estado: FabricaEstado = lerEstad
           pullRequestUrl: run.entrega?.pullRequestUrl ?? null,
           resultadoPr: run.resultadoPr?.resultado ?? null,
           tokens: run.uso ? run.uso.entrada + run.uso.saida : null,
+          melhorias: (run.melhorias ?? []).map((m) => ({ rodada: m.rodada, antes: m.antes, depois: m.depois, aceita: m.aceita })),
           ultimosEventos: run.trilha.slice(-8).map((e) => ({ tipo: e.tipo, resumo: e.resumo })),
         }
       : null,
