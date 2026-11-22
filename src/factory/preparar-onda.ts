@@ -26,6 +26,8 @@ export type PreparoDaOnda = {
   pulados: Array<{ id: string; motivo: string }>
   bloqueados: Array<{ id: string; motivos: string[] }>
   avisos: string[]
+  /** Número da onda em que os cards ficaram reservados (o de planejarOnda, se todos já tinham o mesmo). */
+  onda: number | null
   nota: string
 }
 
@@ -42,7 +44,7 @@ export async function prepararOnda(
   const bloqueados: PreparoDaOnda['bloqueados'] = []
   const avisos: string[] = []
   const pedidos: PedidoPreparado[] = []
-  const falha = (nota: string): PreparoDaOnda => ({ ok: false, pedidos: [], pulados, bloqueados, avisos, nota })
+  const falha = (nota: string): PreparoDaOnda => ({ ok: false, pedidos: [], pulados, bloqueados, avisos, onda: null, nota })
   if (!entrada.cardIds?.length && !entrada.pedidos?.length) return falha('Informe cardIds (cards que já estão no quadro) ou pedidos completos.')
   const ids = [...new Set(entrada.cardIds ?? [])]
   for (const id of ids) {
@@ -86,9 +88,12 @@ export async function prepararOnda(
   }
   if (seguros.length === 0) return { ...falha(`BLOCKED: nenhum card pôde iniciar. ${bloqueados.map((b) => `${b.id}: ${b.motivos[0]}`).join(' ')}`), pedidos: [] }
   // Reserva: os cards da onda saem do pool de ready até a onda acabar ou a pessoa liberar com moverCard.
+  let ondaN: number | null = null
   if (entrada.reservar !== false) {
-    const ondaN = Math.max(0, ...estado.cards.map((c) => c.onda ?? 0)) + 1
     const reservar = new Set(seguros.map((p) => p.cardId).filter((i): i is string => Boolean(i)))
+    // Os cards que planejarOnda já reservou mantêm o número da onda; senão, abre a próxima.
+    const jaReservados = [...new Set(estado.cards.filter((c) => reservar.has(c.id)).map((c) => c.onda))]
+    ondaN = reservar.size === 0 ? null : jaReservados.length === 1 && jaReservados[0] !== null ? jaReservados[0] : Math.max(0, ...estado.cards.map((c) => c.onda ?? 0)) + 1
     if (reservar.size > 0) {
       atualizarEstado((e) => ({
         ...e,
@@ -99,5 +104,5 @@ export async function prepararOnda(
   const partes = [`${seguros.length} card(s) prontos para a onda`]
   if (pulados.length) partes.push(`${pulados.length} pulado(s): ${pulados.map((p) => `${p.id} (${p.motivo})`).join('; ')}`)
   if (bloqueados.length) partes.push(`${bloqueados.length} BLOCKED pelo sandbox: ${bloqueados.map((b) => `${b.id}: ${b.motivos[0]}`).join(' ')}`)
-  return { ok: true, pedidos: seguros, pulados, bloqueados, avisos, nota: `${partes.join('. ')}.` }
+  return { ok: true, pedidos: seguros, pulados, bloqueados, avisos, onda: ondaN, nota: `${partes.join('. ')}.` }
 }

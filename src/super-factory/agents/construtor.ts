@@ -8,6 +8,7 @@ import { z } from 'zod'
 
 import type { Implementador } from '../../factory/autonomo.ts'
 import { redigirSegredos } from '../../factory/guards.ts'
+import { lerMapaDeCriterios } from '../../factory/criterios.ts'
 import type { AcaoDoConstrutor } from '../../factory/verificacao.ts'
 import { lerBaseDoProjeto } from '../conhecimento.ts'
 import type { Executor } from '../../factory/sandbox.ts'
@@ -107,7 +108,7 @@ export const construtor = new Agent({
     'Rode o comando de teste do repositório e só pare quando ele passar, ou quando explicar por que não passa.',
     'Não faça commit, push, merge nem deploy: a Factory envia a branch e abre o pull request depois. Uma pessoa revisa e faz o merge.',
     'Não leia nem imprima credenciais. Não desative testes para passar.',
-    'Termine com um resumo curto: o que mudou, quais arquivos e o resultado do teste.',
+    'Termine com um resumo curto: o que mudou, quais arquivos e o resultado do teste. Depois do resumo, escreva UMA linha por critério de aceite, na ordem em que eles foram numerados no pedido, neste formato exato: "CRITERIO <n>: <arquivo de teste>" (vários arquivos separados por vírgula; "CRITERIO <n>: nenhum" se nenhum teste cobre). A Factory confere se o arquivo está no diff e se a suíte passou; não invente um teste que você não escreveu.',
   ].join('\n'),
   model: MODELO_CONSTRUTOR,
   maxRetries: 2,
@@ -180,8 +181,8 @@ export const implementadorComAgente: Implementador = async ({ estado, executor, 
     '',
     estado.card.descricao,
     '',
-    'Critérios de aceite:',
-    ...estado.card.criterios.map((criterio) => `- ${criterio}`),
+    'Critérios de aceite (numerados; informe no fim qual teste cobre cada um):',
+    ...estado.card.criterios.map((criterio, i) => `${i + 1}. ${criterio}`),
     '',
     `Teste do repositório: ${verificacao.verificar ?? 'nenhum encontrado; crie um teste se o projeto tiver framework de teste'}.`,
     mapa ? `\nMapa do repositório (gerado pela Factory dos arquivos clonados: use para achar onde mexer, sem listar tudo):\n${mapa}` : '',
@@ -196,5 +197,7 @@ export const implementadorComAgente: Implementador = async ({ estado, executor, 
   const entrada = Number(resposta.usage?.inputTokens)
   const saida = Number(resposta.usage?.outputTokens)
   const uso = Number.isFinite(entrada) && Number.isFinite(saida) ? { entrada, saida } : undefined
-  return { resumo: resposta.text.slice(0, 1500) || 'O construtor terminou sem resumo.', uso, acoes: acoesDasChamadas(resposta.toolCalls as Parameters<typeof acoesDasChamadas>[0]) }
+  // O mapa de critérios vem do texto inteiro, antes de cortar o resumo.
+  const criterios = lerMapaDeCriterios(resposta.text)
+  return { resumo: resposta.text.replace(/^\s*[-*]?\s*CRIT[ÉE]RIO\s+\d+\s*[:=-].*$/gim, '').trim().slice(0, 1500) || 'O construtor terminou sem resumo.', uso, ...(criterios.length ? { criterios } : {}), acoes: acoesDasChamadas(resposta.toolCalls as Parameters<typeof acoesDasChamadas>[0]) }
 }

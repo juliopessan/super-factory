@@ -4,6 +4,7 @@
 // que já existe, nunca de uma cópia dele. Não há transição para build/qa/review/done por aqui: isso é da execução e do merge humano.
 
 import { grauDe } from './board.ts'
+import { resultadoPorCriterio, type ResultadoDoCriterio } from './criterios.ts'
 import { anotar } from './ledger.ts'
 import { triarPedido } from './pipeline.ts'
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
@@ -88,6 +89,8 @@ export type CardCompleto = {
     tokens: number | null
     ultimosEventos: Array<{ tipo: string; resumo: string }>
   }
+  /** Resultado por critério de aceite (PASS, FAIL, NOT_RUN ou BLOCKED), com a evidência. */
+  criterios: ResultadoDoCriterio[]
   podeEditar: boolean
   podeIniciar: boolean
   porQueNaoIniciar: string | null
@@ -117,6 +120,7 @@ export function lerCardCompleto(cardId: string, estado: FabricaEstado = lerEstad
           ultimosEventos: run.trilha.slice(-8).map((e) => ({ tipo: e.tipo, resumo: e.resumo })),
         }
       : null,
+    criterios: run?.criterios ?? resultadoPorCriterio({ criterios: card.criterios, mapa: null, arquivosMudados: [], checks: run?.checks ?? [], parado: run?.parado ?? false, motivo: run?.motivo ?? null }),
     podeEditar: (COLUNAS_EDITAVEIS as readonly string[]).includes(card.coluna),
     podeIniciar: razao === null,
     porQueNaoIniciar: razao,

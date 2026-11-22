@@ -32,6 +32,7 @@ import { comentarPullRequestGithub as postarRevisao, lerPullRequestGithub as bus
 import { MAXIMO_DE_CARDS_POR_ONDA, validarOnda } from '../../factory/dependencias.ts'
 import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/paralelo.ts'
 import { editarCard as editarCardDoQuadro, lerCardCompleto, moverCard as moverCardDoQuadro, planejarOndaDeCards } from '../../factory/cards.ts'
+import { anexarCI, listarOndas, visaoDaOnda } from '../../factory/ondas.ts'
 import { prepararOnda } from '../../factory/preparar-onda.ts'
 import { preValidarSandbox } from '../../factory/preflight.ts'
 import { depsDoPreflight, ferramentasDaImagem, imagemDoSandbox } from '../preflight.ts'
@@ -180,6 +181,23 @@ export const lerCard = createTool({
     if (!lido) return { ok: false, card: null, issue: null, duplicatas: [], execucao: null, podeEditar: false, podeIniciar: false, porQueNaoIniciar: null, resumo: `Não achei o card ${cardId}.` }
     const dup = lido.duplicatas.length ? ` Parecido com: ${lido.duplicatas.map((d) => `${d.id} (${d.coluna})`).join(', ')}.` : ''
     return { ok: true, ...lido, resumo: `${lido.card.id} em ${lido.card.coluna}: ${lido.card.titulo}.${lido.execucao ? ` Execução ${lido.execucao.runId}: ${lido.execucao.desfecho}.` : ' Sem execução.'}${lido.podeIniciar ? ' Pode iniciar.' : ` Não inicia: ${lido.porQueNaoIniciar}`}${dup}` }
+  },
+})
+
+export const lerOnda = createTool({
+  id: 'ler-onda',
+  description: 'Mostra uma onda inteira num lugar só: cada card reservado, a execução dele (estágio, desfecho, motivo, minutos), o PR e o resultado do PR (aceito/ajustado/recusado), o resultado por critério de aceite (PASS, FAIL, NOT_RUN ou BLOCKED, com a evidência) e os tokens. Com comCI, lê também o CI de cada PR no GitHub (só leitura). Sem o número da onda, lista as ondas que existem.',
+  inputSchema: z.object({ onda: z.number().int().min(1).optional().describe('Número da onda (iniciarOnda e planejarOnda devolvem). Sem isto, lista as ondas.'), comCI: z.boolean().optional().describe('Lê o CI de cada PR da onda.') }),
+  outputSchema: z.object({ ok: z.boolean(), onda: z.any().nullable(), ondas: z.array(z.any()), resumo: z.string() }),
+  execute: async ({ onda, comCI }) => {
+    if (onda === undefined) {
+      const ondas = listarOndas()
+      return { ok: true, onda: null, ondas, resumo: ondas.length ? ondas.map((o) => o.resumo).join(' ') : 'Nenhuma onda reservada ainda.' }
+    }
+    let visao = visaoDaOnda(onda)
+    if (!visao) return { ok: false, onda: null, ondas: [], resumo: `Não há cards na onda ${onda}.` }
+    if (comCI) visao = await anexarCI(visao, (id) => lerEstado().cards.find((c) => c.id === id)?.repositorio ?? null)
+    return { ok: true, onda: visao, ondas: [], resumo: visao.resumo }
   },
 })
 
@@ -974,6 +992,7 @@ export const iniciarOnda = createTool({
     ok: z.boolean(),
     runId: z.string().nullable(),
     nota: z.string(),
+    onda: z.number().nullable().optional(),
     iniciados: z.array(z.string()).optional(),
     pulados: z.array(z.object({ id: z.string(), motivo: z.string() })).optional(),
     bloqueados: z.array(z.object({ id: z.string(), motivos: z.array(z.string()) })).optional(),
@@ -999,10 +1018,11 @@ export const iniciarOnda = createTool({
     return {
       ok: true,
       runId,
+      onda: preparo.onda,
       iniciados: entrada.pedidos.map((p) => p.cardId ?? p.titulo),
       pulados: preparo.pulados,
       bloqueados: preparo.bloqueados,
-      nota: `${preparo.pulados.length || preparo.bloqueados.length ? `${preparo.nota} ` : ''}Onda iniciada com ${entrada.pedidos.length} card(s), ${simultaneos} por vez${entrada.ensaio ? ' (ensaio)' : ''}${entrada.revisar && !entrada.ensaio ? ', com revisão automática dos PRs' : ''}${empilhados ? `, ${empilhados} deles empilhado(s) sobre outro (PRs em pilha: o merge segue de baixo para cima)` : ''}. Execução ${runId} em Workflows → onda. Cada card termina em pull request aguardando revisão humana.`,
+      nota: `${preparo.pulados.length || preparo.bloqueados.length ? `${preparo.nota} ` : ''}Onda${preparo.onda ? ` ${preparo.onda}` : ''} iniciada com ${entrada.pedidos.length} card(s), ${simultaneos} por vez${entrada.ensaio ? ' (ensaio)' : ''}${entrada.revisar && !entrada.ensaio ? ', com revisão automática dos PRs' : ''}${empilhados ? `, ${empilhados} deles empilhado(s) sobre outro (PRs em pilha: o merge segue de baixo para cima)` : ''}. Execução ${runId} em Workflows → onda. Cada card termina em pull request aguardando revisão humana.`,
     }
   },
 })

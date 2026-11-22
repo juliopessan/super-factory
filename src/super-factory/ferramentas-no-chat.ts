@@ -48,6 +48,7 @@ export const ETAPAS_POR_FERRAMENTA: Record<string, { peso: number; sugestao: str
   listarMilestonesGithub: { peso: 5, sugestao: 'Coloque as issues abertas no milestone com mais atraso' },
   diagnosticarProntidaoGithub: { peso: 6, sugestao: 'Abra cards para o que falta nesse repositório' },
   triarBugGithub: { peso: 7, sugestao: 'Importe a issue e abra o card para corrigir' },
+  lerOnda: { peso: 5, sugestao: 'O que falta para liberar o merge dos PRs dessa onda?' },
   lerCard: { peso: 5, sugestao: 'Inicie a onda com esse card' },
   editarCard: { peso: 7, sugestao: 'Mova o card para ready e inicie a onda' },
   moverCard: { peso: 7, sugestao: 'Planeje a onda com os cards em ready' },

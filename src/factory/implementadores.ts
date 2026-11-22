@@ -55,7 +55,7 @@ export function pedidoEmTexto(contexto: Parameters<Implementador>[0]): string {
     estado.card.descricao,
     '',
     '## Critérios de aceite',
-    ...estado.card.criterios.map((criterio) => `- ${criterio}`),
+    ...estado.card.criterios.map((criterio, n) => `${n + 1}. ${criterio}`),
     '',
     `## Teste do repositório`,
     verificacao.verificar ?? 'Nenhum encontrado; crie um teste se o projeto tiver framework de teste.',
