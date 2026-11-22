@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { Implementador } from '../../factory/autonomo.ts'
 import { redigirSegredos } from '../../factory/guards.ts'
 import { lerMapaDeCriterios } from '../../factory/criterios.ts'
+import { ErroDeTeto, medidorDeTokens, registrarGasto } from '../../factory/custo.ts'
 import type { AcaoDoConstrutor } from '../../factory/verificacao.ts'
 import { lerBaseDoProjeto } from '../conhecimento.ts'
 import type { Executor } from '../../factory/sandbox.ts'
@@ -152,6 +153,7 @@ export const reprodutorComAgente: Reprodutor = async ({ issue, executor, verific
     convencoes ? `\nConvenções do repositório (texto do projeto):\n${convencoes}` : '',
   ].join('\n')
   const resposta = await reprodutor.generate(pedido, { requestContext: contexto, maxSteps: 30 })
+  registrarGasto(`triagem:#${issue.numero}`, (Number(resposta.usage?.inputTokens) || 0) + (Number(resposta.usage?.outputTokens) || 0))
   return { resumo: resposta.text.slice(0, 600) || 'O reprodutor terminou sem resumo.' }
 }
 
@@ -171,7 +173,7 @@ export function acoesDasChamadas(chamadas: Array<{ payload?: { toolName?: string
 }
 
 /** Implementador de verdade: o agente construtor, com o executor do card no contexto. */
-export const implementadorComAgente: Implementador = async ({ estado, executor, verificacao, tentativa, falhaAnterior, convencoes, mapa }) => {
+export const implementadorComAgente: Implementador = async ({ estado, executor, verificacao, tentativa, falhaAnterior, convencoes, mapa, orcamento }) => {
   const base = await lerBaseDoProjeto(estado.card.repositorio).catch(() => null)
   const regrasDoCliente = base && !/está vazia/.test(base.resumo) ? base.resumo : null
   const contexto = new RequestContext()
@@ -193,7 +195,27 @@ export const implementadorComAgente: Implementador = async ({ estado, executor, 
       ? `\nTentativa ${tentativa}. O teste falhou antes (código ${falhaAnterior.codigo}):\n${`${falhaAnterior.saida}\n${falhaAnterior.erro}`.slice(-4000)}`
       : '',
   ].join('\n')
-  const resposta = await construtor.generate(pedido, { requestContext: contexto, maxSteps: 60 })
+  // Teto de custo: soma os tokens de cada passo e interrompe o agente ao chegar no que ainda cabe.
+  const controle = new AbortController()
+  const medidor = medidorDeTokens(orcamento?.tokens ?? null, () => controle.abort())
+  const gasto = medidor.uso
+  const opcoes = {
+    requestContext: contexto,
+    maxSteps: 60,
+    ...(orcamento
+      ? {
+          abortSignal: controle.signal,
+          onStepFinish: medidor.aoTerminarPasso,
+        }
+      : {}),
+  }
+  let resposta: Awaited<ReturnType<typeof construtor.generate>>
+  try {
+    resposta = await construtor.generate(pedido, opcoes)
+  } catch (erro) {
+    if (orcamento && controle.signal.aborted) throw new ErroDeTeto(orcamento.nivel, gasto.entrada + gasto.saida, orcamento.tokens, gasto)
+    throw erro
+  }
   const entrada = Number(resposta.usage?.inputTokens)
   const saida = Number(resposta.usage?.outputTokens)
   const uso = Number.isFinite(entrada) && Number.isFinite(saida) ? { entrada, saida } : undefined

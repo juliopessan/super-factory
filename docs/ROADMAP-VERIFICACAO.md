@@ -33,6 +33,8 @@ Decisões da pessoa que opera a Factory (21/11/2026): navegador no sandbox, **si
 | C | Evals, minerador de regras, resultado do PR | feito |
 | D | Webhook, triagem automática de bug, orçamento de PR | feito |
 | E | Cards existentes por ID (ler, editar, mover, duplicatas, reservar, iniciar) e pré-validação do sandbox | feito |
+| F | Resultado por critério de aceite e visão por onda | feito |
+| G | Teto de custo em tokens (card, onda, dia) | feito |
 
 ## Ainda aberto (relato do Chief, 22/11/2026)
 

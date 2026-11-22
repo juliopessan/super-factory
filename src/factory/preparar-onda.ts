@@ -1,6 +1,7 @@
 // Prepara a onda: transforma os IDs de cards que já existem nos pedidos que o iniciador entende, sem abrir card novo,
 // confere duplicatas e o sandbox, e reserva os cards. Quem de fato roda a onda é o workflow "onda".
 
+import { mensagemDoTeto, type Tetos } from './custo.ts'
 import { duplicatasDe, issueDoCard, lerCardCompleto } from './cards.ts'
 import { preValidarSandbox, type DepsDoPreflight } from './preflight.ts'
 import { atualizarEstado, lerEstado, type FabricaEstado } from './store.ts'
@@ -37,7 +38,7 @@ export type PreparoDaOnda = {
  */
 export async function prepararOnda(
   entrada: { cardIds?: string[]; pedidos?: PedidoPreparado[]; ensaio?: boolean; reservar?: boolean },
-  deps: { preflight?: DepsDoPreflight },
+  deps: { preflight?: DepsDoPreflight; custo?: { tetos: Tetos; gastoDoDia: () => number } },
   estado: FabricaEstado = lerEstado(),
 ): Promise<PreparoDaOnda> {
   const pulados: PreparoDaOnda['pulados'] = []
@@ -46,6 +47,8 @@ export async function prepararOnda(
   const pedidos: PedidoPreparado[] = []
   const falha = (nota: string): PreparoDaOnda => ({ ok: false, pedidos: [], pulados, bloqueados, avisos, onda: null, nota })
   if (!entrada.cardIds?.length && !entrada.pedidos?.length) return falha('Informe cardIds (cards que já estão no quadro) ou pedidos completos.')
+  // Teto do dia: se já passou, nenhuma execução nova começa (o ensaio não gasta modelo).
+  if (!entrada.ensaio && deps.custo && deps.custo.tetos.dia > 0 && deps.custo.gastoDoDia() >= deps.custo.tetos.dia) return falha(`BLOCKED: ${mensagemDoTeto('dia', deps.custo.gastoDoDia(), deps.custo.tetos.dia)}`)
   const ids = [...new Set(entrada.cardIds ?? [])]
   for (const id of ids) {
     const lido = lerCardCompleto(id, estado)
