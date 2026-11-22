@@ -5033,6 +5033,83 @@ assert.equal(
   assert.ok(agI.includes('SÓ aprova com decidirLicao quando ela disser'))
 }
 
+// --- Lote J: filtro de repositório (o quadro é um só para todos os repositórios)
+{
+  const ca = await import('../factory/cards.ts')
+  const po = await import('../factory/preparar-onda.ts')
+  const st = await import('../factory/store.ts')
+  const { planejarOnda: planejarTool } = await import('../super-factory/tools/factory.ts')
+
+  assert.equal(ca.repositorioComparavel('Acme/Pedidos'), 'acme/pedidos')
+  assert.equal(ca.repositorioComparavel('https://github.com/Acme/Pedidos.git'), 'acme/pedidos', 'o endereço do navegador também serve')
+  assert.equal(ca.repositorioComparavel('  acme/pedidos/ '), 'acme/pedidos')
+
+  const salvo = process.env.FACTORY_STATE_PATH
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-estado-j-'))
+  process.env.FACTORY_STATE_PATH = path.join(pasta, 'estado.json')
+  try {
+    const card = (id: string, titulo: string, repositorio: string, extra: Record<string, unknown> = {}) => ({ id, titulo, descricao: 'Ajustar o filtro de datas da API de pedidos para aceitar hora e minuto.', criterios: ['A API aceita intervalo com hora e retorna 400 quando o fim é anterior ao início'], coluna: 'ready', rota: 'clear', grau: 'easy', provedor: 'github', repositorio, branchBase: 'main', branchHead: null, onda: null, itemExterno: null, ...extra }) as import('../factory/schemas.ts').Card
+    const semear = () => st.gravarEstado({ seq: 40, cards: [card('C-1', 'Filtro antigo de outro projeto', 'juliopessan/outro-projeto'), card('C-8', 'Headroom integração de compressão', 'juliopessan/outro-projeto'), card('C-22', 'Capitalizar parceiro com espaços', 'juliopessan/src-amf-python-ensaio'), card('C-23', 'Rota de readiness no health', 'juliopessan/src-amf-python-ensaio'), card('C-24', 'Melhorar a performance', 'juliopessan/src-amf-python-ensaio', { coluna: 'blocked' })], runs: {}, ledger: [] } as unknown as Parameters<typeof st.gravarEstado>[0])
+    semear()
+    const ENSAIO = 'juliopessan/src-amf-python-ensaio'
+
+    // sem filtro: o plano mistura, e avisa
+    let plano = ca.planejarOndaDeCards({ limite: 5 })
+    assert.deepEqual(plano.cardIds, ['C-1', 'C-8', 'C-22', 'C-23'])
+    assert.match(plano.aviso ?? '', /Esta onda mistura 2 repositórios \(juliopessan\/outro-projeto, juliopessan\/src-amf-python-ensaio\)\. Passe repositorio/)
+    assert.equal(plano.repositorio, null)
+    // sem filtro e escolhendo só de um repositório: avisa que o quadro tem ready de vários
+    plano = ca.planejarOndaDeCards({ escolher: ['C-22', 'C-23'] })
+    assert.match(plano.aviso ?? '', /O quadro tem cards em ready de 2 repositórios/)
+    // com filtro: só o repositório pedido, sem aviso
+    plano = ca.planejarOndaDeCards({ limite: 5, repositorio: ENSAIO })
+    assert.deepEqual([plano.cardIds, plano.aviso, plano.repositorio], [['C-22', 'C-23'], null, ENSAIO])
+    assert.deepEqual(ca.planejarOndaDeCards({ limite: 5, repositorio: 'https://github.com/JulioPessan/src-amf-python-ensaio.git' }).cardIds, ['C-22', 'C-23'], 'URL e maiúsculas servem')
+    // escolher um card de outro repositório com filtro: pulado, com o motivo
+    plano = ca.planejarOndaDeCards({ escolher: ['C-8', 'C-22'], repositorio: ENSAIO })
+    assert.deepEqual(plano.cardIds, ['C-22'])
+    assert.deepEqual(plano.pulados, [{ id: 'C-8', motivo: `é do repositório juliopessan/outro-projeto, não de ${ENSAIO}` }])
+    // repositório sem card em ready
+    plano = ca.planejarOndaDeCards({ repositorio: 'acme/nada' })
+    assert.deepEqual([plano.cardIds, plano.aviso], [[], 'Nenhum card em ready para acme/nada.'])
+    // reservar com filtro reserva só os do repositório
+    plano = ca.planejarOndaDeCards({ limite: 5, repositorio: ENSAIO, reservar: true })
+    assert.deepEqual(st.lerEstado().cards.filter((c) => c.onda !== null).map((c) => c.id), ['C-22', 'C-23'])
+    assert.equal(st.lerEstado().cards.find((c) => c.id === 'C-1')!.onda, null, 'os cards de outro projeto ficam intactos')
+    // a ferramenta expõe o filtro e o aviso
+    semear()
+    const viaTool = await planejarTool.execute!({ limite: 5 }, {} as never) as { cardIds: string[]; resumo: string; aviso: string | null }
+    assert.match(viaTool.resumo, /ATENÇÃO: Esta onda mistura 2 repositórios/)
+    const viaTool2 = await planejarTool.execute!({ limite: 5, repositorio: ENSAIO }, {} as never) as { cardIds: string[]; resumo: string }
+    assert.deepEqual(viaTool2.cardIds, ['C-22', 'C-23'])
+    assert.ok(!/ATENÇÃO/.test(viaTool2.resumo))
+
+    // iniciar: recusa card e pedido de outro repositório
+    const preflight = { imagem: 'i', ferramentas: async () => ({ git: true, node: true, npm: true, python3: true, pip: true, go: true, dotnet: true }), arquivosDaRaiz: async () => ['package.json'] }
+    const livre = { titulo: 'Trabalho avulso', descricao: 'Descrição longa o bastante para o pedido avulso.', criterios: 'Critério observável aqui', provedor: 'github' as const, repositorio: 'juliopessan/outro-projeto' }
+    let prep = await po.prepararOnda({ cardIds: ['C-1', 'C-22', 'C-23'], pedidos: [livre], repositorio: ENSAIO }, { preflight })
+    assert.deepEqual(prep.pedidos.map((p) => p.cardId), ['C-22', 'C-23'])
+    assert.deepEqual(prep.pulados.map((p) => p.id), ['C-1', 'Trabalho avulso'])
+    assert.match(prep.pulados[0]!.motivo, /é do repositório juliopessan\/outro-projeto, não de juliopessan\/src-amf-python-ensaio/)
+    assert.equal(st.lerEstado().cards.find((c) => c.id === 'C-1')!.onda, null, 'o card recusado não é reservado')
+    // tudo de outro repositório: a onda não começa
+    semear()
+    prep = await po.prepararOnda({ cardIds: ['C-1', 'C-8'], repositorio: ENSAIO }, { preflight })
+    assert.equal(prep.ok, false)
+    assert.match(prep.nota, /Nenhum card pôde iniciar: C-1 \(é do repositório/)
+    // sem filtro, tudo como antes
+    semear()
+    assert.deepEqual((await po.prepararOnda({ cardIds: ['C-1', 'C-22'] }, { preflight })).pedidos.map((p) => p.cardId), ['C-1', 'C-22'])
+  } finally {
+    if (salvo === undefined) delete process.env.FACTORY_STATE_PATH
+    else process.env.FACTORY_STATE_PATH = salvo
+    fs.rmSync(pasta, { recursive: true, force: true })
+  }
+  const toolsJ = fs.readFileSync(new URL('../super-factory/tools/factory.ts', import.meta.url), 'utf8')
+  assert.ok(toolsJ.includes('repositorio: bruto.repositorio') && toolsJ.includes('planejarOndaDeCards({ limite, escolher, excluir, reservar, repositorio })'))
+  assert.ok(fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8').includes('O quadro é UM SÓ para todos os repositórios'))
+}
+
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(
