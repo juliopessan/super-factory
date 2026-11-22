@@ -4279,6 +4279,16 @@ assert.equal(
     const bloq = pre.bloqueiosDoSandbox(semPip, pre.exigenciasDosArquivos(['requirements.txt']), 'node:22-bookworm')
     assert.match(bloq[0] ?? '', /não tem pip, e este repositório precisa \(requirements\.txt pede pip install\)\. Conserto: rode sudo bash \/opt\/super-factory\/deploy\/construir-sandbox\.sh/)
     const lidas = await pre.inspecionarSandbox(criarExecutorFalso(() => ({ saida: 'git=1\nnode=1\nnpm=1\npython3=0\npip=0\ngo=0\ndotnet=1\nlixo' })))
+    // a imagem pura não tem a pasta do repositório: a inspeção roda em /workspace
+    const execIns = criarExecutorFalso(() => ({ saida: 'git=1\nnode=1\nnpm=1\npython3=1\npip=1\ngo=0\ndotnet=0' }))
+    await pre.inspecionarSandbox(execIns)
+    await pre.versaoDoPythonNoSandbox(execIns)
+    assert.deepEqual(execIns.cwds, ['/workspace', '/workspace'], 'sem repositório clonado, o cwd padrão não existe: usa /workspace')
+    // inspeção que falha (saída vazia, erro do docker exec) não é "a imagem não tem nada"
+    await assert.rejects(pre.inspecionarSandbox(criarExecutorFalso(() => ({ codigo: 126, saida: '', erro: 'OCI runtime exec failed: chdir to cwd ("/workspace/repo") set in config.json failed' }))), /não consegui inspecionar o sandbox \(código 126\): OCI runtime exec failed/)
+    const semInspecao = await pre.preValidarSandbox({ repositorio: 'acme/x', branchBase: 'main', provedor: 'github' }, { imagem: 'i', ferramentas: () => pre.inspecionarSandbox(criarExecutorFalso(() => ({ codigo: 126, saida: '', erro: 'chdir falhou' }))), arquivosDaRaiz: async () => ['requirements.txt'] })
+    assert.equal(semInspecao.resultado, 'NOT_RUN', 'inspeção que falhou não bloqueia a onda')
+    assert.match(semInspecao.motivos[0] ?? '', /não consegui inspecionar o sandbox/)
     assert.deepEqual([lidas.git, lidas.python3, lidas.pip, lidas.dotnet], [true, false, false, true])
     const depsPre = (ferr: Partial<typeof tudo>, raiz: string[] | null, falha = false) => ({ imagem: 'node:22-bookworm', ferramentas: async () => { if (falha) throw new Error('Docker não responde'); return { ...tudo, ...ferr } }, arquivosDaRaiz: async () => raiz })
     const cardPy = { repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }
