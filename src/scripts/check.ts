@@ -4352,6 +4352,147 @@ assert.equal(
   assert.ok(fs.readFileSync(new URL('../super-factory/tools/factory.ts', import.meta.url), 'utf8').includes('cardIds: z.array'))
 }
 
+// --- Lote F: resultado por critério de aceite e visão por onda
+{
+  const cr = await import('../factory/criterios.ts')
+  const on = await import('../factory/ondas.ts')
+  const ca = await import('../factory/cards.ts')
+  const po = await import('../factory/preparar-onda.ts')
+  const st = await import('../factory/store.ts')
+  const { lerOnda } = await import('../super-factory/tools/factory.ts')
+  const { acoesDasChamadas: _a } = await import('../super-factory/agents/construtor.ts')
+
+  // o mapa que o construtor informa
+  assert.deepEqual(cr.lerMapaDeCriterios('Mudei o filtro.\nCRITERIO 1: tests/filtro.test.js, `src/x.test.js`\ncritério 2: nenhum\n- CRITERIO 3 = ./tests/c.test.js\nCRITERIO 4: ../../etc/passwd'), [{ n: 1, testes: ['tests/filtro.test.js', 'src/x.test.js'] }, { n: 2, testes: [] }, { n: 3, testes: ['tests/c.test.js'] }, { n: 4, testes: [] }], 'caminho inseguro não entra')
+  assert.deepEqual(cr.lerMapaDeCriterios('sem linhas de critério'), [])
+  assert.deepEqual(cr.lerMapaDeCriterios('CRITERIO 1: a.test.js\nCRITERIO 1: b.test.js'), [{ n: 1, testes: ['a.test.js', 'b.test.js'] }], 'repetido soma')
+
+  // o resultado: só PASS com teste no diff e suíte verde
+  const ck = (nome: string, resultado: 'PASS' | 'FAIL' | 'NOT_RUN' | 'BLOCKED', comando: string | null = 'npm run test') => ({ nome, resultado, comando, evidencia: 'e' })
+  const base = { criterios: ['filtra por status', 'recusa fim anterior ao início', 'mostra mensagem vazia'], mapa: [{ n: 1, testes: ['tests/filtro.test.js'] }, { n: 2, testes: ['tests/nao-existe.test.js'] }, { n: 3, testes: [] }], arquivosMudados: ['src/filtro.js', 'tests/filtro.test.js'], checks: [ck('testes-no-sandbox', 'PASS')], parado: false, motivo: null }
+  let r = cr.resultadoPorCriterio(base)
+  assert.deepEqual(r.map((x) => x.status), ['PASS', 'NOT_RUN', 'NOT_RUN'])
+  assert.match(r[0]!.evidencia, /Teste apontado no diff: tests\/filtro\.test\.js\. A suíte \(npm run test\) passou\. Cobertura declarada pelo construtor/)
+  assert.match(r[1]!.evidencia, /não está no diff: o mapeamento não foi confirmado/, 'teste citado que não existe não vale')
+  assert.match(r[2]!.evidencia, /não apontou nenhum teste/)
+  assert.equal(cr.contagemDosCriterios(r), '1 PASS, 2 NOT_RUN')
+  assert.match(cr.resultadoPorCriterio({ ...base, checks: [ck('testes-no-sandbox', 'PASS'), ck('vermelho-verde', 'PASS')] })[0]!.evidencia, /falha sem a correção \(vermelho→verde\)/)
+  assert.equal(cr.resultadoPorCriterio({ ...base, checks: [ck('testes-no-sandbox', 'FAIL')] })[0]!.status, 'FAIL', 'suíte vermelha: o critério com teste apontado falha')
+  assert.equal(cr.resultadoPorCriterio({ ...base, checks: [ck('testes-no-sandbox', 'FAIL')] })[2]!.status, 'NOT_RUN', 'e o sem teste continua sem prova')
+  assert.match(cr.resultadoPorCriterio({ ...base, checks: [ck('testes-no-sandbox', 'PASS'), ck('vermelho-verde', 'FAIL')] })[0]!.evidencia, /passa mesmo sem a correção/)
+  assert.deepEqual(cr.resultadoPorCriterio({ ...base, mapa: null }).map((x) => x.status), ['NOT_RUN', 'NOT_RUN', 'NOT_RUN'], 'implementador sem mapa (CLI externa): nada é PASS')
+  assert.equal(cr.resultadoPorCriterio({ ...base, checks: [] })[0]!.status, 'NOT_RUN')
+  const bloq = cr.resultadoPorCriterio({ ...base, checks: [], parado: true, motivo: 'O clone falhou: sem permissão' })
+  assert.deepEqual(bloq.map((x) => x.status), ['BLOCKED', 'BLOCKED', 'BLOCKED'])
+  assert.match(bloq[0]!.evidencia, /parou antes dos testes: O clone falhou/)
+  assert.equal(cr.resultadoPorCriterio({ ...base, checks: [ck('testes-no-sandbox', 'BLOCKED')] })[0]!.status, 'BLOCKED')
+  assert.equal(cr.contagemDosCriterios([]), 'sem critérios')
+
+  // no fluxo do PR: o construtor aponta, a Factory confere contra o diff e a suíte
+  const pedidoDois = { ...pedidoAuto, criterios: 'O endpoint devolve 400 quando o fim do intervalo é anterior ao início\nO filtro aplica hora e minuto, não só o dia' }
+  const fluxoC = async (mapa: Array<{ n: number; testes: string[] }> | undefined, arquivos = 'src/filtro.js\ntests/filtro.test.js') => {
+    const g = githubFalso()
+    const b = roteiroNode()
+    const exec = criarExecutorFalso((c) => (c === 'git ls-files -m -o --exclude-standard' ? { saida: arquivos } : b(c)))
+    const out = await executarAutonomo(pedidoDois, { criarExecutor: async () => exec, implementador: async () => ({ resumo: 'ok', ...(mapa ? { criterios: mapa } : {}) }), credenciais: { githubToken: TOKEN_TESTE }, github: g.deps })
+    return { out, corpo: String(g.chamadas[0]?.corpo.body ?? '') }
+  }
+  let f = await fluxoC([{ n: 1, testes: ['tests/filtro.test.js'] }, { n: 2, testes: ['tests/filtro.test.js'] }])
+  assert.deepEqual(f.out.estado.criterios?.map((c) => c.status), ['PASS', 'PASS'])
+  assert.match(f.corpo, /### Resultado por critério\n1\. O endpoint devolve 400[\s\S]*→ \*\*PASS\*\*\n {3}Teste apontado no diff[\s\S]*2\. O filtro aplica hora e minuto[\s\S]*### Evidência do sandbox/)
+  assert.ok(f.out.estado.trilha.some((e) => /Critérios de aceite: 2 PASS\./.test(e.resumo)))
+  f = await fluxoC([{ n: 1, testes: ['tests/filtro.test.js'] }, { n: 2, testes: [] }])
+  assert.deepEqual(f.out.estado.criterios?.map((c) => c.status), ['PASS', 'NOT_RUN'])
+  assert.match(f.corpo, /2\. O filtro aplica hora e minuto[^\n]*→ \*\*NOT_RUN\*\*\n {3}O construtor não apontou nenhum teste/)
+  f = await fluxoC(undefined)
+  assert.deepEqual(f.out.estado.criterios?.map((c) => c.status), ['NOT_RUN', 'NOT_RUN'], 'sem mapa do implementador, nada é PASS')
+  f = await fluxoC([{ n: 1, testes: ['tests/filtro.test.js'] }], 'src/filtro.js')
+  assert.match(f.out.estado.criterios?.[0]?.evidencia ?? '', /não está no diff/, 'o teste apontado precisa estar no diff')
+  f = await fluxoC([{ n: 1, testes: ['a.test.js'] }])
+  assert.equal(f.out.estado.criterios?.[0]?.status, 'NOT_RUN')
+  assert.equal(f.out.estado.parado, false)
+  // o construtor de verdade pede o mapa e o resumo não leva as linhas dele
+  const constrSrc = fs.readFileSync(new URL('../super-factory/agents/construtor.ts', import.meta.url), 'utf8')
+  assert.ok(constrSrc.includes('CRITERIO <n>: <arquivo de teste>') && constrSrc.includes('lerMapaDeCriterios(resposta.text)'))
+  const { pedidoEmTexto } = await import('../factory/implementadores.ts')
+  assert.match(pedidoEmTexto({ estado: { card: { id: 'C-1', titulo: 'T', descricao: 'd', criterios: ['um', 'dois'] } }, verificacao: { verificar: 'npm test' }, tentativa: 1, falhaAnterior: null } as never), /1\. um\n2\. dois/, 'critérios numerados')
+
+  // a visão por onda
+  const salvo = process.env.FACTORY_STATE_PATH
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-estado-f-'))
+  process.env.FACTORY_STATE_PATH = path.join(pasta, 'estado.json')
+  try {
+    const card = (id: string, extra: Record<string, unknown> = {}) => ({ id, titulo: `Card ${id}`, descricao: 'Ajustar o filtro de datas da API de pedidos para aceitar hora e minuto.', criterios: ['A API aceita intervalo com hora e retorna 400 quando o fim é anterior ao início', 'Mostra a mensagem "Nada encontrado" quando a lista vem vazia'], coluna: 'ready', rota: 'clear', grau: 'easy', provedor: 'github', repositorio: 'acme/pedidos', branchBase: 'main', branchHead: null, onda: null, itemExterno: null, ...extra }) as import('../factory/schemas.ts').Card
+    const run = (c: import('../factory/schemas.ts').Card, extra: Record<string, unknown> = {}) => ({ runId: `R${c.id.slice(1)}`, card: c, estagio: 'delivery', parado: false, motivo: null, desfecho: 'em-andamento', especificacao: '', fatias: [], checks: [], achados: [], aprovacoes: [], entrega: null, evidencia: 'NONE', trilha: [{ sequencia: 1, runId: 'x', em: '2026-01-01T10:00:00Z', estagio: 'triage', tipo: 'observed', resumo: 'a', ator: 'a' }, { sequencia: 2, runId: 'x', em: '2026-01-01T10:12:30Z', estagio: 'delivery', tipo: 'observed', resumo: 'b', ator: 'a' }], relatorio: '', atualizadoEm: '2026-01-01T00:00:00Z', ...extra }) as unknown as import('../factory/schemas.ts').Estado
+    const pr = (n: number) => ({ modo: 'live', provedor: 'github', ok: true, itemId: null, itemUrl: null, pullRequestId: n, pullRequestUrl: `https://github.com/acme/pedidos/pull/${n}`, nota: '' })
+    const c1 = card('C-1', { onda: 3, coluna: 'review', titulo: 'Filtro por status' })
+    const c2 = card('C-2', { onda: 3, coluna: 'blocked', titulo: 'Paginação' })
+    const c3 = card('C-3', { onda: 3, coluna: 'build', titulo: 'Cache' })
+    const c4 = card('C-4', { onda: 3, coluna: 'review', titulo: 'Exportar CSV' })
+    const c5 = card('C-5', { onda: 3, coluna: 'ready', titulo: 'Ainda não iniciou' })
+    const c6 = card('C-6', { onda: 4 })
+    st.gravarEstado({
+      seq: 10,
+      cards: [c1, c2, c3, c4, c5, c6, card('C-7')],
+      runs: {
+        'R-1': run(c1, { entrega: pr(11), desfecho: 'aceito-com-ressalvas', uso: { entrada: 3000, saida: 1000 }, checks: [ck('testes-no-sandbox', 'PASS')], criterios: [{ n: 1, texto: 'a', status: 'PASS', testes: ['t.js'], evidencia: 'ok' }, { n: 2, texto: 'b', status: 'NOT_RUN', testes: [], evidencia: 'sem teste' }], resultadoPr: { resultado: 'aceito', motivo: 'm', commitsHumanos: 0, mudancasPedidas: 0, medidoEm: 'x' } }),
+        'R-2': run(c2, { parado: true, motivo: 'A imagem do sandbox não tem pip', desfecho: 'bloqueado' }),
+        'R-4': run(c4, { entrega: pr(14), uso: { entrada: 500, saida: 500 } }),
+      },
+      ledger: [],
+    } as unknown as Parameters<typeof st.gravarEstado>[0])
+    const v = on.visaoDaOnda(3)!
+    assert.equal(v.total, 5)
+    assert.deepEqual(v.cards.map((c) => [c.id, c.andamento]), [['C-1', 'mesclado'], ['C-2', 'parado'], ['C-3', 'em-execucao'], ['C-4', 'pr-aberto'], ['C-5', 'aguardando']])
+    assert.deepEqual(v.porAndamento, { aguardando: 1, 'em-execucao': 1, parado: 1, 'pr-aberto': 1, mesclado: 1, recusado: 0 })
+    assert.equal(v.tokens, 5000, 'tokens somados da onda')
+    assert.equal(v.cards[0]!.execucao?.minutos, 12.5)
+    assert.equal(v.cards[0]!.contagemDeCriterios, '1 PASS, 1 NOT_RUN')
+    assert.deepEqual(v.cards[1]!.criterios.map((c) => c.status), ['BLOCKED', 'BLOCKED'], 'card parado: critérios BLOCKED com o motivo')
+    assert.match(v.cards[1]!.criterios[0]!.evidencia, /A imagem do sandbox não tem pip/)
+    assert.deepEqual(v.cards[4]!.criterios.map((c) => c.status), ['NOT_RUN', 'NOT_RUN'], 'quem não rodou não tem prova')
+    assert.match(v.resumo, /Onda 3: 5 card\(s\) \(1 aguardando, 1 em execucao, 1 parado, 1 pr aberto, 1 mesclado\)\. 5000 tokens gastos\./)
+    assert.equal(on.visaoDaOnda(99), null)
+    assert.deepEqual(on.listarOndas().map((o) => [o.onda, o.cards.length]), [[3, 5], [4, 1]])
+    // o CI de cada PR (só leitura), sem derrubar a visão quando falha
+    const lidos: string[] = []
+    const comCi = await on.anexarCI(v, (id) => (id === 'C-4' ? 'acme/pedidos' : 'acme/pedidos'), undefined, async (repo, ref) => {
+      lidos.push(`${repo}#${ref}`)
+      if (ref === 14) return { ok: false, dado: null, nota: 'falhou' }
+      return { ok: true, dado: { ref: String(ref), sha: 'x', estadoGeral: 'falha', checks: [{ nome: 'unit', status: 'completed', conclusao: 'failure', url: null, resumo: '', passosQueFalharam: [], fimDoLog: null }, { nome: 'lint', status: 'completed', conclusao: 'success', url: null, resumo: '', passosQueFalharam: [], fimDoLog: null }], statusLegado: [] }, nota: 'ok' }
+    })
+    assert.deepEqual(lidos, ['acme/pedidos#11', 'acme/pedidos#14'], 'só os cards com PR')
+    assert.deepEqual(comCi.cards[0]!.ci, { estado: 'falha', falhou: ['unit'] })
+    assert.deepEqual(comCi.cards[3]!.ci, { estado: 'nao-lido', falhou: [] })
+    assert.equal(comCi.cards[1]!.ci, null)
+    // a ferramenta
+    const lista = await lerOnda.execute!({}, {} as never) as { ok: boolean; ondas: unknown[]; resumo: string }
+    assert.equal(lista.ondas.length, 2)
+    assert.match(lista.resumo, /Onda 3:.*Onda 4:/)
+    const uma = await lerOnda.execute!({ onda: 3 }, {} as never) as { ok: boolean; onda: { total: number } }
+    assert.equal(uma.onda.total, 5)
+    assert.equal(((await lerOnda.execute!({ onda: 77 }, {} as never)) as { ok: boolean }).ok, false)
+    // lerCard traz o resultado por critério
+    assert.deepEqual(ca.lerCardCompleto('C-1')!.criterios.map((c) => c.status), ['PASS', 'NOT_RUN'])
+    assert.deepEqual(ca.lerCardCompleto('C-2')!.criterios.map((c) => c.status), ['BLOCKED', 'BLOCKED'])
+    // planejarOnda reserva e iniciarOnda mantém o mesmo número de onda
+    st.gravarEstado({ seq: 10, cards: [card('C-1', { titulo: 'Um' }), card('C-2', { titulo: 'Dois' }), card('C-3', { titulo: 'Outro assunto', onda: 5, coluna: 'review' })], runs: {}, ledger: [] } as unknown as Parameters<typeof st.gravarEstado>[0])
+    const plano = ca.planejarOndaDeCards({ limite: 2, reservar: true })
+    assert.equal(plano.onda, 6)
+    const prep = await po.prepararOnda({ cardIds: plano.cardIds }, { preflight: { imagem: 'i', ferramentas: async () => ({ git: true, node: true, npm: true, python3: true, pip: true, go: true, dotnet: true }), arquivosDaRaiz: async () => ['package.json'] } })
+    assert.equal(prep.onda, 6, 'iniciar mantém a onda que o planejamento reservou')
+    assert.equal(st.lerEstado().cards.filter((c) => c.onda === 6).length, 2)
+    const prep2 = await po.prepararOnda({ pedidos: [{ titulo: 'Novo pedido', descricao: 'Descrição longa o bastante.', criterios: 'Critério aqui', provedor: 'github', repositorio: 'acme/pedidos' }], ensaio: true }, {})
+    assert.equal(prep2.onda, null, 'pedido novo, sem card existente, não reserva onda')
+  } finally {
+    if (salvo === undefined) delete process.env.FACTORY_STATE_PATH
+    else process.env.FACTORY_STATE_PATH = salvo
+    fs.rmSync(pasta, { recursive: true, force: true })
+  }
+  const ag = fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8')
+  assert.ok(ag.includes('lerOnda') && ag.includes('PASS/FAIL/NOT_RUN/BLOCKED'))
+}
+
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(

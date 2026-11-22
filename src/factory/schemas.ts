@@ -104,6 +104,8 @@ export const estadoSchema = z.object({
   /** O que o construtor leu, escreveu e rodou (redigido, até 300 ações). Base da auditoria "afirmou sem ler". */
   acoes: z.array(z.object({ tentativa: z.number(), ferramenta: z.string(), alvo: z.string() })).max(300).optional(),
   /** O que aconteceu com o PR depois de aberto: mesclado como veio, mesclado com ajustes, recusado ou ainda aberto. */
+  /** Resultado por critério de aceite, com a evidência observada. Ausente em execuções antigas. */
+  criterios: z.array(z.object({ n: z.number(), texto: z.string(), status: z.enum(['PASS', 'FAIL', 'NOT_RUN', 'BLOCKED']), testes: z.array(z.string()), evidencia: z.string() })).max(30).optional(),
   resultadoPr: z.object({ resultado: z.enum(['aceito', 'ajustado', 'recusado', 'aberto']), motivo: z.string(), commitsHumanos: z.number(), mudancasPedidas: z.number(), medidoEm: z.string() }).optional(),
   atualizadoEm: z.string(),
 })

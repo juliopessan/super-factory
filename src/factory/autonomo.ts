@@ -12,6 +12,7 @@ import { PASTA_DO_REPOSITORIO, type Execucao, type Executor } from './sandbox.ts
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
 import { auditarAcoes, extrasDoNode, lerConvencoes, rodarBaseline, rodarExtras, verificarVermelhoVerde, veredito, type AcaoDoConstrutor, type Verificacao } from './verificacao.ts'
 import { lerEstado, persistir } from './store.ts'
+import { contagemDosCriterios, resultadoPorCriterio } from './criterios.ts'
 import { lerNumstat, lerOrcamento, textoDoOrcamento } from './orcamento.ts'
 import { atencaoDeProntidao, diagnosticarProntidao, gerarMapaDoRepositorio, prontidaoEmTexto, verificarAppNoNavegador, type MapaDoRepositorio } from './mapa.ts'
 
@@ -34,7 +35,7 @@ export type Implementador = (contexto: {
   convencoes?: string | null
   /** Mapa do repositório (pastas, telas, rotas, entradas, testes), gerado do que foi clonado. */
   mapa?: string | null
-}) => Promise<{ resumo: string; uso?: { entrada: number; saida: number }; acoes?: AcaoDoConstrutor[] }>
+}) => Promise<{ resumo: string; uso?: { entrada: number; saida: number }; acoes?: AcaoDoConstrutor[]; /** Qual teste o construtor diz que cobre cada critério (posição começando em 1). */ criterios?: Array<{ n: number; testes: string[] }> }>
 
 export type DepsAutonomo = {
   criarExecutor: (cardId: string) => Promise<Executor>
@@ -336,9 +337,11 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       const tentativas = Math.max(1, deps.tentativas ?? 2)
       let teste: Execucao | null = null
       let ultimoResumo = ''
+      let mapaDeCriterios: Array<{ n: number; testes: string[] }> | null = null
       for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
-        const { resumo, uso, acoes } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste, convencoes: contexto.convencoes ?? null, mapa: contexto.mapa ?? null })
+        const { resumo, uso, acoes, criterios: mapaDoConstrutor } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste, convencoes: contexto.convencoes ?? null, mapa: contexto.mapa ?? null })
         ultimoResumo = resumo
+        if (mapaDoConstrutor?.length) mapaDeCriterios = mapaDoConstrutor
         estado = anotarAuto(estado, 'implementation', `Tentativa ${tentativa}: ${resumo}`, 'reported')
         if (uso) estado = { ...estado, uso: { entrada: (estado.uso?.entrada ?? 0) + uso.entrada, saida: (estado.uso?.saida ?? 0) + uso.saida } }
         if (acoes?.length) estado = { ...estado, acoes: [...(estado.acoes ?? []), ...acoes.map((a) => ({ ...a, tentativa }))].slice(-300) }
@@ -373,6 +376,13 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         const nomes = new Set(novos.map((c) => c.nome))
         estado = { ...estado, checks: [...estado.checks.filter((c) => !nomes.has(c.nome)), ...novos] }
         if (novos.length > 0) estado = anotarAuto(estado, 'verification', `Verificações: ${novos.map((c) => `${c.nome} ${c.resultado}`).join(', ')}.`)
+      }
+      // Resultado por critério: o que o construtor apontou, conferido contra o diff e a suíte que o sandbox rodou.
+      {
+        const mudados = (await executor.executar('git ls-files -m -o --exclude-standard')).saida.split('\n').map((l) => l.trim()).filter(Boolean)
+        const criterios = resultadoPorCriterio({ criterios: estado.card.criterios, mapa: mapaDeCriterios, arquivosMudados: mudados, checks: estado.checks, parado: false, motivo: null })
+        estado = { ...estado, criterios }
+        if (criterios.length) estado = anotarAuto(estado, 'verification', `Critérios de aceite: ${contagemDosCriterios(criterios)}.`)
       }
       // O que o construtor afirmou contra o que fez.
       const achadosDeAncoragem = auditarAcoes(ultimoResumo, estado.acoes ?? [])
@@ -444,6 +454,9 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         '### Critérios de aceite',
         ...estado.card.criterios.map((criterio) => `- [ ] ${criterio}`),
         '',
+        ...(estado.criterios?.length
+          ? ['### Resultado por critério', ...estado.criterios.map((c) => `${c.n}. ${c.texto} → **${c.status}**\n   ${c.evidencia}`), '']
+          : []),
         '### Evidência do sandbox',
         `- Teste: \`${check.comando ?? 'nenhum'}\` → **${check.resultado}**${achado('baseline:testes') ? ` (antes da mudança: ${achado('baseline:testes')!.resultado})` : ''}`,
         ...linhasDeChecks,
