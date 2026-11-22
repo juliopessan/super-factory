@@ -12,7 +12,9 @@ import { PASTA_DO_REPOSITORIO, type Execucao, type Executor } from './sandbox.ts
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
 import { auditarAcoes, extrasDoNode, lerConvencoes, rodarBaseline, rodarExtras, verificarVermelhoVerde, veredito, type AcaoDoConstrutor, type Verificacao } from './verificacao.ts'
 import { lerEstado, persistir } from './store.ts'
+import { escolherPasta, naPasta } from './projeto-pasta.ts'
 import { ErroDeTeto, mensagemDoTeto, restanteDeTokens, SEM_TETOS, type Tetos } from './custo.ts'
+import type { ExtraDeVerificacao } from './verificacao.ts'
 import { contagemDosCriterios, resultadoPorCriterio } from './criterios.ts'
 import { lerNumstat, lerOrcamento, textoDoOrcamento } from './orcamento.ts'
 import { atencaoDeProntidao, diagnosticarProntidao, gerarMapaDoRepositorio, prontidaoEmTexto, verificarAppNoNavegador, type MapaDoRepositorio } from './mapa.ts'
@@ -123,12 +125,33 @@ function gerenciadorDe(v: Verificacao): string {
   return /\((pnpm|yarn)\)/.exec(v.origem)?.[1] ?? 'npm'
 }
 
-/** Descobre como instalar e testar o projeto, só pelo que está no repositório. */
+/** Descobre como instalar e testar o projeto, só pelo que está no repositório. Sem manifesto na raiz, procura em UMA subpasta. */
 export async function descobrirVerificacao(executor: Executor): Promise<Verificacao> {
-  const arquivos = (await executor.executar('ls -1a')).saida.split('\n').map((linha) => linha.trim())
+  const raiz = (await executor.executar('ls -1a')).saida.split('\n').map((linha) => linha.trim())
+  const ehManifesto = (nome: string) => MANIFESTOS.includes(nome) || /\.(sln|csproj)$/.test(nome)
+  let pasta = ''
+  let alternativas: string[] = []
+  if (!raiz.some(ehManifesto)) {
+    const achados = await executor.executar(`for d in */; do d="\${d%/}"; for m in ${MANIFESTOS.join(' ')}; do [ -f "$d/$m" ] && echo "$d/$m"; done; for f in "$d"/*.sln "$d"/*.csproj; do [ -f "$f" ] && echo "$f"; done; done 2>/dev/null; true`)
+    const escolha = escolherPasta(achados.saida.split('\n'))
+    if (escolha?.pasta) {
+      pasta = escolha.pasta
+      alternativas = escolha.alternativas
+    }
+  }
+  const sh = (comando: string) => naPasta(comando, pasta)
+  const arquivos = pasta ? (await executor.executar(sh('ls -1a'))).saida.split('\n').map((linha) => linha.trim()) : raiz
+  const v = await detectarProjeto(executor, arquivos, sh)
+  return pasta ? { ...v, pasta, origem: `${pasta}/ · ${v.origem}${alternativas.length ? ` (também há: ${alternativas.join(', ')})` : ''}` } : v
+}
+
+const MANIFESTOS = ['package.json', 'pyproject.toml', 'requirements.txt', 'go.mod', 'Makefile']
+
+async function detectarProjeto(executor: Executor, arquivos: string[], sh: (comando: string) => string): Promise<Verificacao> {
   const tem = (nome: string) => arquivos.includes(nome)
+  const comPasta = (extras: ExtraDeVerificacao[]): ExtraDeVerificacao[] => extras.map((e) => ({ ...e, comando: sh(e.comando) }))
   if (tem('package.json')) {
-    const pacote = await executor.executar('cat package.json')
+    const pacote = await executor.executar(sh('cat package.json'))
     let scripts: Record<string, string> = {}
     try {
       scripts = (JSON.parse(pacote.saida) as { scripts?: Record<string, string> }).scripts ?? {}
@@ -144,22 +167,31 @@ export async function descobrirVerificacao(executor: Executor): Promise<Verifica
             : 'npm install'
     const alvo = ['test', 'check'].find((nome) => scripts[nome] && !/no test specified/.test(scripts[nome] ?? ''))
     const verificar = alvo ? `${gerenciador} run ${alvo}` : null
-    return { instalar, verificar, origem: `package.json (${gerenciador})`, extras: extrasDoNode(scripts, gerenciador, verificar) }
+    return { instalar: sh(instalar), verificar: verificar ? sh(verificar) : null, origem: `package.json (${gerenciador})`, extras: comPasta(extrasDoNode(scripts, gerenciador, verificar)) }
   }
-  if (arquivos.some((nome) => /\.(sln|csproj)$/.test(nome))) return { instalar: 'dotnet restore', verificar: 'dotnet test --no-restore', origem: '.NET', extras: [{ nome: 'build', comando: 'dotnet build --no-restore' }] }
-  if (tem('go.mod')) return { instalar: 'go mod download', verificar: 'go test ./...', origem: 'go.mod', extras: [{ nome: 'lint', comando: 'go vet ./...' }, { nome: 'build', comando: 'go build ./...' }] }
+  if (arquivos.some((nome) => /\.(sln|csproj)$/.test(nome))) return { instalar: sh('dotnet restore'), verificar: sh('dotnet test --no-restore'), origem: '.NET', extras: comPasta([{ nome: 'build', comando: 'dotnet build --no-restore' }]) }
+  if (tem('go.mod')) return { instalar: sh('go mod download'), verificar: sh('go test ./...'), origem: 'go.mod', extras: comPasta([{ nome: 'lint', comando: 'go vet ./...' }, { nome: 'build', comando: 'go build ./...' }]) }
   if (tem('pyproject.toml') || tem('requirements.txt')) {
-    const instalar = tem('requirements.txt') ? 'pip install -r requirements.txt' : 'pip install -e .'
+    // Com requirements.txt, instala o que o projeto lista (e o de teste, se houver). Só com pyproject, instala o projeto
+    // com o extra "dev" quando ele existe: é onde costumam estar pytest e ruff.
+    let instalar: string
+    if (tem('requirements.txt')) instalar = `pip install -r requirements.txt${['requirements-dev.txt', 'requirements-test.txt'].filter(tem).map((r) => ` -r ${r}`).join('')}`
+    else {
+      const dev = await executor.executar(sh("grep -qE '^dev[[:space:]]*=' pyproject.toml && echo sim || true"))
+      instalar = dev.saida.includes('sim') ? "pip install -e '.[dev]'" : 'pip install -e .'
+    }
     // pytest só quando o projeto o declara. Sem sinal, vale o unittest, que já vem com o Python.
-    const sinais = await executor.executar("{ grep -qiE 'pytest' requirements*.txt pyproject.toml setup.cfg tox.ini 2>/dev/null && echo pytest; ls pytest.ini conftest.py 2>/dev/null | head -1; } || true")
+    const sinais = await executor.executar(sh("{ grep -qiE 'pytest' requirements*.txt pyproject.toml setup.cfg tox.ini 2>/dev/null && echo pytest; ls pytest.ini conftest.py 2>/dev/null | head -1; } || true"))
     const usaPytest = sinais.saida.trim().length > 0
+    const ruff = await executor.executar(sh("{ grep -qiE 'ruff' pyproject.toml requirements*.txt setup.cfg 2>/dev/null || [ -f ruff.toml ] || [ -f .ruff.toml ]; } && echo ruff || true"))
+    const extras = ruff.saida.includes('ruff') ? comPasta([{ nome: 'lint', comando: 'ruff check' }]) : undefined
     return usaPytest
-      ? { instalar, verificar: 'python -m pytest -q', origem: 'Python (pytest)' }
-      : { instalar, verificar: 'python -m unittest discover', origem: 'Python (unittest)' }
+      ? { instalar: sh(instalar), verificar: sh('python -m pytest -q'), origem: 'Python (pytest)', ...(extras ? { extras } : {}) }
+      : { instalar: sh(instalar), verificar: sh('python -m unittest discover'), origem: 'Python (unittest)', ...(extras ? { extras } : {}) }
   }
   if (tem('Makefile')) {
-    const make = await executor.executar("grep -E '^test:' Makefile || true")
-    return { instalar: null, verificar: make.saida.trim() ? 'make test' : null, origem: 'Makefile' }
+    const make = await executor.executar(sh("grep -E '^test:' Makefile || true"))
+    return { instalar: null, verificar: make.saida.trim() ? sh('make test') : null, origem: 'Makefile' }
   }
   return { instalar: null, verificar: null, origem: 'nenhum comando de teste encontrado' }
 }
@@ -170,6 +202,11 @@ export async function descobrirVerificacao(executor: Executor): Promise<Verifica
  */
 export function dicaDoSandbox(execucao: Execucao): string | null {
   const texto = `${execucao.saida}\n${execucao.erro}`
+  const versao = /requires a different Python: (\d+\.\d+[\d.]*) not in '([^']+)'/i.exec(texto)
+  if (versao) {
+    const pede = /(\d+\.\d+)/.exec(versao[2]!)?.[1] ?? versao[2]
+    return `O projeto pede Python ${versao[2]} e o sandbox tem ${versao[1]}. Isso é do ambiente, não do card: construa a imagem com sudo bash /opt/super-factory/deploy/construir-sandbox.sh --python ${pede} e aponte SUPER_FACTORY_SANDBOX_IMAGE para ela.`
+  }
   if (/externally-managed-environment/i.test(texto)) {
     return 'O Python da imagem do sandbox é gerenciado pelo sistema (PEP 668) e recusa o pip. Isso é do ambiente, não do card: use a imagem de deploy/sandbox.Dockerfile (sudo bash /opt/super-factory/deploy/construir-sandbox.sh), que já libera o pip.'
   }
@@ -325,7 +362,7 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       }
       // O app abria no navegador antes da mudança? Sem isso, não dá para chamar de regressão o que ele faz depois.
       if (deps.navegador && deps.verificacaoCompleta) {
-        const antes = await verificarAppNoNavegador(executor, gerenciadorDe(verificacao), false).catch(() => null)
+        const antes = await verificarAppNoNavegador(executor, gerenciadorDe(verificacao), false, verificacao.pasta ?? '').catch(() => null)
         if (antes) {
           estado = { ...estado, checks: [...estado.checks.filter((c) => c.nome !== 'baseline:app'), { ...antes.check, nome: 'baseline:app' }] }
           estado = anotarAuto(estado, 'verification', `Baseline do app no navegador: ${antes.check.resultado}.`)
@@ -386,7 +423,7 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
         // O app no navegador: sobe, abre, lê o console e guarda a captura de tela.
         let appCheck: typeof estado.checks = []
         if (deps.navegador && check.resultado === 'PASS') {
-          const app = await verificarAppNoNavegador(executor, gerenciadorDe(verificacao), true).catch(() => null)
+          const app = await verificarAppNoNavegador(executor, gerenciadorDe(verificacao), true, verificacao.pasta ?? '').catch(() => null)
           if (app) {
             appCheck = [app.check]
             let onde: string | null = null
