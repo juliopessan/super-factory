@@ -12,6 +12,7 @@ import { PASTA_DO_REPOSITORIO, type Execucao, type Executor } from './sandbox.ts
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
 import { auditarAcoes, extrasDoNode, lerConvencoes, rodarBaseline, rodarExtras, verificarVermelhoVerde, veredito, type AcaoDoConstrutor, type Verificacao } from './verificacao.ts'
 import { lerEstado, persistir } from './store.ts'
+import { ErroDeTeto, mensagemDoTeto, restanteDeTokens, SEM_TETOS, type Tetos } from './custo.ts'
 import { contagemDosCriterios, resultadoPorCriterio } from './criterios.ts'
 import { lerNumstat, lerOrcamento, textoDoOrcamento } from './orcamento.ts'
 import { atencaoDeProntidao, diagnosticarProntidao, gerarMapaDoRepositorio, prontidaoEmTexto, verificarAppNoNavegador, type MapaDoRepositorio } from './mapa.ts'
@@ -33,6 +34,8 @@ export type Implementador = (contexto: {
   falhaAnterior: Execucao | null
   /** O que o próprio repositório pede de quem contribui (AGENTS.md, CLAUDE.md, CONTRIBUTING). Texto do projeto, não ordem da Factory. */
   convencoes?: string | null
+  /** Quanto o agente ainda pode gastar nesta tentativa (teto do card ou do dia, o menor). O implementador interrompe a geração ao chegar nele. */
+  orcamento?: { tokens: number; nivel: 'card' | 'dia' } | null
   /** Mapa do repositório (pastas, telas, rotas, entradas, testes), gerado do que foi clonado. */
   mapa?: string | null
 }) => Promise<{ resumo: string; uso?: { entrada: number; saida: number }; acoes?: AcaoDoConstrutor[]; /** Qual teste o construtor diz que cobre cada critério (posição começando em 1). */ criterios?: Array<{ n: number; testes: string[] }> }>
@@ -56,6 +59,12 @@ export type DepsAutonomo = {
   guardarCaptura?: (cardId: string, pngBase64: string) => string | null
   /** Teto de tamanho do PR (linhas e arquivos). Padrão: SUPER_FACTORY_PR_MAX_LINHAS / _ARQUIVOS, ou 400 linhas e 15 arquivos. */
   orcamentoDePr?: { linhas: number; arquivos: number }
+  /** Teto de tokens por card e por dia. Sem isto, nada limita (ensaio e testes). */
+  tetos?: Tetos
+  /** Tokens já gastos hoje, por todos os cards, triagens e revisões. */
+  gastoDoDia?: () => number
+  /** Anota o gasto de uma tentativa, para o teto do dia e o painel de custo. */
+  registrarGasto?: (origem: string, tokens: number) => void
 }
 
 const AUTOR = 'Super Factory <factory@super-factory.local>'
@@ -339,7 +348,24 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       let ultimoResumo = ''
       let mapaDeCriterios: Array<{ n: number; testes: string[] }> | null = null
       for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
-        const { resumo, uso, acoes, criterios: mapaDoConstrutor } = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste, convencoes: contexto.convencoes ?? null, mapa: contexto.mapa ?? null })
+        // Teto de custo: antes de gastar mais, confere o que ainda cabe; o implementador interrompe a geração quando chega nele.
+        const gastoDoCard = (estado.uso?.entrada ?? 0) + (estado.uso?.saida ?? 0)
+        const resta = restanteDeTokens(deps.tetos ?? SEM_TETOS, gastoDoCard, deps.gastoDoDia?.() ?? 0)
+        if (resta && resta.tokens <= 0) return pararCom({ ...contexto, estado, verificacao }, mensagemDoTeto(resta.nivel, resta.gasto, resta.teto))
+        let tentado: Awaited<ReturnType<Implementador>>
+        try {
+          tentado = await deps.implementador({ estado, executor, verificacao, tentativa, falhaAnterior: teste, convencoes: contexto.convencoes ?? null, mapa: contexto.mapa ?? null , orcamento: resta ? { tokens: resta.tokens, nivel: resta.nivel } : null })
+        } catch (erro) {
+          if (!(erro instanceof ErroDeTeto)) throw erro
+          // O agente foi interrompido no meio: o que ele gastou conta, o card para e nenhum PR sai pela metade.
+          const gasto = erro.uso.entrada + erro.uso.saida
+          deps.registrarGasto?.(`card:${estado.card.id}`, gasto)
+          estado = { ...estado, uso: { entrada: (estado.uso?.entrada ?? 0) + erro.uso.entrada, saida: (estado.uso?.saida ?? 0) + erro.uso.saida } }
+          // O teto absoluto e o que já havia gasto neste nível vêm de quem calculou o orçamento (resta).
+          return pararCom({ ...contexto, estado, verificacao }, resta ? mensagemDoTeto(resta.nivel, resta.gasto + gasto, resta.teto) : erro.message)
+        }
+        const { resumo, uso, acoes, criterios: mapaDoConstrutor } = tentado
+        if (uso) deps.registrarGasto?.(`card:${estado.card.id}`, uso.entrada + uso.saida)
         ultimoResumo = resumo
         if (mapaDoConstrutor?.length) mapaDeCriterios = mapaDoConstrutor
         estado = anotarAuto(estado, 'implementation', `Tentativa ${tentativa}: ${resumo}`, 'reported')

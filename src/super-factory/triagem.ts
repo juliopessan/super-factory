@@ -1,6 +1,7 @@
 // Liga a triagem de bug e o webhook do GitHub ao ambiente real: Docker, agente reprodutor e GITHUB_TOKEN.
 // A triagem automática (pelo webhook) é opt-in: gasta sandbox e modelo. Pelo chat, é um pedido explícito de uma pessoa.
 
+import { gastoDoDia, lerTetos, mensagemDoTeto } from '../factory/custo.ts'
 import { criarExecutorDocker } from '../factory/sandbox.ts'
 import { triarBug, type DepsDaTriagem } from '../factory/triagem-bug.ts'
 import { tratarWebhookGithub } from '../factory/webhook-github.ts'
@@ -26,6 +27,8 @@ const limite = criarLimitePorChave(Math.max(1, Number(process.env.SUPER_FACTORY_
 export async function triarBugDoAmbiente(repositorio: string, numero: number) {
   const chave = `${repositorio.toLowerCase()}#${numero}`
   if (emAndamento.has(chave)) return { ok: false, resultado: null, nota: `A triagem de ${chave} já está rodando.` }
+  const teto = lerTetos().dia
+  if (teto > 0 && gastoDoDia() >= teto) return { ok: false, resultado: null, nota: mensagemDoTeto('dia', gastoDoDia(), teto) }
   if (!limite('todas')) return { ok: false, resultado: null, nota: 'Teto de triagens por hora atingido (SUPER_FACTORY_TRIAGEM_MAX_POR_HORA). Tente mais tarde.' }
   emAndamento.add(chave)
   try {

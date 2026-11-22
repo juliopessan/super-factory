@@ -1,6 +1,7 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows'
 import { z } from 'zod'
 
+import { gastoDoDia, lerTetos, mensagemDoTeto, registrarGasto } from '../../factory/custo.ts'
 import { executarOnda, MAXIMO_DE_CARDS_POR_ONDA, ordemDeMerge, PADRAO_DE_CHAVE, validarOnda } from '../../factory/dependencias.ts'
 import { mapearEmParalelo, paralelismoConfigurado, PARALELISMO_MAXIMO } from '../../factory/paralelo.ts'
 import { foiComentado } from '../../factory/revisao.ts'
@@ -71,6 +72,9 @@ const rodar = createStep({
     const cartoes = inputData as CartaoDaOnda[]
     const nos = cartoes.map((c) => ({ chave: c.chave ?? null, dependeDe: c.dependeDe ?? null, cartao: c }))
     const fluxo = mastra.getWorkflow('autonomo')
+    // Teto de custo da onda: o que a onda gastou desde que começou (medido pelo registro de gastos). Passou, não inicia mais cards.
+    const tetos = cartoes.some((c) => c.ensaio) ? null : lerTetos()
+    const gastoNoInicio = gastoDoDia()
 
     const resultados = await executarOnda<(typeof nos)[number], ResultadoDoCartao>(
       nos,
@@ -78,6 +82,12 @@ const rodar = createStep({
       async (no, pai) => {
         const { chave: _chave, dependeDe: _dependeDe, revisar: _revisar, ...pedido } = no.cartao
         const inicio = Date.now()
+        const gastoDaOnda = gastoDoDia() - gastoNoInicio
+        if (tetos && tetos.onda > 0 && gastoDaOnda >= tetos.onda) {
+          const motivo = mensagemDoTeto('onda', gastoDaOnda, tetos.onda)
+          loggerVNext?.warn('Card da onda não iniciado: teto de tokens', { titulo: pedido.titulo, gastoDaOnda })
+          return { titulo: pedido.titulo, ok: false, desfecho: 'bloqueado', pullRequestUrl: null, motivo, chave: no.chave, branch: null, base: null, pai: no.dependeDe, revisao: null }
+        }
         // O filho parte da branch que o pai acabou de enviar: é isso que faz o PR ficar empilhado.
         const base = pai?.branch ?? null
         const entrada = base ? { ...pedido, branchBase: base, empilhadoSobre: base } : pedido
@@ -131,10 +141,13 @@ const rodar = createStep({
         const url = r.pullRequestUrl as string
         const criterios = cartoes.find((c) => c.titulo === r.titulo)?.criterios ?? ''
         try {
-          await Promise.race([
+          const tetoDoDia = lerTetos().dia
+          if (tetoDoDia > 0 && gastoDoDia() >= tetoDoDia) throw new Error(mensagemDoTeto('dia', gastoDoDia(), tetoDoDia))
+          const feito = (await Promise.race([
             revisor.generate(`Revise o pull request ${url}. Leia-o com lerPullRequestGithub e deixe a revisão com comentarPullRequestGithub. Critérios de aceite do card, um por linha:\n${criterios}`, { maxSteps: 14 }),
             new Promise((_, rejeitar) => setTimeout(() => rejeitar(new Error('A revisão passou de 3 minutos.')), 180_000)),
-          ])
+          ])) as { usage?: { inputTokens?: number; outputTokens?: number } }
+          registrarGasto(`revisao:${url.split('/').slice(-3).join('/')}`, (Number(feito?.usage?.inputTokens) || 0) + (Number(feito?.usage?.outputTokens) || 0))
           r.revisao = foiComentado(url, '') ? 'comentada' : 'nao-feita'
         } catch (erro) {
           r.revisao = 'nao-feita'

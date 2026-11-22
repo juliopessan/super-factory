@@ -4493,6 +4493,154 @@ assert.equal(
   assert.ok(ag.includes('lerOnda') && ag.includes('PASS/FAIL/NOT_RUN/BLOCKED'))
 }
 
+// --- Lote G: teto de custo em tokens (card, onda e dia)
+{
+  const cu = await import('../factory/custo.ts')
+  const po = await import('../factory/preparar-onda.ts')
+  const st = await import('../factory/store.ts')
+  const { lerCusto } = await import('../super-factory/tools/factory.ts')
+  const { depsDoAmbiente } = await import('../super-factory/workflows/autonomo.ts')
+
+  // tetos: padrões seguros, env e valores inválidos
+  assert.deepEqual(cu.lerTetos({}), { card: 600_000, onda: 2_000_000, dia: 6_000_000 })
+  assert.deepEqual(cu.lerTetos({ SUPER_FACTORY_MAX_TOKENS_CARD: '100000', SUPER_FACTORY_MAX_TOKENS_ONDA: '0', SUPER_FACTORY_MAX_TOKENS_DIA: '9000000' }), { card: 100_000, onda: 0, dia: 9_000_000 }, '0 desliga o nível')
+  assert.deepEqual(cu.lerTetos({ SUPER_FACTORY_MAX_TOKENS_CARD: 'muito', SUPER_FACTORY_MAX_TOKENS_DIA: '-5', SUPER_FACTORY_MAX_TOKENS_ONDA: '1.5' }), cu.TETOS_PADRAO, 'valor inválido volta ao padrão: nunca vira "sem teto" por engano')
+  // o que ainda cabe: o menor entre card e dia
+  assert.equal(cu.restanteDeTokens(cu.SEM_TETOS, 999, 999), null, 'sem teto, nada limita')
+  assert.deepEqual(cu.restanteDeTokens({ card: 1000, onda: 0, dia: 0 }, 300, 50_000), { tokens: 700, nivel: 'card', gasto: 300, teto: 1000 })
+  assert.deepEqual(cu.restanteDeTokens({ card: 1000, onda: 0, dia: 5000 }, 300, 4800), { tokens: 200, nivel: 'dia', gasto: 4800, teto: 5000 }, 'o dia aperta mais que o card')
+  assert.equal(cu.restanteDeTokens({ card: 1000, onda: 0, dia: 0 }, 1200, 0)!.tokens, -200, 'negativo: já passou')
+  assert.match(cu.mensagemDoTeto('card', 600_000, 600_000), /Teto de tokens do card atingido \(600\.000 de 600\.000\)[\s\S]*suba SUPER_FACTORY_MAX_TOKENS_CARD no \.env \(0 desliga o teto\)/)
+  assert.match(cu.mensagemDoTeto('dia', 1, 2), /meia-noite UTC/)
+  assert.match(cu.mensagemDoTeto('onda', 1, 2), /da onda[\s\S]*SUPER_FACTORY_MAX_TOKENS_ONDA/)
+
+  // medidor: soma passo a passo e avisa uma vez só
+  let avisos = 0
+  const m = cu.medidorDeTokens(1000, () => void avisos++)
+  m.aoTerminarPasso({ usage: { inputTokens: 400, outputTokens: 100 } })
+  assert.equal(avisos, 0)
+  m.aoTerminarPasso({ usage: { inputTokens: 300, outputTokens: 250 } })
+  m.aoTerminarPasso({ usage: { inputTokens: 5000, outputTokens: 5000 } })
+  m.aoTerminarPasso(undefined)
+  assert.deepEqual([m.uso, avisos, m.estourou], [{ entrada: 5700, saida: 5350 }, 1, true])
+  const livre = cu.medidorDeTokens(null, () => assert.fail('sem limite, não interrompe'))
+  livre.aoTerminarPasso({ usage: { inputTokens: 9_999_999, outputTokens: 1 } })
+
+  // gastos do dia, em arquivo de estado temporário
+  const salvo = process.env.FACTORY_STATE_PATH
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-estado-g-'))
+  process.env.FACTORY_STATE_PATH = path.join(pasta, 'estado.json')
+  try {
+    const hoje = new Date('2026-11-22T15:00:00Z')
+    st.gravarEstado({ seq: 5, cards: [], runs: {}, ledger: [] })
+    cu.registrarGasto('card:C-9', 70, new Date('2026-11-01T00:00:00Z'))
+    cu.registrarGasto('card:C-1', 1000, new Date('2026-11-22T09:00:00Z'))
+    cu.registrarGasto('card:C-1', 500, new Date('2026-11-22T10:00:00Z'))
+    cu.registrarGasto('triagem:#4', 250, new Date('2026-11-22T11:00:00Z'))
+    cu.registrarGasto('card:C-2', 4000, new Date('2026-11-21T23:59:00Z'))
+    cu.registrarGasto('revisao:x', 0, hoje)
+    cu.registrarGasto('revisao:x', Number.NaN, hoje)
+    assert.equal(cu.gastoDoDia(st.lerEstado(), hoje), 1750, 'só o que foi gasto hoje (UTC)')
+    assert.equal(cu.gastoDoDia(st.lerEstado(), new Date('2026-11-21T12:00:00Z')), 4000)
+    assert.ok(!(st.lerEstado().gastos ?? []).some((g) => g.origem === 'card:C-9'), 'gasto com mais de 14 dias sai do registro')
+    assert.equal((st.lerEstado().gastos ?? []).length, 4, 'zero e NaN não entram')
+    // o gasto sobrevive a outras gravações do estado (cards, runs)
+    st.atualizarEstado((e) => ({ ...e, seq: e.seq + 1 }))
+    assert.equal(cu.gastoDoDia(st.lerEstado(), hoje), 1750)
+    const run = (id: string, entrada: number, saida: number) => ({ runId: `R-${id}`, card: { id: `C-${id}`, titulo: `Card ${id}` }, uso: { entrada, saida } }) as never
+    const resumo = cu.resumoDeCusto({ card: 600_000, onda: 2_000_000, dia: 10_000 }, { ...st.lerEstado(), runs: { a: run('1', 3000, 1000), b: run('2', 100, 100), c: { runId: 'R-3', card: { id: 'C-3', titulo: 'x' } } as never } }, hoje)
+    assert.deepEqual([resumo.hoje.tokens, resumo.hoje.restante], [1750, 8250])
+    assert.deepEqual(resumo.hoje.porOrigem, [{ origem: 'card:C-1', tokens: 1500 }, { origem: 'triagem:#4', tokens: 250 }])
+    assert.deepEqual(resumo.cardsMaisCaros.map((c) => [c.cardId, c.tokens]), [['C-1', 4000], ['C-2', 200]])
+    assert.equal(resumo.mediaPorCard, 2100)
+    assert.deepEqual(resumo.ultimosDias, [{ dia: '2026-11-21', tokens: 4000 }, { dia: '2026-11-22', tokens: 1750 }])
+    assert.match(resumo.resumo, /Hoje \(UTC\): 1\.750 tokens de 10\.000 \(restam 8\.250\)\. Teto por card: 600\.000; por onda: 2\.000\.000\./)
+    assert.match(cu.resumoDeCusto(cu.SEM_TETOS, st.lerEstado(), hoje).resumo, /sem teto do dia[\s\S]*por card: sem teto; por onda: sem teto/)
+    const viaTool = await lerCusto.execute!({}, {} as never) as { resumo: string; tetos: { card: number } }
+    assert.match(viaTool.resumo, /Hoje \(UTC\): /)
+    // não começa onda com o teto do dia estourado
+    st.gravarEstado({ seq: 5, cards: [], runs: {}, ledger: [] })
+    const novo = { titulo: 'Trabalho novo', descricao: 'Descrição longa o bastante para o pedido.', criterios: 'Critério observável aqui', provedor: 'github' as const, repositorio: 'acme/pedidos' }
+    const estourado = await po.prepararOnda({ pedidos: [novo] }, { custo: { tetos: { card: 0, onda: 0, dia: 1000 }, gastoDoDia: () => 1000 } })
+    assert.equal(estourado.ok, false)
+    assert.match(estourado.nota, /^BLOCKED: Teto de tokens do dia atingido \(1\.000 de 1\.000\)/)
+    assert.equal((await po.prepararOnda({ pedidos: [novo] }, { custo: { tetos: { card: 0, onda: 0, dia: 1000 }, gastoDoDia: () => 999 } })).ok, true, 'abaixo do teto segue')
+    assert.equal((await po.prepararOnda({ pedidos: [novo], ensaio: true }, { custo: { tetos: { card: 0, onda: 0, dia: 1000 }, gastoDoDia: () => 5000 } })).ok, true, 'o ensaio não gasta modelo')
+    assert.equal((await po.prepararOnda({ pedidos: [novo] }, { custo: { tetos: cu.SEM_TETOS, gastoDoDia: () => 9e9 } })).ok, true, 'teto 0 desliga')
+  } finally {
+    if (salvo === undefined) delete process.env.FACTORY_STATE_PATH
+    else process.env.FACTORY_STATE_PATH = salvo
+    fs.rmSync(pasta, { recursive: true, force: true })
+  }
+
+  // no fluxo do card: o teto interrompe e para, sem PR pela metade
+  const roteiroTetos = (testes: number[]) => roteiroNode({ teste: testes })
+  const rodarT = async (opcoes: { tetos?: import('../factory/custo.ts').Tetos; dia?: number; usos: number[]; testes?: number[]; lanca?: { nivel: 'card' | 'dia'; entrada: number; saida: number } }) => {
+    const g = githubFalso()
+    const gastos: Array<[string, number]> = []
+    const orcamentos: unknown[] = []
+    let chamadas = 0
+    const out = await executarAutonomo(pedidoAuto, {
+      criarExecutor: async () => criarExecutorFalso(roteiroTetos(opcoes.testes ?? [0])),
+      implementador: async ({ orcamento }) => {
+        orcamentos.push(orcamento)
+        const i = chamadas++
+        if (opcoes.lanca && i === opcoes.usos.length) throw new cu.ErroDeTeto(opcoes.lanca.nivel, 0, orcamento?.tokens ?? 0, { entrada: opcoes.lanca.entrada, saida: opcoes.lanca.saida })
+        return { resumo: 'ok', uso: { entrada: opcoes.usos[i] ?? 0, saida: 0 } }
+      },
+      credenciais: { githubToken: TOKEN_TESTE },
+      github: g.deps,
+      tetos: opcoes.tetos,
+      gastoDoDia: () => opcoes.dia ?? 0,
+      registrarGasto: (o, t) => void gastos.push([o, t]),
+    })
+    return { out, g, gastos, orcamentos, chamadas }
+  }
+  // sem teto: tudo como antes, sem orçamento
+  let t = await rodarT({ usos: [300_000] })
+  assert.equal(t.out.estado.parado, false)
+  assert.deepEqual(t.orcamentos, [null])
+  assert.deepEqual(t.gastos, [[`card:${t.out.estado.card.id}`, 300_000]], 'o gasto de cada tentativa é registrado')
+  // o orçamento da tentativa é o que resta do card
+  t = await rodarT({ tetos: { card: 1_000_000, onda: 0, dia: 0 }, usos: [300_000, 100_000], testes: [1, 0] })
+  assert.deepEqual(t.orcamentos, [{ tokens: 1_000_000, nivel: 'card' }, { tokens: 700_000, nivel: 'card' }])
+  assert.equal(t.out.estado.parado, false)
+  // o dia aperta mais que o card
+  t = await rodarT({ tetos: { card: 1_000_000, onda: 0, dia: 5_000_000 }, dia: 4_900_000, usos: [10] })
+  assert.deepEqual(t.orcamentos, [{ tokens: 100_000, nivel: 'dia' }])
+  // card que já gastou o teto não chama o agente de novo
+  t = await rodarT({ tetos: { card: 300_000, onda: 0, dia: 0 }, usos: [300_000, 1], testes: [1, 0] })
+  assert.equal(t.chamadas, 1, 'a segunda tentativa nem começa')
+  assert.equal(t.out.estado.parado, true)
+  assert.match(t.out.estado.motivo ?? '', /Teto de tokens do card atingido \(300\.000 de 300\.000\)/)
+  assert.equal(t.g.chamadas.length, 0, 'nenhum PR sai')
+  // teto do dia já estourado: nem a primeira tentativa
+  t = await rodarT({ tetos: { card: 0, onda: 0, dia: 1000 }, dia: 1000, usos: [1] })
+  assert.equal(t.chamadas, 0)
+  assert.match(t.out.estado.motivo ?? '', /Teto de tokens do dia atingido \(1\.000 de 1\.000\)/)
+  // o agente é interrompido no meio da geração: o que ele gastou conta, o card para
+  t = await rodarT({ tetos: { card: 400_000, onda: 0, dia: 0 }, usos: [300_000], testes: [1, 0], lanca: { nivel: 'card', entrada: 60_000, saida: 40_000 } })
+  assert.equal(t.out.estado.parado, true)
+  assert.match(t.out.estado.motivo ?? '', /Teto de tokens do card atingido \(400\.000 de 400\.000\)/, '300 mil da 1ª tentativa + 100 mil da interrompida')
+  assert.deepEqual(t.out.estado.uso, { entrada: 360_000, saida: 40_000 })
+  assert.deepEqual(t.gastos.map((g) => g[1]), [300_000, 100_000])
+  assert.equal(t.g.chamadas.length, 0)
+  assert.ok(t.out.estado.trilha.some((e) => /Teto de tokens do card/.test(e.resumo)))
+
+  // ligação: o ambiente real traz os tetos, e a onda, o revisor e a triagem respeitam
+  const dA = depsDoAmbiente()
+  assert.ok(dA.tetos && typeof dA.gastoDoDia === 'function' && typeof dA.registrarGasto === 'function')
+  assert.deepEqual(dA.tetos, cu.lerTetos())
+  const ondaSrc = fs.readFileSync(new URL('../super-factory/workflows/onda.ts', import.meta.url), 'utf8')
+  assert.ok(ondaSrc.includes("mensagemDoTeto('onda'") && ondaSrc.includes('gastoDoDia() - gastoNoInicio') && ondaSrc.includes("mensagemDoTeto('dia'") && ondaSrc.includes('registrarGasto(`revisao:'), 'a onda para ao chegar no teto; a revisão conta e respeita o teto do dia')
+  const triSrc = fs.readFileSync(new URL('../super-factory/triagem.ts', import.meta.url), 'utf8')
+  assert.ok(triSrc.includes("mensagemDoTeto('dia'"))
+  const constrSrc2 = fs.readFileSync(new URL('../super-factory/agents/construtor.ts', import.meta.url), 'utf8')
+  assert.ok(constrSrc2.includes('abortSignal: controle.signal') && constrSrc2.includes('onStepFinish: medidor.aoTerminarPasso') && constrSrc2.includes('registrarGasto(`triagem:'))
+  const agG = fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8')
+  assert.ok(agG.includes('lerCusto') && agG.includes('teto de tokens por card, por onda e por dia'))
+}
+
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(

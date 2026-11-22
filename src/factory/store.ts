@@ -9,6 +9,8 @@ export type FabricaEstado = {
   cards: Card[]
   runs: Record<string, Estado>
   ledger: Evento[]
+  /** Tokens gastos com modelo, por origem, dos últimos dias (teto de custo). */
+  gastos?: Array<{ em: string; origem: string; tokens: number }>
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -72,6 +74,7 @@ export function lerEstado(): FabricaEstado {
     cards: bruto.cards,
     runs: bruto.runs ?? {},
     ledger: bruto.ledger,
+    gastos: bruto.gastos ?? [],
   }
 }
 

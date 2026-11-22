@@ -10,6 +10,7 @@ import {
   type FaseAutonomo,
   type SessaoAutonomo,
 } from '../../factory/autonomo.ts'
+import { gastoDoDia, lerTetos, registrarGasto } from '../../factory/custo.ts'
 import { guardarCapturaDoApp, guardarMapaDoRepositorio } from '../../factory/artefatos.ts'
 import { redigirSegredos } from '../../factory/guards.ts'
 import { parar } from '../../factory/pipeline.ts'
@@ -31,6 +32,10 @@ export function depsDoAmbiente(): DepsAutonomo {
     verificacaoCompleta: process.env.SUPER_FACTORY_VERIFICACAO?.trim().toLowerCase() !== 'minima',
     // Navegador no sandbox: só com a imagem construída com --com-browser (o script liga esta variável).
     navegador: ['1', 'sim', 'true'].includes(process.env.SUPER_FACTORY_NAVEGADOR?.trim().toLowerCase() ?? ''),
+    // Teto de custo em tokens (card e dia); o da onda vale no workflow onda. 0 desliga. Padrões em factory/custo.ts.
+    tetos: lerTetos(),
+    gastoDoDia: () => gastoDoDia(),
+    registrarGasto: (origem, tokens) => registrarGasto(origem, tokens),
     guardarMapa: (repositorio, mapa) => void guardarMapaDoRepositorio(repositorio, mapa),
     guardarCaptura: guardarCapturaDoApp,
     credenciais: {

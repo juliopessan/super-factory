@@ -32,6 +32,7 @@ import { comentarPullRequestGithub as postarRevisao, lerPullRequestGithub as bus
 import { MAXIMO_DE_CARDS_POR_ONDA, validarOnda } from '../../factory/dependencias.ts'
 import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/paralelo.ts'
 import { editarCard as editarCardDoQuadro, lerCardCompleto, moverCard as moverCardDoQuadro, planejarOndaDeCards } from '../../factory/cards.ts'
+import { gastoDoDia, lerTetos, resumoDeCusto } from '../../factory/custo.ts'
 import { anexarCI, listarOndas, visaoDaOnda } from '../../factory/ondas.ts'
 import { prepararOnda } from '../../factory/preparar-onda.ts'
 import { preValidarSandbox } from '../../factory/preflight.ts'
@@ -182,6 +183,14 @@ export const lerCard = createTool({
     const dup = lido.duplicatas.length ? ` Parecido com: ${lido.duplicatas.map((d) => `${d.id} (${d.coluna})`).join(', ')}.` : ''
     return { ok: true, ...lido, resumo: `${lido.card.id} em ${lido.card.coluna}: ${lido.card.titulo}.${lido.execucao ? ` Execução ${lido.execucao.runId}: ${lido.execucao.desfecho}.` : ' Sem execução.'}${lido.podeIniciar ? ' Pode iniciar.' : ` Não inicia: ${lido.porQueNaoIniciar}`}${dup}` }
   },
+})
+
+export const lerCusto = createTool({
+  id: 'ler-custo',
+  description: 'Mostra o gasto de tokens com modelo hoje (UTC) contra os tetos por card, onda e dia, o que ainda cabe no dia, de onde veio o gasto (cards, triagens, revisões), os cards mais caros e a média por card. Tokens, não dinheiro: o preço depende do modelo e do contrato. Só lê. Quem muda os tetos é o operador, no .env.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({ tetos: z.any(), hoje: z.any(), cardsMaisCaros: z.array(z.any()), mediaPorCard: z.number().nullable(), ultimosDias: z.array(z.any()), resumo: z.string() }),
+  execute: async () => resumoDeCusto(lerTetos()),
 })
 
 export const lerOnda = createTool({
@@ -1000,7 +1009,7 @@ export const iniciarOnda = createTool({
   execute: async (bruto, contexto) => {
     if ((bruto.cardIds?.length ?? 0) + (bruto.pedidos?.length ?? 0) > MAXIMO_DE_CARDS_POR_ONDA) return { ok: false, runId: null, nota: `Uma onda leva até ${MAXIMO_DE_CARDS_POR_ONDA} cards, somando cardIds e pedidos.` }
     // Cards por ID viram pedidos sem abrir card novo; o sandbox é conferido antes de gastar qualquer execução.
-    const preparo = await prepararOnda({ cardIds: bruto.cardIds, pedidos: bruto.pedidos, ensaio: bruto.ensaio }, { preflight: depsDoPreflight() })
+    const preparo = await prepararOnda({ cardIds: bruto.cardIds, pedidos: bruto.pedidos, ensaio: bruto.ensaio }, { preflight: depsDoPreflight(), custo: { tetos: lerTetos(), gastoDoDia: () => gastoDoDia() } })
     if (!preparo.ok) return { ok: false, runId: null, nota: preparo.nota, pulados: preparo.pulados, bloqueados: preparo.bloqueados }
     const entrada = { pedidos: preparo.pedidos as unknown as z.infer<typeof pedidoDaOndaSchema>[], ensaio: bruto.ensaio, revisar: bruto.revisar }
     // Erro de chave ou de dependência volta agora, para o agente corrigir, e não depois de a onda já ter começado.
