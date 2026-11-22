@@ -2,7 +2,7 @@
 // confere duplicatas e o sandbox, e reserva os cards. Quem de fato roda a onda é o workflow "onda".
 
 import { mensagemDoTeto, type Tetos } from './custo.ts'
-import { duplicatasDe, issueDoCard, lerCardCompleto } from './cards.ts'
+import { duplicatasDe, issueDoCard, lerCardCompleto, repositorioComparavel } from './cards.ts'
 import { preValidarSandbox, type DepsDoPreflight } from './preflight.ts'
 import { atualizarEstado, lerEstado, type FabricaEstado } from './store.ts'
 
@@ -37,7 +37,7 @@ export type PreparoDaOnda = {
  * Os pedidos livres (sem cardId) seguem como estavam. O preflight vale para os dois, exceto no ensaio.
  */
 export async function prepararOnda(
-  entrada: { cardIds?: string[]; pedidos?: PedidoPreparado[]; ensaio?: boolean; reservar?: boolean },
+  entrada: { cardIds?: string[]; pedidos?: PedidoPreparado[]; ensaio?: boolean; reservar?: boolean; repositorio?: string },
   deps: { preflight?: DepsDoPreflight; custo?: { tetos: Tetos; gastoDoDia: () => number } },
   estado: FabricaEstado = lerEstado(),
 ): Promise<PreparoDaOnda> {
@@ -50,9 +50,12 @@ export async function prepararOnda(
   // Teto do dia: se já passou, nenhuma execução nova começa (o ensaio não gasta modelo).
   if (!entrada.ensaio && deps.custo && deps.custo.tetos.dia > 0 && deps.custo.gastoDoDia() >= deps.custo.tetos.dia) return falha(`BLOCKED: ${mensagemDoTeto('dia', deps.custo.gastoDoDia(), deps.custo.tetos.dia)}`)
   const ids = [...new Set(entrada.cardIds ?? [])]
+  // Filtro de repositório: o quadro é um só, e a onda não deve levar trabalho de outro projeto por engano.
+  const alvo = entrada.repositorio?.trim() ? repositorioComparavel(entrada.repositorio) : null
   for (const id of ids) {
     const lido = lerCardCompleto(id, estado)
     if (!lido) { pulados.push({ id, motivo: 'não existe no quadro' }); continue }
+    if (alvo && repositorioComparavel(lido.card.repositorio) !== alvo) { pulados.push({ id, motivo: `é do repositório ${lido.card.repositorio}, não de ${entrada.repositorio!.trim()}` }); continue }
     if (!lido.podeIniciar) { pulados.push({ id, motivo: lido.porQueNaoIniciar ?? 'não pode iniciar' }); continue }
     const repetido = pedidos.find((p) => p.cardId && duplicatasDe(estado.cards, lido.card).some((d) => d.id === p.cardId))
     if (repetido) { pulados.push({ id, motivo: `é o mesmo trabalho de ${repetido.cardId}, já na onda` }); continue }
@@ -69,7 +72,10 @@ export async function prepararOnda(
       cardId: c.id,
     })
   }
-  pedidos.push(...(entrada.pedidos ?? []))
+  for (const livre of entrada.pedidos ?? []) {
+    if (alvo && repositorioComparavel(livre.repositorio) !== alvo) pulados.push({ id: livre.titulo, motivo: `é do repositório ${livre.repositorio}, não de ${entrada.repositorio!.trim()}` })
+    else pedidos.push(livre)
+  }
   if (pedidos.length === 0) return falha(`Nenhum card pôde iniciar: ${pulados.map((p) => `${p.id} (${p.motivo})`).join('; ')}.`)
 
   // Sandbox: uma conferência por repositório, antes de gastar qualquer execução.

@@ -154,6 +154,7 @@ export const planejarOnda = createTool({
     escolher: z.array(z.string().regex(/^C-\d+$/)).max(8).optional().describe('IDs que você quer, na ordem. Sem isto, vale a ordem de ready.'),
     excluir: z.array(z.string().regex(/^C-\d+$/)).max(20).optional().describe('IDs a deixar de fora.'),
     reservar: z.boolean().optional().describe('Marca os escolhidos como reservados por esta onda.'),
+    repositorio: z.string().min(3).max(140).optional().describe('owner/repo. O quadro é um só para todos os repositórios: com isto, o plano considera só os cards desse repositório. Passe SEMPRE que o quadro tiver cards de mais de um.'),
   }),
   outputSchema: z.object({
     onda: z.number(),
@@ -161,14 +162,16 @@ export const planejarOnda = createTool({
     cardIds: z.array(z.string()),
     pulados: z.array(z.object({ id: z.string(), motivo: z.string() })),
     reservado: z.boolean(),
+    repositorio: z.string().nullable(),
+    aviso: z.string().nullable(),
     resumo: z.string(),
   }),
-  execute: async ({ limite, escolher, excluir, reservar }) => {
-    const plano = planejarOndaDeCards({ limite, escolher, excluir, reservar })
+  execute: async ({ limite, escolher, excluir, reservar, repositorio }) => {
+    const plano = planejarOndaDeCards({ limite, escolher, excluir, reservar, repositorio })
     const pulou = plano.pulados.length ? ` Pulados: ${plano.pulados.map((p) => `${p.id} (${p.motivo})`).join('; ')}.` : ''
     return {
       ...plano,
-      resumo: plano.cardIds.length ? `Onda ${plano.onda}${plano.reservado ? ' (reservada)' : ''}: ${plano.cardIds.join(', ')}.${pulou}` : `Nenhum card para a onda.${pulou}`,
+      resumo: `${plano.cardIds.length ? `Onda ${plano.onda}${plano.reservado ? ' (reservada)' : ''}: ${plano.cardIds.join(', ')}.${pulou}` : `Nenhum card para a onda.${pulou}`}${plano.aviso ? ` ATENÇÃO: ${plano.aviso}` : ''}`,
     }
   },
 })
@@ -1026,6 +1029,7 @@ export const iniciarOnda = createTool({
   id: 'iniciar-onda',
   description: `Dispara o modo autônomo para 1 a ${MAXIMO_DE_CARDS_POR_ONDA} cards, até ${PARALELISMO_MAXIMO} ao mesmo tempo: cada um ganha sandbox, branch e pull request próprios. Para tarefas que dependem uma da outra (um épico), dê "chave" a cada card e "dependeDe" (a chave do pai, uma só) ao que vem depois: o filho espera o pai, nasce da branch dele e abre um PR em pilha. Se o pai falha, o filho fica bloqueado. Devolve na hora, com o id da execução; o trabalho segue em segundo plano. Não faz merge nem deploy. Acompanhe com statusQuadro e lerLedger.`,
   inputSchema: z.object({
+    repositorio: z.string().min(3).max(140).optional().describe('owner/repo. Recusa (e explica) card ou pedido de outro repositório: o quadro é um só, e a onda não deve levar trabalho de outro projeto. Passe SEMPRE que o quadro tiver cards de mais de um repositório.'),
     cardIds: z.array(z.string().regex(/^C-\d+$/)).min(1).max(MAXIMO_DE_CARDS_POR_ONDA).optional().describe('Cards que JÁ estão em ready no quadro (ex.: os que planejarOnda devolveu). A execução parte deles, sem abrir card novo. Cards em outra coluna, com PR, ou duplicados de trabalho ativo são pulados e explicados.'),
     pedidos: z.array(pedidoDaOndaSchema).min(1).max(MAXIMO_DE_CARDS_POR_ONDA).optional().describe('Pedidos completos, para trabalho que ainda não está no quadro. Pode combinar com cardIds.'),
     ensaio: z.boolean().optional().describe('Só para demonstrar o fluxo: nada é clonado, escrito ou enviado.'),
@@ -1043,7 +1047,7 @@ export const iniciarOnda = createTool({
   execute: async (bruto, contexto) => {
     if ((bruto.cardIds?.length ?? 0) + (bruto.pedidos?.length ?? 0) > MAXIMO_DE_CARDS_POR_ONDA) return { ok: false, runId: null, nota: `Uma onda leva até ${MAXIMO_DE_CARDS_POR_ONDA} cards, somando cardIds e pedidos.` }
     // Cards por ID viram pedidos sem abrir card novo; o sandbox é conferido antes de gastar qualquer execução.
-    const preparo = await prepararOnda({ cardIds: bruto.cardIds, pedidos: bruto.pedidos, ensaio: bruto.ensaio }, { preflight: depsDoPreflight(), custo: { tetos: lerTetos(), gastoDoDia: () => gastoDoDia() } })
+    const preparo = await prepararOnda({ cardIds: bruto.cardIds, pedidos: bruto.pedidos, ensaio: bruto.ensaio, repositorio: bruto.repositorio }, { preflight: depsDoPreflight(), custo: { tetos: lerTetos(), gastoDoDia: () => gastoDoDia() } })
     if (!preparo.ok) return { ok: false, runId: null, nota: preparo.nota, pulados: preparo.pulados, bloqueados: preparo.bloqueados }
     const entrada = { pedidos: preparo.pedidos as unknown as z.infer<typeof pedidoDaOndaSchema>[], ensaio: bruto.ensaio, revisar: bruto.revisar }
     // Erro de chave ou de dependência volta agora, para o agente corrigir, e não depois de a onda já ter começado.

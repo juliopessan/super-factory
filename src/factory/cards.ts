@@ -4,6 +4,7 @@
 // que já existe, nunca de uma cópia dele. Não há transição para build/qa/review/done por aqui: isso é da execução e do merge humano.
 
 import { grauDe } from './board.ts'
+import { normalizarRepositorio } from './guards.ts'
 import { resultadoPorCriterio, type ResultadoDoCriterio } from './criterios.ts'
 import { anotar } from './ledger.ts'
 import { triarPedido } from './pipeline.ts'
@@ -219,7 +220,17 @@ export function moverCard(cardId: string, para: ColunaEditavel, motivo?: string,
 
 // ---------- planejar e reservar ----------
 
-export type PlanoDaOnda = { onda: number; limite: number; cardIds: string[]; pulados: Array<{ id: string; motivo: string }>; reservado: boolean }
+/** Repositório em forma comparável: aceita owner/repo ou o endereço copiado do navegador, sem diferenciar maiúsculas. */
+export function repositorioComparavel(valor: string): string {
+  const v = valor.trim()
+  try {
+    return normalizarRepositorio('github', v).toLowerCase()
+  } catch {
+    return v.toLowerCase()
+  }
+}
+
+export type PlanoDaOnda = { onda: number; limite: number; cardIds: string[]; pulados: Array<{ id: string; motivo: string }>; reservado: boolean; repositorio: string | null; aviso: string | null }
 
 /**
  * Escolhe os cards da próxima onda. Sem "escolher", vale a ordem de ready. Fica de fora o que já está reservado por outra onda,
@@ -227,16 +238,19 @@ export type PlanoDaOnda = { onda: number; limite: number; cardIds: string[]; pul
  * Com "reservar", os escolhidos ficam marcados com o número da onda e não voltam em planos seguintes.
  */
 export function planejarOndaDeCards(
-  opcoes: { limite?: number; escolher?: string[]; excluir?: string[]; reservar?: boolean; incluirReservados?: boolean } = {},
+  opcoes: { limite?: number; escolher?: string[]; excluir?: string[]; reservar?: boolean; incluirReservados?: boolean; repositorio?: string } = {},
   estado: FabricaEstado = lerEstado(),
 ): PlanoDaOnda {
   const limite = Math.min(Math.max(Math.trunc(opcoes.limite ?? 3) || 1, 1), 5)
   const excluir = new Set(opcoes.excluir ?? [])
   const pulados: PlanoDaOnda['pulados'] = []
   const porId = new Map(estado.cards.map((c) => [c.id, c]))
+  // O quadro é um só para todos os repositórios: o filtro impede que o plano misture trabalhos de projetos diferentes.
+  const alvo = opcoes.repositorio?.trim() ? repositorioComparavel(opcoes.repositorio) : null
+  const doAlvo = (c: Card) => !alvo || repositorioComparavel(c.repositorio) === alvo
   const candidatos = opcoes.escolher?.length
     ? opcoes.escolher.map((id) => porId.get(id) ?? id)
-    : estado.cards.filter((c) => c.coluna === 'ready').sort((a, b) => numeroDe(a.id) - numeroDe(b.id))
+    : estado.cards.filter((c) => c.coluna === 'ready' && doAlvo(c)).sort((a, b) => numeroDe(a.id) - numeroDe(b.id))
   const escolhidos: Card[] = []
   for (const c of candidatos) {
     if (typeof c === 'string') {
@@ -245,6 +259,7 @@ export function planejarOndaDeCards(
     }
     if (escolhidos.length >= limite) break
     if (excluir.has(c.id)) { pulados.push({ id: c.id, motivo: 'excluído a pedido' }); continue }
+    if (!doAlvo(c)) { pulados.push({ id: c.id, motivo: `é do repositório ${c.repositorio}, não de ${opcoes.repositorio!.trim()}` }); continue }
     if (c.coluna !== 'ready') { pulados.push({ id: c.id, motivo: `está em ${c.coluna}, não em ready` }); continue }
     if (c.onda !== null && !opcoes.incluirReservados && !opcoes.escolher?.length) { pulados.push({ id: c.id, motivo: `já reservado pela onda ${c.onda}` }); continue }
     const ativa = duplicatasDe(estado.cards, c).find((d) => d.ativo)
@@ -262,5 +277,15 @@ export function planejarOndaDeCards(
       runs: Object.fromEntries(Object.entries(e.runs).map(([k, r]) => [k, ids.has(r.card.id) ? { ...r, card: { ...r.card, onda } } : r])),
     }))
   }
-  return { onda, limite, cardIds: escolhidos.map((c) => c.id), pulados, reservado: Boolean(opcoes.reservar && escolhidos.length > 0) }
+  // Sem filtro, avisa quando o plano (ou o que está em ready) mistura repositórios.
+  const reposDosEscolhidos = [...new Set(escolhidos.map((c) => c.repositorio))]
+  const reposEmReady = [...new Set(estado.cards.filter((c) => c.coluna === 'ready').map((c) => c.repositorio))]
+  const aviso = alvo
+    ? escolhidos.length === 0 ? `Nenhum card em ready para ${opcoes.repositorio!.trim()}.` : null
+    : reposDosEscolhidos.length > 1
+      ? `Esta onda mistura ${reposDosEscolhidos.length} repositórios (${reposDosEscolhidos.join(', ')}). Passe repositorio para planejar só um.`
+      : reposEmReady.length > 1
+        ? `O quadro tem cards em ready de ${reposEmReady.length} repositórios (${reposEmReady.join(', ')}). Passe repositorio para planejar só os de um deles.`
+        : null
+  return { onda, limite, cardIds: escolhidos.map((c) => c.id), pulados, reservado: Boolean(opcoes.reservar && escolhidos.length > 0), repositorio: opcoes.repositorio?.trim() || null, aviso }
 }

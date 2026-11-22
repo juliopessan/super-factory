@@ -104,8 +104,8 @@ Peça ao Chief, nesta ordem:
 
 1. `Importe as issues etiquetadas super-factory de juliopessan/src-amf-python`. **Esperado:** 4 cards; o da issue C bloqueado na triagem ("a definir"), sem gastar nada.
 2. `Leia o card C-<n>` para A e B (`lerCard`). **Esperado:** critérios, issue de origem, `podeIniciar: true`.
-3. `Planeje uma onda com os cards A e B e reserve` (`planejarOnda`, `escolher`, `reservar`). **Esperado:** os dois IDs e um número de onda.
-4. `Inicie a onda com esses cards e peça a revisão dos PRs` (`iniciarOnda` por `cardIds`, `revisar: true`). **Esperado:** "Onda N iniciada" e **nenhum card novo no quadro**. Anote o `runId`.
+3. `Planeje uma onda do repositório juliopessan/src-amf-python-ensaio escolhendo exatamente os cards C-<A> e C-<B> e reserve` (`planejarOnda` com `repositorio`, `escolher`, `reservar`). **Esperado:** os dois IDs e um número de onda, sem aviso. O quadro é um só para todos os repositórios e costuma ter cards ready de outros projetos: sem `repositorio` o plano mistura (e avisa).
+4. `Inicie a onda do repositório juliopessan/src-amf-python-ensaio com os cardIds C-<A> e C-<B> e peça a revisão dos PRs` (`iniciarOnda` por `cardIds`, com `repositorio`, `revisar: true`). Um card de outro repositório seria recusado e explicado. **Esperado:** "Onda N iniciada" e **nenhum card novo no quadro**. Anote o `runId`.
 5. Acompanhe: `Mostre a onda N com o CI` (`lerOnda`, `comCI`) e `Quanto gastamos hoje?` (`lerCusto`). Cada execução leva alguns minutos.
 
 ## 5. O que conferir em cada PR (o coração do ensaio)
