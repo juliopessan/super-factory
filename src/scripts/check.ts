@@ -4131,6 +4131,227 @@ assert.equal(
   assert.ok(ag.includes('triarBugGithub'))
 }
 
+// --- Lote E: cards existentes por ID (ler, editar, mover, duplicatas, reservar, iniciar) e pré-validação do sandbox
+{
+  const ca = await import('../factory/cards.ts')
+  const pre = await import('../factory/preflight.ts')
+  const po = await import('../factory/preparar-onda.ts')
+  const st = await import('../factory/store.ts')
+  const { lerCard, editarCard, moverCard, planejarOnda: planejarOndaTool } = await import('../super-factory/tools/factory.ts')
+
+  const salvoEstado = process.env.FACTORY_STATE_PATH
+  const pastaE = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-estado-e-'))
+  process.env.FACTORY_STATE_PATH = path.join(pastaE, 'estado.json')
+  try {
+    const card = (id: string, extra: Record<string, unknown> = {}) => ({
+      id, titulo: `Card ${id}`, descricao: 'Ajustar o filtro de datas da API de pedidos para aceitar hora e minuto.', criterios: ['A API aceita intervalo com hora e retorna 400 quando o fim é anterior ao início'],
+      coluna: 'ready', rota: 'clear', grau: 'easy', provedor: 'github', repositorio: 'acme/pedidos', branchBase: 'main', branchHead: null, onda: null, itemExterno: null, ...extra,
+    }) as import('../factory/schemas.ts').Card
+    const run = (c: import('../factory/schemas.ts').Card, extra: Record<string, unknown> = {}) => ({ runId: `R${c.id.slice(1)}`, card: c, estagio: 'implementation', parado: false, motivo: null, desfecho: 'em-andamento', especificacao: '', fatias: [], checks: [], achados: [], aprovacoes: [], entrega: null, evidencia: 'NONE', trilha: [], relatorio: '', atualizadoEm: '2026-01-01T00:00:00Z', ...extra }) as unknown as import('../factory/schemas.ts').Estado
+    const semear = () => {
+      const c5 = card('C-5', { titulo: 'Filtro de datas só com dia', coluna: 'review' })
+      const c9 = card('C-9', { titulo: 'Exportar pedidos em CSV', itemExterno: 'issue:acme/pedidos#12' })
+      st.gravarEstado({
+        seq: 20,
+        cards: [
+          card('C-1', { titulo: 'Filtro por status na lista' }),
+          card('C-2', { titulo: 'Filtro de datas só com dia' }), // mesmo trabalho que C-5, que já está em review
+          card('C-3', { titulo: 'Paginar a lista de pedidos' }),
+          card('C-4', { titulo: 'Cache de consultas frequentes' }),
+          c5,
+          card('C-6', { titulo: 'Idéia de relatório mensal', coluna: 'backlog' }),
+          card('C-7', { titulo: 'Melhorar o onboarding', coluna: 'blocked', criterios: ['a definir'], rota: 'foggy' }),
+          card('C-8', { titulo: 'Atualizar o README do outro repo', repositorio: 'acme/outro' }),
+          c9,
+          card('C-10', { titulo: 'Trabalho em execução', coluna: 'build' }),
+          card('C-11', { titulo: 'Validar CPF no cadastro' }),
+          card('C-12', { titulo: 'Validar CPF no cadastro!' }), // quase igual a C-11, ambos ready
+        ],
+        runs: { 'R-5': run(c5, { entrega: { modo: 'live', provedor: 'github', ok: true, itemId: null, itemUrl: null, pullRequestId: 7, pullRequestUrl: 'https://github.com/acme/pedidos/pull/7', nota: '' }, desfecho: 'aceito-com-ressalvas', checks: [{ nome: 'testes-no-sandbox', resultado: 'PASS', comando: 'npm test', evidencia: 'ok' }] }), 'R-9': run(c9, { parado: true, motivo: 'O clone falhou', desfecho: 'bloqueado', trilha: Array.from({ length: 10 }, (_, i) => ({ sequencia: i + 1, runId: 'R-9', em: 'x', estagio: 'implementation', tipo: 'observed', resumo: `evento ${i + 1}`, ator: 'a' })) }) },
+        ledger: [],
+      } as unknown as Parameters<typeof st.gravarEstado>[0])
+    }
+    semear()
+    const cartoes = () => st.lerEstado().cards
+    const doCard = (id: string) => cartoes().find((c) => c.id === id)!
+
+    // duplicatas
+    assert.equal(ca.normalizarTitulo('  Filtro, de DATAS (só com dia)! '), 'filtro de datas so com dia')
+    const dups = ca.duplicatasDe(cartoes(), doCard('C-2'))
+    assert.deepEqual(dups.map((d) => [d.id, d.motivo, d.ativo]), [['C-5', 'titulo-igual', true]], 'C-2 e C-5 são o mesmo trabalho, e C-5 já está em review')
+    assert.deepEqual(ca.duplicatasDe(cartoes(), doCard('C-11')).map((d) => [d.id, d.motivo, d.ativo]), [['C-12', 'titulo-igual', false]])
+    assert.equal(ca.duplicatasDe(cartoes(), doCard('C-8')).length, 0, 'outro repositório não conta')
+    assert.deepEqual(ca.duplicatasDe([...cartoes(), card('C-30', { titulo: 'Outro nome totalmente', itemExterno: 'issue:acme/pedidos#12', coluna: 'done' })], doCard('C-9')).map((d) => [d.id, d.motivo, d.ativo]), [['C-30', 'mesmo-item-externo', true]], 'a mesma issue de origem é o mesmo trabalho')
+    assert.equal(ca.issueDoCard(doCard('C-9')), 12)
+    assert.equal(ca.issueDoCard(card('C-31', { itemExterno: 'issue:outro/repo#3' })), null, 'issue de outro repositório não liga')
+
+    // ler por ID
+    const lido = ca.lerCardCompleto('C-9')!
+    assert.deepEqual([lido.card.id, lido.issue, lido.podeEditar, lido.podeIniciar], ['C-9', 12, true, true])
+    assert.equal(lido.execucao?.motivo, 'O clone falhou')
+    assert.equal(lido.execucao?.ultimosEventos.length, 8, 'só os últimos eventos')
+    assert.equal(lido.execucao?.ultimosEventos.at(-1)?.resumo, 'evento 10')
+    const dup = ca.lerCardCompleto('C-2')!
+    assert.equal(dup.podeIniciar, false)
+    assert.match(dup.porQueNaoIniciar ?? '', /C-5 \(review\) é o mesmo trabalho \(titulo igual\)/)
+    assert.match(ca.lerCardCompleto('C-5')!.porQueNaoIniciar ?? '', /está em review/)
+    assert.equal(ca.lerCardCompleto('C-5')!.execucao?.pullRequestUrl, 'https://github.com/acme/pedidos/pull/7')
+    assert.equal(ca.lerCardCompleto('C-10')!.podeEditar, false)
+    assert.equal(ca.lerCardCompleto('C-99'), null)
+    const viaTool = await lerCard.execute!({ cardId: 'C-9' }, {} as never) as { ok: boolean; resumo: string }
+    assert.match(viaTool.resumo, /C-9 em ready: Exportar pedidos em CSV\. Execução R-9: bloqueado\. Pode iniciar\./)
+    assert.equal(((await lerCard.execute!({ cardId: 'C-99' }, {} as never)) as { ok: boolean }).ok, false)
+
+    // editar
+    assert.match(ca.editarCard('C-10', { titulo: 'Novo título' }).nota, /está em build: só backlog, ready e blocked se editam/)
+    assert.match(ca.editarCard('C-1', {}).nota, /Nada para mudar/)
+    assert.equal(ca.editarCard('C-99', { titulo: 'Qualquer título' }).ok, false)
+    assert.equal(ca.editarCard('C-1', { branchBase: 'a..b' }).ok, false, 'branch inválida')
+    let ed = ca.editarCard('C-7', { criterios: ['O onboarding mostra o progresso e, ao concluir os 3 passos, exibe a mensagem "Tudo pronto"'], descricao: 'Mostrar ao novo usuário os 3 passos do onboarding e o progresso de cada um, sem mudar o cadastro.' })
+    assert.equal(ed.ok, true, ed.nota)
+    assert.match(ed.nota, /triagem passa\. Use moverCard para colocá-lo em ready/)
+    assert.equal(doCard('C-7').coluna, 'blocked', 'editar não promove sozinho')
+    assert.equal(doCard('C-7').rota, 'clear')
+    ed = ca.editarCard('C-1', { criterios: ['a definir'] })
+    assert.equal(doCard('C-1').coluna, 'blocked', 'texto novo que não passa na triagem bloqueia o card')
+    assert.match(ed.nota, /a triagem bloqueia/)
+    ed = ca.editarCard('C-6', { descricao: `Chave ${TOKEN_TESTE} no texto da descrição do card.` })
+    assert.ok(!doCard('C-6').descricao.includes(TOKEN_TESTE), 'segredo sai redigido')
+    assert.equal(doCard('C-6').coluna, 'blocked', 'e a triagem bloqueia o card com segredo')
+    // a edição aparece na trilha da execução, quando há
+    ca.editarCard('C-9', { titulo: 'Exportar pedidos em CSV (v2)' })
+    assert.equal(st.lerEstado().runs['R-9']!.card.titulo, 'Exportar pedidos em CSV (v2)', 'o card da execução acompanha')
+    assert.match(st.lerEstado().runs['R-9']!.trilha.at(-1)?.resumo ?? '', /Card editado \(titulo\)/)
+
+    // mover
+    const moverCardTipo = () => (moverCard.inputSchema as unknown as { shape: { para: { options: string[] } } }).shape.para.options.join('|')
+    assert.match(ca.moverCard('C-1', 'ready').nota, /A triagem não deixa C-1 ir para ready/, 'card bloqueado na triagem não vai para ready')
+    assert.equal(ca.moverCard('C-7', 'ready').ok, true)
+    assert.equal(doCard('C-7').coluna, 'ready')
+    assert.match(ca.moverCard('C-7', 'blocked').nota, /diga o motivo/)
+    assert.equal(ca.moverCard('C-7', 'blocked', 'Aguardando o design').ok, true)
+    assert.match(st.lerEstado().cards.find((c) => c.id === 'C-7')!.coluna, /blocked/)
+    assert.equal(moverCardTipo(), 'backlog|ready|blocked', 'só se vai para backlog, ready ou blocked')
+    assert.match(ca.moverCard('C-10', 'ready').nota, /ele não se move por aqui/)
+    assert.match(ca.moverCard('C-5', 'backlog').nota, /ele não se move por aqui/, 'card em review é do merge humano')
+    assert.match(ca.moverCard('C-3', 'ready').nota, /já está em ready/)
+    // as ferramentas validam a coluna de destino
+    const mv = await moverCard.execute!({ cardId: 'C-3', para: 'backlog' }, {} as never) as { ok: boolean }
+    assert.equal(mv.ok, true)
+    assert.equal(ca.moverCard('C-3', 'ready').ok, true)
+
+    // planejar, excluir, escolher e reservar
+    semear()
+    let plano = ca.planejarOndaDeCards({ limite: 5 })
+    assert.deepEqual(plano.cardIds, ['C-1', 'C-3', 'C-4', 'C-8', 'C-9'].slice(0, 5), 'C-2 fica de fora: é o mesmo trabalho de C-5, que já está em review')
+    assert.deepEqual(plano.pulados.find((p) => p.id === 'C-2'), { id: 'C-2', motivo: 'é o mesmo trabalho de C-5 (review)' })
+    plano = ca.planejarOndaDeCards({ limite: 5, excluir: ['C-1'] })
+    assert.ok(!plano.cardIds.includes('C-1') && plano.pulados.some((p) => p.id === 'C-1' && /excluído/.test(p.motivo)))
+    plano = ca.planejarOndaDeCards({ escolher: ['C-4', 'C-99', 'C-5', 'C-3'], limite: 5 })
+    assert.deepEqual(plano.cardIds, ['C-4', 'C-3'], 'respeita a ordem pedida')
+    assert.deepEqual(plano.pulados.map((p) => p.id), ['C-99', 'C-5'])
+    plano = ca.planejarOndaDeCards({ limite: 5 })
+    assert.ok(plano.cardIds.includes('C-11') !== plano.cardIds.includes('C-12') || plano.cardIds.length <= 5, 'dois ready iguais não entram juntos')
+    const ambos = ca.planejarOndaDeCards({ escolher: ['C-11', 'C-12'], limite: 5 })
+    assert.deepEqual(ambos.cardIds, ['C-11'])
+    assert.match(ambos.pulados[0]?.motivo ?? '', /mesmo trabalho de C-11, já escolhido nesta onda/)
+    // reservar: não volta no plano seguinte; moverCard libera
+    const reservada = ca.planejarOndaDeCards({ limite: 2, reservar: true })
+    assert.deepEqual([reservada.cardIds, reservada.onda, reservada.reservado], [['C-1', 'C-3'], 1, true])
+    assert.equal(doCard('C-1').onda, 1)
+    const seguinte = ca.planejarOndaDeCards({ limite: 2 })
+    assert.deepEqual(seguinte.cardIds, ['C-4', 'C-8'], 'o reservado não volta')
+    assert.equal(seguinte.onda, 2, 'a numeração segue')
+    assert.ok(seguinte.pulados.some((p) => p.id === 'C-1' && /já reservado pela onda 1/.test(p.motivo)))
+    assert.equal(ca.planejarOndaDeCards({ limite: 5, incluirReservados: true }).cardIds[0], 'C-1')
+    assert.match(ca.moverCard('C-1', 'backlog').nota, /a reserva de onda foi liberada/)
+    assert.equal(doCard('C-1').onda, null)
+    const viaPlan = await planejarOndaTool.execute!({ limite: 2, excluir: ['C-4'] }, {} as never) as { cardIds: string[]; resumo: string }
+    assert.deepEqual(viaPlan.cardIds, ['C-8', 'C-9'], 'a ferramenta expõe excluir (C-3 segue reservado)')
+    assert.match(viaPlan.resumo, /Pulados: .*C-4 \(excluído a pedido\)/)
+
+    // pré-validação do sandbox
+    assert.deepEqual(pre.exigenciasDosArquivos(['README.md', 'requirements.txt', 'src']).map((e) => e.pilha), ['git', 'Python'])
+    assert.deepEqual(pre.exigenciasDosArquivos(['package.json', 'go.mod', 'App.sln']).map((e) => e.pilha), ['git', 'Node', 'Go', '.NET'])
+    const tudo = { git: true, node: true, npm: true, python3: true, pip: true, go: true, dotnet: true }
+    assert.deepEqual(pre.bloqueiosDoSandbox(tudo, pre.exigenciasDosArquivos(['requirements.txt']), 'img'), [])
+    const semPip = { ...tudo, pip: false }
+    const bloq = pre.bloqueiosDoSandbox(semPip, pre.exigenciasDosArquivos(['requirements.txt']), 'node:22-bookworm')
+    assert.match(bloq[0] ?? '', /não tem pip, e este repositório precisa \(requirements\.txt pede pip install\)\. Conserto: rode sudo bash \/opt\/super-factory\/deploy\/construir-sandbox\.sh/)
+    const lidas = await pre.inspecionarSandbox(criarExecutorFalso(() => ({ saida: 'git=1\nnode=1\nnpm=1\npython3=0\npip=0\ngo=0\ndotnet=1\nlixo' })))
+    assert.deepEqual([lidas.git, lidas.python3, lidas.pip, lidas.dotnet], [true, false, false, true])
+    const depsPre = (ferr: Partial<typeof tudo>, raiz: string[] | null, falha = false) => ({ imagem: 'node:22-bookworm', ferramentas: async () => { if (falha) throw new Error('Docker não responde'); return { ...tudo, ...ferr } }, arquivosDaRaiz: async () => raiz })
+    const cardPy = { repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }
+    assert.equal((await pre.preValidarSandbox(cardPy, depsPre({ pip: false }, ['requirements.txt']))).resultado, 'BLOCKED')
+    assert.equal((await pre.preValidarSandbox(cardPy, depsPre({}, ['requirements.txt']))).resultado, 'PASS')
+    assert.equal((await pre.preValidarSandbox(cardPy, depsPre({ pip: false }, ['package.json']))).resultado, 'PASS', 'falta pip, mas o repositório é Node')
+    assert.equal((await pre.preValidarSandbox(cardPy, depsPre({}, null))).resultado, 'NOT_RUN', 'repositório ilegível: não bloqueia, avisa')
+    assert.match((await pre.preValidarSandbox(cardPy, depsPre({}, [], true))).motivos[0] ?? '', /Docker não responde/)
+    assert.equal((await pre.preValidarSandbox({ ...cardPy, provedor: 'azure-devops' }, depsPre({}, ['requirements.txt']))).resultado, 'NOT_RUN')
+
+    // preparar a onda por IDs
+    semear()
+    let preparo = await po.prepararOnda({ cardIds: ['C-1', 'C-2', 'C-10', 'C-99', 'C-1'] }, { preflight: depsPre({}, ['package.json']) })
+    assert.equal(preparo.ok, true, preparo.nota)
+    assert.deepEqual(preparo.pedidos.map((p) => p.cardId), ['C-1'], 'só o que pode iniciar, sem repetir')
+    assert.deepEqual(preparo.pulados.map((p) => [p.id, p.motivo.slice(0, 22)]), [['C-2', 'C-5 (review) é o mesmo'], ['C-10', 'O card está em build: '], ['C-99', 'não existe no quadro']])
+    assert.equal(preparo.pedidos[0]!.criterios, 'A API aceita intervalo com hora e retorna 400 quando o fim é anterior ao início')
+    assert.equal(doCard('C-1').onda, 1, 'os cards da onda ficam reservados')
+    assert.match(preparo.nota, /1 card\(s\) prontos para a onda\. 3 pulado\(s\)/)
+    const c9 = (await po.prepararOnda({ cardIds: ['C-9'] }, { preflight: depsPre({}, ['package.json']) })).pedidos[0]!
+    assert.equal(c9.issue, 12, 'a issue de origem acompanha o card')
+    // sandbox sem o que o repositório pede: BLOCKED, sem gastar a execução
+    semear()
+    preparo = await po.prepararOnda({ cardIds: ['C-1', 'C-3'] }, { preflight: depsPre({ pip: false }, ['requirements.txt']) })
+    assert.equal(preparo.ok, false)
+    assert.match(preparo.nota, /^BLOCKED: nenhum card pôde iniciar\. C-1: A imagem do sandbox \(node:22-bookworm\) não tem pip/)
+    assert.equal(preparo.bloqueados.length, 2)
+    assert.equal(doCard('C-1').onda, null, 'bloqueado pelo sandbox não fica reservado')
+    // um repositório bloqueado não derruba o outro
+    preparo = await po.prepararOnda({ cardIds: ['C-1', 'C-8'] }, { preflight: { ...depsPre({ pip: false }, null), arquivosDaRaiz: async (repo) => (repo === 'acme/pedidos' ? ['requirements.txt'] : ['package.json']) } })
+    assert.deepEqual(preparo.pedidos.map((p) => p.cardId), ['C-8'])
+    assert.deepEqual(preparo.bloqueados.map((b) => b.id), ['C-1'])
+    assert.match(preparo.nota, /1 BLOCKED pelo sandbox/)
+    // ensaio não confere o sandbox; sem ele, só avisa quando não deu para conferir
+    assert.equal((await po.prepararOnda({ cardIds: ['C-3'], ensaio: true }, { preflight: depsPre({ pip: false }, ['requirements.txt']) })).ok, true)
+    semear()
+    preparo = await po.prepararOnda({ cardIds: ['C-3'] }, { preflight: depsPre({}, null) })
+    assert.equal(preparo.ok, true)
+    assert.match(preparo.avisos[0] ?? '', /C-3: sandbox não conferido/)
+    // pedido novo e card existente na mesma onda; erros de entrada
+    semear()
+    const novo = { titulo: 'Trabalho novo', descricao: 'Descrição longa o bastante para o pedido novo.', criterios: 'Critério observável aqui', provedor: 'github' as const, repositorio: 'acme/pedidos' }
+    preparo = await po.prepararOnda({ cardIds: ['C-3'], pedidos: [novo] }, { preflight: depsPre({}, ['package.json']) })
+    assert.deepEqual(preparo.pedidos.map((p) => p.cardId ?? p.titulo), ['C-3', 'Trabalho novo'])
+    assert.equal((await po.prepararOnda({}, {})).ok, false)
+    assert.match((await po.prepararOnda({ cardIds: ['C-2'] }, {})).nota, /Nenhum card pôde iniciar: C-2/)
+
+    // a execução parte do card que já existe: nenhum card novo
+    semear()
+    const antes = cartoes().length
+    const g = githubFalso()
+    const exec = criarExecutorFalso(roteiroNode())
+    const pedidoC3 = { titulo: 'Paginar a lista de pedidos', descricao: 'Ajustar o filtro de datas da API de pedidos para aceitar hora e minuto.', criterios: 'A API aceita intervalo com hora e retorna 400 quando o fim é anterior ao início', provedor: 'github' as const, repositorio: 'acme/pedidos' }
+    const feito = await executarAutonomo(pedidoC3, { criarExecutor: async () => exec, implementador: async () => ({ resumo: 'ok' }), credenciais: { githubToken: TOKEN_TESTE }, github: g.deps }, { cardId: 'C-9' })
+    assert.equal(feito.estado.card.id, 'C-9', 'o mesmo card, não uma cópia')
+    assert.equal(feito.estado.card.itemExterno, 'issue:acme/pedidos#12', 'a issue de origem fica')
+    assert.equal(cartoes().length, antes, 'nenhum card novo foi aberto')
+    assert.equal(feito.estado.runId, 'R-9')
+    await assert.rejects(executarAutonomo(pedidoC3, { criarExecutor: async () => exec, implementador: async () => ({ resumo: 'ok' }) }, { cardId: 'C-404' }), /O card C-404 não existe no quadro/, 'sem card, sem execução')
+  } finally {
+    if (salvoEstado === undefined) delete process.env.FACTORY_STATE_PATH
+    else process.env.FACTORY_STATE_PATH = salvoEstado
+    fs.rmSync(pastaE, { recursive: true, force: true })
+  }
+
+  // ligação: o Chief tem as ferramentas e a regra aprovada pode ser gravada
+  const fonteAg = fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8')
+  const doChiefE = fonteAg.slice(fonteAg.indexOf('export const chiefOfStaff'), fonteAg.indexOf('export const architect') > 0 ? fonteAg.indexOf('export const architect') : undefined)
+  for (const nome of ['lerCard', 'editarCard', 'moverCard', 'validarSandbox', 'registrarRegraProjeto', 'iniciarOnda', 'planejarOnda']) assert.ok(doChiefE.includes(`${nome},`) || fonteAg.includes(`    ${nome},`), `o Chief tem ${nome}`)
+  assert.ok(fonteAg.includes('passando cardIds') && fonteAg.includes('nenhum card novo é aberto'))
+  assert.ok(fs.readFileSync(new URL('../super-factory/tools/factory.ts', import.meta.url), 'utf8').includes('cardIds: z.array'))
+}
+
 assert.equal(nomeDaBranch({ card: { id: 'C-9', titulo: 'Ação com acentuação!' } } as Parameters<typeof nomeDaBranch>[0]), 'factory/c-9-acao-com-acentuacao')
 
 console.log(

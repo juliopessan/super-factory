@@ -11,7 +11,7 @@ import { especificar, iniciar, parar } from './pipeline.ts'
 import { PASTA_DO_REPOSITORIO, type Execucao, type Executor } from './sandbox.ts'
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
 import { auditarAcoes, extrasDoNode, lerConvencoes, rodarBaseline, rodarExtras, verificarVermelhoVerde, veredito, type AcaoDoConstrutor, type Verificacao } from './verificacao.ts'
-import { persistir } from './store.ts'
+import { lerEstado, persistir } from './store.ts'
 import { lerNumstat, lerOrcamento, textoDoOrcamento } from './orcamento.ts'
 import { atencaoDeProntidao, diagnosticarProntidao, gerarMapaDoRepositorio, prontidaoEmTexto, verificarAppNoNavegador, type MapaDoRepositorio } from './mapa.ts'
 
@@ -528,13 +528,17 @@ function ligarAIssue(estado: Estado, issue?: number): Estado {
   return persistir({ ...estado, card: { ...estado.card, itemExterno: chaveDaIssue(estado.card.repositorio, issue) } })
 }
 
-export function contextoInicial(pedido: PedidoBruto, issue?: number): ContextoAutonomo {
-  return { estado: ligarAIssue(iniciar(pedido), issue), branch: null, verificacao: null, estatistica: null }
+export function contextoInicial(pedido: PedidoBruto, issue?: number, cardId?: string): ContextoAutonomo {
+  // Card que já está no quadro: a execução parte dele (mesmo ID, mesma issue de origem), em vez de abrir um duplicado.
+  const existente = cardId ? lerEstado().cards.find((c) => c.id === cardId) : undefined
+  if (cardId && !existente) throw new Error(`O card ${cardId} não existe no quadro.`)
+  const estado = iniciar(pedido, existente ? { cardId: existente.id, itemExterno: existente.itemExterno } : undefined)
+  return { estado: ligarAIssue(existente?.onda ? { ...estado, card: { ...estado.card, onda: existente.onda } } : estado, issue), branch: null, verificacao: null, estatistica: null }
 }
 
 /** Leva um pedido do card ao pull request. Para no primeiro bloqueio e explica. */
-export async function executarAutonomo(pedido: PedidoBruto, deps: DepsAutonomo, opcoes: { pilha?: string; issue?: number } = {}): Promise<ResultadoAutonomo> {
-  let contexto: ContextoAutonomo = { ...contextoInicial(pedido, opcoes.issue), pilha: opcoes.pilha ?? null }
+export async function executarAutonomo(pedido: PedidoBruto, deps: DepsAutonomo, opcoes: { pilha?: string; issue?: number; cardId?: string } = {}): Promise<ResultadoAutonomo> {
+  let contexto: ContextoAutonomo = { ...contextoInicial(pedido, opcoes.issue, opcoes.cardId), pilha: opcoes.pilha ?? null }
   const sessao: SessaoAutonomo = { executor: null }
   try {
     for (const fase of FASES_AUTONOMO) {

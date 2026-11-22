@@ -32,3 +32,11 @@ Decisões da pessoa que opera a Factory (21/11/2026): navegador no sandbox, **si
 | B | Control glass (navegador no sandbox), feature map, prontidão do repositório | feito |
 | C | Evals, minerador de regras, resultado do PR | feito |
 | D | Webhook, triagem automática de bug, orçamento de PR | feito |
+| E | Cards existentes por ID (ler, editar, mover, duplicatas, reservar, iniciar) e pré-validação do sandbox | feito |
+
+## Ainda aberto (relato do Chief, 22/11/2026)
+
+- Resultado **por critério de aceite** (PASS/FAIL/NOT_RUN/BLOCKED ligado a evidência): hoje o relatório é por card (testes, lint, vermelho→verde); não há mapeamento teste→critério, e a Factory não finge que há.
+- Visão agregada **por onda** (card ↔ execução ↔ PR ↔ CI): `lerCard` cobre um card; falta a consulta da onda inteira.
+- Sincronizar o quadro da Factory com **GitHub Project** e issues (ligar um rascunho do Project a um card executável).
+- Paridade com **Azure DevOps** (leituras, transições, vínculos e acompanhamento de PR/CI).

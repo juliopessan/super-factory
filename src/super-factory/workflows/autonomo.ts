@@ -105,6 +105,7 @@ function passo(fase: FaseAutonomo, ultima: boolean) {
 
 const entradaSchema = pedidoSchema.extend({
   issue: z.number().int().min(1).max(9_999_999).optional().describe('Número da issue (no mesmo repositório) de onde veio o pedido. O PR passa a referenciá-la (Closes #N com os testes verdes, Refs #N no rascunho) e a Factory comenta nela quando o PR abre.'),
+  cardId: z.string().regex(/^C-\d+$/).optional().describe('Uso interno: a execução parte deste card que já está no quadro (mesmo ID), em vez de abrir um card novo.'),
   empilhadoSobre: z.string().min(1).max(120).optional().describe('Uso interno da onda: branch do card pai. O PR deste card avisa que está empilhado sobre ela.'),
   ensaio: z
     .boolean()
@@ -118,9 +119,9 @@ const preparar = createStep({
   inputSchema: entradaSchema,
   outputSchema: contextoSchema,
   execute: async ({ inputData }) => {
-    const { ensaio = false, empilhadoSobre, issue, ...pedido } = inputData
+    const { ensaio = false, empilhadoSobre, issue, cardId, ...pedido } = inputData
     // O card do ensaio entra no quadro de verdade; o prefixo evita confundir com trabalho real.
-    const contexto = contextoInicial(ensaio ? { ...pedido, titulo: `[ENSAIO] ${pedido.titulo}`.slice(0, 120) } : pedido, issue)
+    const contexto = contextoInicial(ensaio ? { ...pedido, titulo: `[ENSAIO] ${pedido.titulo}`.slice(0, 120) } : pedido, issue, ensaio ? undefined : cardId)
     const temModelo = ensaio || process.env.ANTHROPIC_API_KEY || process.env.SUPER_FACTORY_BUILDER_MODEL
     if (!temModelo) {
       const estado = persistir(parar(contexto.estado, 'O modo autônomo precisa de ANTHROPIC_API_KEY para o agente construtor escrever código. Cole a chave em Settings → Chaves e acessos, no Studio, ou marque ensaio para conhecer o fluxo.'))
