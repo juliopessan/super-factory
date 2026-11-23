@@ -17,6 +17,7 @@ import { fraquezasDaTentativa, melhorou, pontuarTentativa, type ConfigDeMelhoria
 import { ErroDeTeto, mensagemDoTeto, restanteDeTokens, SEM_TETOS, type Tetos } from './custo.ts'
 import type { ExtraDeVerificacao } from './verificacao.ts'
 import { contagemDosCriterios, resultadoPorCriterio } from './criterios.ts'
+import { auditarDiff, checkDosTestes } from './slop.ts'
 import { lerNumstat, lerOrcamento, textoDoOrcamento } from './orcamento.ts'
 import { atencaoDeProntidao, diagnosticarProntidao, gerarMapaDoRepositorio, prontidaoEmTexto, verificarAppNoNavegador, type MapaDoRepositorio } from './mapa.ts'
 
@@ -562,6 +563,15 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       const segredos = varrerSegredos(diff.saida)
       if (segredos.encontrado) return pararCom(contexto, `O diff tem padrão de segredo (${segredos.rotulos.join(', ')}). Nada foi enviado.`)
       const estatistica = (await executor.executar('git diff --cached --stat')).saida.trim()
+      // Auditoria de slop no diff (determinística): teste enfraquecido deixa o PR em rascunho; o resto vira nota.
+      const slop = auditarDiff((await executor.executar('git diff --cached -U0 --no-color')).saida)
+      const checkDeTestes = checkDosTestes(slop)
+      estado = {
+        ...estado,
+        achados: [...estado.achados.filter((a) => !a.id.startsWith('SLP-')), ...slop.achados],
+        checks: [...estado.checks.filter((c) => c.nome !== 'testes-preservados'), ...(checkDeTestes ? [checkDeTestes] : [])],
+      }
+      if (slop.achados.length) estado = anotarAuto(estado, 'verification', `Auditoria de slop: ${slop.enfraquece ? `os testes ficaram mais fracos (${slop.enfraquece})` : `${slop.achados.length} nota(s)`}.`)
       // Orçamento de tamanho: PR grande não é bloqueado, mas leva o aviso e uma proposta de divisão em PRs empilhados.
       const orcamentoDoPr = textoDoOrcamento(lerNumstat((await executor.executar('git diff --cached --numstat')).saida), deps.orcamentoDePr ?? lerOrcamento())
       if (orcamentoDoPr.length > 0) estado = anotarAuto(estado, 'verification', orcamentoDoPr[0]!.split('\n')[0]!)
@@ -588,13 +598,13 @@ export const FASES_AUTONOMO: FaseAutonomo[] = [
       const ver = veredito({ checks: estado.checks.some((c) => c.nome === 'testes-no-sandbox') ? estado.checks : [...estado.checks, check] })
       const passou = ver.passou
       const achado = (nome: string) => estado.checks.find((c) => c.nome === nome)
-      const linhasDeChecks = ['lint', 'typecheck', 'build', 'vermelho-verde', 'app-no-navegador'].flatMap((nome) => {
+      const linhasDeChecks = ['lint', 'typecheck', 'build', 'vermelho-verde', 'app-no-navegador', 'testes-preservados'].flatMap((nome) => {
         const c = achado(nome)
         if (!c) return []
         const antes = achado(`baseline:${nome === 'app-no-navegador' ? 'app' : nome}`)
-        return [`- ${nome === 'vermelho-verde' ? 'Vermelho→verde' : nome === 'app-no-navegador' ? 'App no navegador' : nome}${c.comando ? ` (\`${c.comando}\`)` : ''} → **${c.resultado}**${antes ? ` (antes da mudança: ${antes.resultado})` : ''}`]
+        return [`- ${nome === 'vermelho-verde' ? 'Vermelho→verde' : nome === 'app-no-navegador' ? 'App no navegador' : nome === 'testes-preservados' ? 'Testes preservados' : nome}${c.comando ? ` (\`${c.comando}\`)` : ''} → **${c.resultado}**${antes ? ` (antes da mudança: ${antes.resultado})` : ''}`]
       })
-      const pontosDeAtencao = [...ver.notas, ...estado.achados.filter((a) => a.id.startsWith('ANC-')).map((a) => a.texto), ...(achado('vermelho-verde')?.resultado === 'NOT_RUN' ? [achado('vermelho-verde')!.evidencia] : []), ...(achado('app-no-navegador')?.resultado === 'FAIL' ? [`App no navegador: ${achado('app-no-navegador')!.evidencia.slice(0, 700)}`] : []), ...(contexto.atencao ?? [])]
+      const pontosDeAtencao = [...ver.notas, ...estado.achados.filter((a) => a.id.startsWith('ANC-') || a.id.startsWith('SLP-')).map((a) => a.texto), ...(achado('vermelho-verde')?.resultado === 'NOT_RUN' ? [achado('vermelho-verde')!.evidencia] : []), ...(achado('app-no-navegador')?.resultado === 'FAIL' ? [`App no navegador: ${achado('app-no-navegador')!.evidencia.slice(0, 700)}`] : []), ...(contexto.atencao ?? [])]
       const corpo = [
         `## ${estado.card.id}: ${estado.card.titulo}`,
         '',

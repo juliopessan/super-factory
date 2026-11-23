@@ -119,6 +119,7 @@ Peça ao Chief, nesta ordem:
 | Vermelho→verde (só o bug A) | Evidência | PASS: o teste novo falha sem a correção. Se for FAIL/NOT_RUN, leia o motivo |
 | Resultado por critério | "Resultado por critério" | PASS só com teste apontado no diff e suíte verde; o resto NOT_RUN com motivo. **Nenhum PASS sem teste** |
 | Pontos de atenção | Fim do PR | Prontidão (sem AGENTS.md é normal) e, se houver, auditoria do construtor |
+| Anti-slop | Evidência e Pontos de atenção | Se o diff mexer em teste, "Testes preservados → PASS". Qualquer nota de slop (erro engolido, print, TODO) é achado a registrar |
 | Tamanho | PR | Bem abaixo de 400 linhas / 15 arquivos |
 | Issue de origem | Issue | PR com `Closes #N` (verde) e comentário da Factory, uma vez |
 | Revisão automática | Comentários do PR | Comentário do revisor (Opus), sem aprovar |
