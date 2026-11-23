@@ -35,6 +35,7 @@ Decisões da pessoa que opera a Factory (21/11/2026): navegador no sandbox, **si
 | E | Cards existentes por ID (ler, editar, mover, duplicatas, reservar, iniciar) e pré-validação do sandbox | feito |
 | F | Resultado por critério de aceite e visão por onda | feito |
 | G | Teto de custo em tokens (card, onda, dia) | feito |
+| K1 | Auditoria de slop no diff (teste enfraquecido vira rascunho; o resto, nota). Origem: palestra "12 Rules for a Software Factory That Doesn't Ship Slop" (Dex Horthy). K2 (plano antes, nos cards de dor alta) e K3 (fila de revisão por risco) ficam para depois do ensaio real | feito |
 | I | Melhoria recursiva fraca: Improver dentro do card e lições entre cards ([RSI.md](RSI.md)) | feito |
 | H | Projeto em subpasta, Python (`.[dev]`, ruff, versão) e imagem do sandbox com Python 3.13 | feito; ensaio real em [ENSAIO-REAL.md](ENSAIO-REAL.md) |
 

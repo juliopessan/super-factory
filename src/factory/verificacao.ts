@@ -92,6 +92,7 @@ export function veredito(estado: Pick<Estado, 'checks'>): { passou: boolean; mot
     if (get('baseline:app')?.resultado === 'PASS') motivos.push('o app abria sem erro no navegador antes da mudança e agora não')
     else notas.push('o app no navegador tem erro (não abria limpo antes da mudança, ou não há baseline): veja a evidência')
   }
+  if (get('testes-preservados')?.resultado === 'FAIL') motivos.push('o diff enfraquece os testes (veja Pontos de atenção)')
   const rv = get('vermelho-verde')
   if (rv?.resultado === 'FAIL') motivos.push('o teste novo passa mesmo sem a correção, então não prova o conserto')
   const base = get('baseline:testes')
