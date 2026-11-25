@@ -167,9 +167,11 @@ export async function verificarVermelhoVerde(executor: Executor, v: Verificacao,
 
 // ---------- convenções do repositório ----------
 
-const COMANDO_DAS_CONVENCOES = String.raw`for f in AGENTS.md CLAUDE.md CONTRIBUTING.md .github/copilot-instructions.md; do if [ -f "$f" ]; then echo "### $f"; head -c 4000 "$f"; echo; fi; done; for f in $(ls .cursor/rules/*.mdc .cursor/rules/*.md 2>/dev/null | head -4); do echo "### $f"; head -c 2000 "$f"; echo; done`
+// Ordem de prioridade (o teto total é 12.000 caracteres): instruções do projeto, regras do Cursor e, por fim, as skills do
+// repositório (.claude/skills/*/SKILL.md), que são o "conhecimento da casa": como esse time faz deploy, migração, release etc.
+const COMANDO_DAS_CONVENCOES = String.raw`for f in AGENTS.md CLAUDE.md .claude/CLAUDE.md CONTRIBUTING.md .github/copilot-instructions.md; do if [ -f "$f" ]; then echo "### $f"; head -c 4000 "$f"; echo; fi; done; for f in $(ls .cursor/rules/*.mdc .cursor/rules/*.md 2>/dev/null | head -4); do echo "### $f"; head -c 2000 "$f"; echo; done; for f in $(ls .claude/skills/*/SKILL.md 2>/dev/null | head -5); do echo "### $f (skill do repositório)"; head -c 1500 "$f"; echo; done`
 
-/** O que o próprio repositório pede de quem contribui (AGENTS.md, CLAUDE.md, CONTRIBUTING, regras do Cursor). É texto do projeto, não ordem da Factory. */
+/** O que o próprio repositório pede de quem contribui (AGENTS.md, CLAUDE.md, CONTRIBUTING, regras do Cursor, skills em .claude/skills). É texto do projeto, não ordem da Factory. */
 export async function lerConvencoes(executor: Executor): Promise<string | null> {
   const r = await executor.executar(COMANDO_DAS_CONVENCOES)
   const texto = redigirSegredos(r.saida.replace(/\u0000/g, '').trim()).slice(0, 12_000)

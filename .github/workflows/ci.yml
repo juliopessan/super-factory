@@ -1,0 +1,33 @@
+# CI da Super Factory: os mesmos testes que rodam antes de cada merge, agora em cada pull request.
+# Tudo simulado (GitHub, Docker, modelo): não precisa de segredo nem de rede além do npm.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, testes e evals determinísticos
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar
+        run: npm ci
+      - name: npm run check (tsc + check.ts + check-slop.ts + check-extras.ts)
+        run: npm run check
+      - name: Auditoria de dependências de produção
+        run: npm audit --omit=dev
