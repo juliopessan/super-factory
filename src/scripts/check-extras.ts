@@ -55,6 +55,41 @@ try {
   fs.rmSync(repo, { recursive: true, force: true })
 }
 
+// Achados da revisão do PR #61: segredo que atravessa o corte, skill em pasta com espaço, saída total acima de 20.000.
+const PEM = `-----BEGIN RSA PRIVATE KEY-----\n${'M'.repeat(64)}\n${'N'.repeat(64)}\n-----END RSA PRIVATE KEY-----`
+const repo2 = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-conv2-'))
+try {
+  fs.mkdirSync(path.join(repo2, '.claude', 'skills', 'code review'), { recursive: true })
+  // a chave começa antes do corte de 1.500 e termina depois dele
+  fs.writeFileSync(path.join(repo2, '.claude', 'skills', 'code review', 'SKILL.md'), `---\nname: code review\n---\n${'a'.repeat(1450)}${PEM}\ndepois`)
+  // credencial atribuída cujas aspas finais caem depois do corte de 4.000
+  fs.writeFileSync(path.join(repo2, 'AGENTS.md'), `${'b'.repeat(3980)} token = "segredo-que-atravessa-o-corte"`)
+  const c2 = (await lerConvencoes(executorEm(repo2))) ?? ''
+  assert.match(c2, /### \.claude\/skills\/code review\/SKILL\.md \(skill do repositório\)\n---\nname: code review/, 'skill em pasta com espaço entra')
+  assert.ok(!c2.includes('M'.repeat(20)) && !c2.includes('BEGIN RSA'), 'chave que atravessa o corte não vaza nem pela metade')
+  assert.ok(!c2.includes('segredo-que-atr'), 'credencial que atravessa o corte não vaza nem pela metade')
+  assert.match(c2, /\[segredo\]\ndepois/, "a chave inteira vira [segredo] antes do corte")
+  // chave sem o fim no arquivo (cortada de propósito): some do ponto em que começa
+  fs.writeFileSync(path.join(repo2, 'CLAUDE.md'), `antes\n-----BEGIN OPENSSH PRIVATE KEY-----\n${'K'.repeat(80)}`)
+  const c3 = (await lerConvencoes(executorEm(repo2))) ?? ''
+  assert.ok(!c3.includes('K'.repeat(20)), 'chave sem o fim também some')
+  // saída total acima de 20.000: o executor de verdade corta o meio de saídas longas; a leitura por arquivo evita isso
+  const limite = (cmd: string, saida: string) => (saida.length > 20_000 ? `${saida.slice(0, 10_000)}\n[… cortados …]\n${saida.slice(-10_000)}` : saida)
+  const comCorte: Executor = { ...executorEm(repo2), async executar(cmd: string) { const r = await executorEm(repo2).executar(cmd); return { ...r, saida: limite(cmd, r.saida) } } }
+  for (const nome of ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md', '.github/copilot-instructions.md']) {
+    fs.mkdirSync(path.dirname(path.join(repo2, nome)), { recursive: true })
+    fs.writeFileSync(path.join(repo2, nome), `inicio de ${nome}\n${'w'.repeat(30_000)}`)
+  }
+  const c4 = (await lerConvencoes(comCorte)) ?? ''
+  assert.ok(!c4.includes('cortados'), 'nada chega cortado pelo meio')
+  assert.match(c4, /^### AGENTS\.md\ninicio de AGENTS\.md/, 'a instrução prioritária continua inteira no começo')
+  assert.match(c4, /### CLAUDE\.md\ninicio de CLAUDE\.md/)
+  assert.match(c4, /### CONTRIBUTING\.md\ninicio de CONTRIBUTING\.md/)
+  assert.ok(c4.length <= 12_000)
+} finally {
+  fs.rmSync(repo2, { recursive: true, force: true })
+}
+
 // CI: o workflow roda o mesmo check, com permissão mínima e sem segredo
 const ci = fs.readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')
 assert.match(ci, /^on:\n {2}pull_request:\n {2}push:\n {4}branches: \[main\]/m)

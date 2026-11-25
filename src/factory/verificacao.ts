@@ -169,12 +169,41 @@ export async function verificarVermelhoVerde(executor: Executor, v: Verificacao,
 
 // Ordem de prioridade (o teto total é 12.000 caracteres): instruções do projeto, regras do Cursor e, por fim, as skills do
 // repositório (.claude/skills/*/SKILL.md), que são o "conhecimento da casa": como esse time faz deploy, migração, release etc.
-const COMANDO_DAS_CONVENCOES = String.raw`for f in AGENTS.md CLAUDE.md .claude/CLAUDE.md CONTRIBUTING.md .github/copilot-instructions.md; do if [ -f "$f" ]; then echo "### $f"; head -c 4000 "$f"; echo; fi; done; for f in $(ls .cursor/rules/*.mdc .cursor/rules/*.md 2>/dev/null | head -4); do echo "### $f"; head -c 2000 "$f"; echo; done; for f in $(ls .claude/skills/*/SKILL.md 2>/dev/null | head -5); do echo "### $f (skill do repositório)"; head -c 1500 "$f"; echo; done`
+// Primeiro lista os arquivos (glob entre aspas: nome com espaço funciona), depois lê um por um. Cada leitura traz uma margem
+// além do corte, para que um segredo que atravesse o limite chegue inteiro à redação; só então o texto é cortado. Ler arquivo
+// por arquivo também mantém cada saída abaixo do corte do executor (20.000), que descartaria o meio, e não o fim.
+const COMANDO_DA_LISTA_DE_CONVENCOES = String.raw`for f in AGENTS.md CLAUDE.md .claude/CLAUDE.md CONTRIBUTING.md .github/copilot-instructions.md; do [ -f "$f" ] && printf 'instrucao\t%s\n' "$f"; done; n=0; for f in .cursor/rules/*.mdc .cursor/rules/*.md; do [ -f "$f" ] || continue; [ $n -ge 4 ] && break; printf 'regra\t%s\n' "$f"; n=$((n+1)); done; n=0; for f in .claude/skills/*/SKILL.md; do [ -f "$f" ] || continue; [ $n -ge 5 ] && break; printf 'skill\t%s\n' "$f"; n=$((n+1)); done; true`
+const CORTE_POR_TIPO = { instrucao: 4000, regra: 2000, skill: 1500 } as const
+const MARGEM_DE_LEITURA = 6000
+const TETO_DAS_CONVENCOES = 12_000
+
+/** Uma chave privada sem o fim (cortada) não casa com o padrão de redação: some daqui até o fim do trecho. */
+function semChaveIncompleta(texto: string): string {
+  const inicio = texto.search(/-----BEGIN [A-Z ]*PRIVATE KEY-----/)
+  return inicio === -1 ? texto : texto.slice(0, inicio) + '[segredo]'
+}
 
 /** O que o próprio repositório pede de quem contribui (AGENTS.md, CLAUDE.md, CONTRIBUTING, regras do Cursor, skills em .claude/skills). É texto do projeto, não ordem da Factory. */
 export async function lerConvencoes(executor: Executor): Promise<string | null> {
-  const r = await executor.executar(COMANDO_DAS_CONVENCOES)
-  const texto = redigirSegredos(r.saida.replace(/\u0000/g, '').trim()).slice(0, 12_000)
+  const lista = await executor.executar(COMANDO_DA_LISTA_DE_CONVENCOES)
+  const arquivos = lista.saida.split('\n').flatMap((linha) => {
+    const [tipo, caminho] = linha.split('\t')
+    if (!caminho || !(tipo! in CORTE_POR_TIPO) || !caminhoDeArquivoSeguro(caminho)) return []
+    return [{ tipo: tipo as keyof typeof CORTE_POR_TIPO, caminho }]
+  })
+  let texto = ''
+  for (const { tipo, caminho } of arquivos) {
+    const resta = TETO_DAS_CONVENCOES - texto.length
+    if (resta <= 0) break
+    const corte = CORTE_POR_TIPO[tipo]
+    const r = await executor.executar(`head -c ${corte + MARGEM_DE_LEITURA} -- '${caminho}'`)
+    if (r.codigo !== 0) continue
+    const redigido = redigirSegredos(r.saida.replace(/\u0000/g, ''))
+    const corpo = semChaveIncompleta(redigido.slice(0, corte)).trim()
+    if (!corpo) continue
+    const secao = `${texto ? '\n' : ''}### ${caminho}${tipo === 'skill' ? ' (skill do repositório)' : ''}\n${corpo}`
+    texto += secao.slice(0, resta)
+  }
   return texto ? texto : null
 }
 
