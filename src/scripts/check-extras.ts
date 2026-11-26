@@ -99,6 +99,6 @@ assert.match(ci, /run: npm run check/)
 assert.match(ci, /run: npm audit --omit=dev/)
 assert.ok(!/secrets\./.test(ci), 'o CI não usa segredo')
 const pacote = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { scripts: Record<string, string> }
-assert.match(pacote.scripts.check!, /check\.ts && .*check-slop\.ts && .*check-extras\.ts$/, 'o npm run check roda os três arquivos')
+assert.match(pacote.scripts.check!, /check\.ts && .*check-slop\.ts && .*check-extras\.ts && .*check-fabrica\.ts$/, 'o npm run check roda os quatro arquivos')
 
 console.log('check-extras: ok')

@@ -34,6 +34,8 @@ import { PARALELISMO_MAXIMO, paralelismoConfigurado } from '../../factory/parale
 import { editarCard as editarCardDoQuadro, lerCardCompleto, moverCard as moverCardDoQuadro, planejarOndaDeCards } from '../../factory/cards.ts'
 import { acompanharLicoes, decidirLicao, proporLicoes as proporLicoesDoQuadro } from '../../factory/licoes.ts'
 import { gastoDoDia, lerTetos, resumoDeCusto } from '../../factory/custo.ts'
+import { abrirPedido, abrirPedidoDeCriterio, cancelarPedido, listarPedidos, resolverVencidos, responderPedido, resumoDosPedidos } from '../../factory/decisoes.ts'
+import { ensaiarDisjuntor, lerConfigDoDisjuntor, resumoDoDisjuntor, retomarDisjuntor as retomarDisjuntorDoRepositorio } from '../../factory/disjuntor.ts'
 import { anexarCI, listarOndas, visaoDaOnda } from '../../factory/ondas.ts'
 import { prepararOnda } from '../../factory/preparar-onda.ts'
 import { preValidarSandbox } from '../../factory/preflight.ts'
@@ -230,9 +232,103 @@ export const decidirLicaoDoConstrutor = createTool({
   },
 })
 
+export const pedirDecisao = createTool({
+  id: 'pedir-decisao',
+  description: 'Abre um PEDIDO DE DECISÃO para uma pessoa, no formato da Fábrica: a pergunta, as opções (cada uma com o que custa), o custo de NÃO fazer (entra sozinho como a última opção), a recomendação com a razão, o padrão que vale se ninguém responder no prazo (sempre uma opção reversível) e o que NÃO foi medido (nunca vazio). Use quando o trabalho depende de uma escolha que é da pessoa (escopo, prioridade, abordagem). Não use para merge, aprovação, deploy, push, segredo ou teste desligado: isso é decisão humana direta no GitHub e a ferramenta recusa. Depois de abrir, siga com o que não depende da resposta.',
+  inputSchema: z.object({
+    pergunta: z.string().min(10).max(200).describe('A decisão, em uma frase.'),
+    opcoes: z.array(z.object({ oQue: z.string().min(5).max(200), custo: z.string().min(3).max(200).describe('O que custa fazer e manter.'), reversivel: z.boolean().describe('Dá para desfazer sem perda?') })).min(1).max(4).describe('As opções, sem o "não fazer".'),
+    custoDeNaoFazer: z.string().min(3).max(200).describe('O que se perde se nada for feito.'),
+    recomendada: z.string().min(1).max(1).describe('Letra da opção recomendada (A, B, …). A última letra é "não fazer".'),
+    porque: z.string().min(10).max(240).describe('Uma razão ligada a quem usa.'),
+    padrao: z.object({ opcao: z.string().min(1).max(1), prazoDias: z.number().int().min(1).max(30) }).describe('Opção reversível que vale se ninguém responder, e em quantos dias. O padrão só registra a escolha: nunca executa nada.'),
+    naoMedido: z.string().min(8).max(400).describe('O que não foi conferido e poderia mudar a recomendação. Se tudo foi conferido, diga o que e como.'),
+    parado: z.string().max(200).optional().describe('O que está parado esperando.'),
+    cardId: z.string().regex(/^C-\d+$/).optional(),
+    repositorio: z.string().max(140).optional(),
+  }),
+  outputSchema: z.object({ ok: z.boolean(), pedido: z.any().nullable(), resumo: z.string() }),
+  execute: async (entrada) => {
+    const r = abrirPedido({ ...entrada, quemDecide: 'dono' })
+    return { ok: r.ok, pedido: r.pedido, resumo: r.nota }
+  },
+})
+
+export const pedirDecisaoDeCriterio = createTool({
+  id: 'pedir-decisao-de-criterio',
+  description: 'Pede a uma pessoa que decida sobre UM critério de aceite de um card: "não se aplica" ou "decidido diferente" (outra forma de cumprir), com o motivo. Só uma pessoa dispensa um critério: o construtor apenas propõe, e sem a resposta o critério continua exigido (o padrão do prazo é manter). Depois da resposta (responderDecisao), lerCard e lerOnda mostram o critério como N_A ou DECIDIDO, com quem decidiu e por quê.',
+  inputSchema: z.object({ cardId: z.string().regex(/^C-\d+$/), criterio: z.number().int().min(1).max(30).describe('Número do critério no card (1, 2, …).'), motivo: z.string().min(10).max(240).describe('Por que não se aplica ou foi decidido diferente.'), prazoDias: z.number().int().min(1).max(30).optional() }),
+  outputSchema: z.object({ ok: z.boolean(), pedido: z.any().nullable(), resumo: z.string() }),
+  execute: async ({ cardId, criterio, motivo, prazoDias }) => {
+    const card = lerEstado().cards.find((c) => c.id === cardId)
+    if (!card) return { ok: false, pedido: null, resumo: `Não achei o card ${cardId}.` }
+    const texto = card.criterios[criterio - 1]
+    if (!texto) return { ok: false, pedido: null, resumo: `O card ${cardId} tem ${card.criterios.length} critério(s); não existe o ${criterio}.` }
+    const r = abrirPedidoDeCriterio({ cardId, repositorio: card.repositorio, criterio, textoDoCriterio: texto, motivo, prazoDias })
+    return { ok: r.ok, pedido: r.pedido, resumo: r.nota }
+  },
+})
+
+export const lerDecisoes = createTool({
+  id: 'ler-decisoes',
+  description: 'Lista os pedidos de decisão (abertos por padrão): pergunta, opções com custo, recomendação, padrão e prazo, o que está parado esperando e o que não foi medido. Antes de listar, registra o padrão dos pedidos cujo prazo venceu (o padrão só registra, nunca executa nada, e o critério continua exigido). Só lê, fora isso.',
+  inputSchema: z.object({ estado: z.enum(['aberto', 'respondido', 'padrao-aplicado', 'cancelado']).optional().describe('Padrão: aberto.'), repositorio: z.string().max(140).optional(), cardId: z.string().regex(/^C-\d+$/).optional() }),
+  outputSchema: z.object({ pedidos: z.array(z.any()), vencidosAgora: z.array(z.string()), resumo: z.string() }),
+  execute: async ({ estado, repositorio, cardId }) => {
+    const vencidos = resolverVencidos()
+    const pedidos = listarPedidos({ estado: estado ?? 'aberto', repositorio, cardId })
+    return { pedidos, vencidosAgora: vencidos.map((p) => p.id), resumo: `${resumoDosPedidos()}${vencidos.length ? ` Venceram agora (valeu o padrão): ${vencidos.map((p) => p.id).join(', ')}.` : ''}` }
+  },
+})
+
+export const responderDecisao = createTool({
+  id: 'responder-decisao',
+  description: 'Registra a resposta de uma PESSOA a um pedido de decisão: a opção escolhida, o nome dela (nunca um papel da Factory) e, se quiser, uma nota. Só responda com a palavra explícita da pessoa nesta conversa. Num pedido de critério, A/B dispensa o critério (N_A ou DECIDIDO) e C mantém; num pedido do disjuntor, retomar fecha o circuito. Com cancelar: true, cancela o pedido em vez de responder.',
+  inputSchema: z.object({ id: z.string().regex(/^D-\d+$/), opcao: z.string().min(1).max(1).optional().describe('Letra da opção escolhida.'), autor: z.string().min(2).max(80).describe('Nome da pessoa que decidiu.'), nota: z.string().max(240).optional(), cancelar: z.boolean().optional() }),
+  outputSchema: z.object({ ok: z.boolean(), pedido: z.any().nullable(), resumo: z.string() }),
+  execute: async ({ id, opcao, autor, nota, cancelar }) => {
+    if (cancelar) {
+      const c = cancelarPedido(id, autor)
+      return { ok: c.ok, pedido: c.pedido, resumo: c.nota }
+    }
+    if (!opcao) return { ok: false, pedido: null, resumo: 'Informe a letra da opção escolhida (ou cancelar: true).' }
+    const r = responderPedido(id, opcao, autor, nota)
+    if (!r.ok || !r.pedido) return { ok: r.ok, pedido: r.pedido, resumo: r.nota }
+    if (r.efeito === 'retomar' && r.pedido.repositorio) {
+      const t = retomarDisjuntorDoRepositorio(r.pedido.repositorio, autor)
+      return { ok: t.ok, pedido: r.pedido, resumo: `${r.nota} ${t.nota}` }
+    }
+    return { ok: true, pedido: r.pedido, resumo: r.efeito === 'nao-se-aplica' || r.efeito === 'decidido-diferente' ? `${r.nota} O critério ${r.pedido.criterio} do card ${r.pedido.cardId} passa a aparecer como ${r.efeito === 'nao-se-aplica' ? 'N_A' : 'DECIDIDO'}.` : r.nota }
+  },
+})
+
+export const lerDisjuntor = createTool({
+  id: 'ler-disjuntor',
+  description: 'Mostra o disjuntor da Factory (vigia sem IA): por repositório, se o circuito está aberto, quantas execuções seguidas pararam, o último sucesso e o último desfecho visto, e o pedido de decisão aberto. Abre com falhas seguidas (padrão 3) ou muitas na última hora (padrão 5); aberto, nada novo começa naquele repositório até uma pessoa retomar. Parar por teto de tokens não conta. Com ensaioDeFalhas: N, simula N falhas a mais SEM gravar nada, para provar que o vigia está armado.',
+  inputSchema: z.object({ repositorio: z.string().max(140).optional(), ensaioDeFalhas: z.number().int().min(1).max(50).optional().describe('Requer repositorio.') }),
+  outputSchema: z.object({ config: z.any(), circuitos: z.array(z.any()), ensaio: z.any().nullable(), resumo: z.string() }),
+  execute: async ({ repositorio, ensaioDeFalhas }) => {
+    const config = lerConfigDoDisjuntor()
+    const r = resumoDoDisjuntor(config)
+    const ensaio = repositorio && ensaioDeFalhas ? ensaiarDisjuntor(repositorio, ensaioDeFalhas, config) : null
+    return { config, circuitos: repositorio ? r.circuitos.filter((c) => c.repositorio === repositorio) : r.circuitos, ensaio, resumo: ensaio ? `${r.resumo} Ensaio: ${ensaio.resumo}` : r.resumo }
+  },
+})
+
+export const retomarDisjuntor = createTool({
+  id: 'retomar-disjuntor',
+  description: 'Fecha o circuito de um repositório, EM NOME DE UMA PESSOA (o autor é o nome dela, nunca um papel da Factory). O disjuntor nunca retoma sozinho nem por prazo. Só retome com a palavra explícita da pessoa e, de preferência, depois de ela ler o motivo das execuções paradas (lerCard). Se a causa persistir, o disjuntor abre de novo.',
+  inputSchema: z.object({ repositorio: z.string().min(3).max(140).describe('owner/repo.'), autor: z.string().min(2).max(80).describe('Nome da pessoa que decidiu.') }),
+  outputSchema: z.object({ ok: z.boolean(), resumo: z.string() }),
+  execute: async ({ repositorio, autor }) => {
+    const r = retomarDisjuntorDoRepositorio(repositorio, autor)
+    return { ok: r.ok, resumo: r.nota }
+  },
+})
+
 export const lerOnda = createTool({
   id: 'ler-onda',
-  description: 'Mostra uma onda inteira num lugar só: cada card reservado, a execução dele (estágio, desfecho, motivo, minutos), o PR e o resultado do PR (aceito/ajustado/recusado), o resultado por critério de aceite (PASS, FAIL, NOT_RUN ou BLOCKED, com a evidência) e os tokens. Com comCI, lê também o CI de cada PR no GitHub (só leitura). Sem o número da onda, lista as ondas que existem.',
+  description: 'Mostra uma onda inteira num lugar só: cada card reservado, a execução dele (estágio, desfecho, motivo, minutos), o PR e o resultado do PR (aceito/ajustado/recusado), o resultado por critério de aceite (PASS, FAIL, NOT_RUN, BLOCKED, e N_A ou DECIDIDO quando uma pessoa decidiu, com a evidência) e os tokens. Com comCI, lê também o CI de cada PR no GitHub (só leitura). Sem o número da onda, lista as ondas que existem.',
   inputSchema: z.object({ onda: z.number().int().min(1).optional().describe('Número da onda (iniciarOnda e planejarOnda devolvem). Sem isto, lista as ondas.'), comCI: z.boolean().optional().describe('Lê o CI de cada PR da onda.') }),
   outputSchema: z.object({ ok: z.boolean(), onda: z.any().nullable(), ondas: z.array(z.any()), resumo: z.string() }),
   execute: async ({ onda, comCI }) => {

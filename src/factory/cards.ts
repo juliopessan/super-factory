@@ -5,7 +5,8 @@
 
 import { grauDe } from './board.ts'
 import { normalizarRepositorio } from './guards.ts'
-import { resultadoPorCriterio, type ResultadoDoCriterio } from './criterios.ts'
+import { aplicarDecisoes, resultadoPorCriterio, type ResultadoDoCriterio } from './criterios.ts'
+import { decisoesDeCriterio } from './decisoes.ts'
 import { anotar } from './ledger.ts'
 import { triarPedido } from './pipeline.ts'
 import type { Card, Estado, PedidoBruto } from './schemas.ts'
@@ -91,7 +92,7 @@ export type CardCompleto = {
     melhorias: Array<{ rodada: number; antes: number; depois: number; aceita: boolean }>
     ultimosEventos: Array<{ tipo: string; resumo: string }>
   }
-  /** Resultado por critério de aceite (PASS, FAIL, NOT_RUN ou BLOCKED), com a evidência. */
+  /** Resultado por critério de aceite (PASS, FAIL, NOT_RUN, BLOCKED, N_A ou DECIDIDO), com a evidência. */
   criterios: ResultadoDoCriterio[]
   podeEditar: boolean
   podeIniciar: boolean
@@ -123,7 +124,7 @@ export function lerCardCompleto(cardId: string, estado: FabricaEstado = lerEstad
           ultimosEventos: run.trilha.slice(-8).map((e) => ({ tipo: e.tipo, resumo: e.resumo })),
         }
       : null,
-    criterios: run?.criterios ?? resultadoPorCriterio({ criterios: card.criterios, mapa: null, arquivosMudados: [], checks: run?.checks ?? [], parado: run?.parado ?? false, motivo: run?.motivo ?? null }),
+    criterios: aplicarDecisoes(run?.criterios ?? resultadoPorCriterio({ criterios: card.criterios, mapa: null, arquivosMudados: [], checks: run?.checks ?? [], parado: run?.parado ?? false, motivo: run?.motivo ?? null }), decisoesDeCriterio(card.id, estado)),
     podeEditar: (COLUNAS_EDITAVEIS as readonly string[]).includes(card.coluna),
     podeIniciar: razao === null,
     porQueNaoIniciar: razao,

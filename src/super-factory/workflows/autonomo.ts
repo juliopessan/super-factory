@@ -11,6 +11,7 @@ import {
   type SessaoAutonomo,
 } from '../../factory/autonomo.ts'
 import { lerConfigDeMelhoria } from '../../factory/melhoria.ts'
+import { bloqueioDoDisjuntor, registrarDesfecho } from '../../factory/disjuntor.ts'
 import { melhoradorComAgente } from '../agents/melhorador.ts'
 import { gastoDoDia, lerTetos, registrarGasto } from '../../factory/custo.ts'
 import { guardarCapturaDoApp, guardarMapaDoRepositorio } from '../../factory/artefatos.ts'
@@ -101,6 +102,8 @@ function passo(fase: FaseAutonomo, ultima: boolean) {
         saida = { ...contexto, estado: parar(contexto.estado, erro instanceof Error ? erro.message : `A fase ${fase.titulo} falhou.`) }
       }
       if (ensaio && ultima && !saida.estado.parado) saida = { ...saida, estado: marcarEnsaio(saida.estado) }
+      // Disjuntor: uma execução que parou depois da triagem é falha do repositório (ensaio não conta; teto e disjuntor também não).
+      if (!ensaio && saida.estado.parado && fase.id !== 'triar') registrarDesfecho({ repositorio: saida.estado.card.repositorio, cardId: saida.estado.card.id, ok: false, motivo: saida.estado.motivo })
       // Logs do Studio: uma linha por fase, com o card, o tempo e, se parou, o motivo (sem segredo).
       const dados = { card: saida.estado.card.id, fase: fase.id, ensaio, duracaoMs: Date.now() - inicio }
       if (saida.estado.parado) loggerVNext?.warn(`Fase ${fase.titulo} parou`, { ...dados, motivo: redigirSegredos(saida.estado.motivo ?? '').slice(0, 300) })
@@ -133,6 +136,12 @@ const preparar = createStep({
     const { ensaio = false, empilhadoSobre, issue, cardId, ...pedido } = inputData
     // O card do ensaio entra no quadro de verdade; o prefixo evita confundir com trabalho real.
     const contexto = contextoInicial(ensaio ? { ...pedido, titulo: `[ENSAIO] ${pedido.titulo}`.slice(0, 120) } : pedido, issue, ensaio ? undefined : cardId)
+    // Disjuntor aberto neste repositório: nada novo começa até uma pessoa retomar (não gasta sandbox nem tokens).
+    const bloqueio = ensaio ? null : bloqueioDoDisjuntor(contexto.estado.card.repositorio)
+    if (bloqueio) {
+      const estado = persistir(parar(contexto.estado, bloqueio))
+      throw new Error(`Parou em Receber o pedido: ${estado.motivo}`)
+    }
     const temModelo = ensaio || process.env.ANTHROPIC_API_KEY || process.env.SUPER_FACTORY_BUILDER_MODEL
     if (!temModelo) {
       const estado = persistir(parar(contexto.estado, 'O modo autônomo precisa de ANTHROPIC_API_KEY para o agente construtor escrever código. Cole a chave em Settings → Chaves e acessos, no Studio, ou marque ensaio para conhecer o fluxo.'))
@@ -147,7 +156,11 @@ const concluir = createStep({
   description: 'Devolve o estado final do card: PR aberto e aguardando revisão humana, ou o motivo da parada.',
   inputSchema: contextoSchema,
   outputSchema: estadoSchema,
-  execute: async ({ inputData }) => persistir(inputData.estado),
+  execute: async ({ inputData }) => {
+    // Chegou ao fim sem parar: sucesso para o disjuntor (zera a sequência de falhas do repositório).
+    if (!inputData.ensaio && !inputData.estado.parado) registrarDesfecho({ repositorio: inputData.estado.card.repositorio, cardId: inputData.estado.card.id, ok: true })
+    return persistir(inputData.estado)
+  },
 })
 
 let fluxo = createWorkflow({

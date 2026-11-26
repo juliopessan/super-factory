@@ -35,6 +35,11 @@ const JANELA_DE_BASE = 10
 // Palavras que tocam em guardas. Lição não é lugar para isso: recusa, e a pessoa escreve uma regra de projeto se quiser.
 const PROIBIDAS = /\b(merge|mescl\w*|aprov\w*|deploy|publica\w*|push|force|--no-verify|segredo\w*|secret\w*|token\w*|credencia\w*|senha\w*|password|\.env|chave de api)\b|(ignor|desativ|desabilit|pul(e|ar)|contorn|burl|remov(a|er) (o )?teste|apag(ue|ar) (o )?teste|skip|disable)/i
 
+/** O texto toca em guarda da Factory (merge, aprovação, deploy, push, segredo, teste desligado)? */
+export function tocaEmGuarda(texto: string): boolean {
+  return PROIBIDAS.test(texto)
+}
+
 export function validarLicao(texto: string): { ok: boolean; motivo: string | null } {
   const t = texto.trim()
   if (t.length < 20 || t.length > 300) return { ok: false, motivo: 'A lição deve ter de 20 a 300 caracteres.' }
@@ -108,7 +113,7 @@ export function proporLicoes(escopo = 'global', estado: FabricaEstado = lerEstad
   return { novas, sinais }
 }
 
-const PAPEIS_DA_FACTORY = /^(factory|super[- ]?factory|chief|chief of staff|agente?|agent|bot|claude|reviewer|architect|backend|frontend|qa|security|docs|integrations)$/i
+export const PAPEIS_DA_FACTORY = /^(factory|super[- ]?factory|chief|chief of staff|agente?|agent|bot|claude|reviewer|architect|backend|frontend|qa|security|docs|integrations)$/i
 
 /** Aprova, recusa ou retira uma lição, em nome de uma pessoa. Aprovar guarda a pontuação média de antes, para comparar depois. */
 export function decidirLicao(id: string, decisao: 'aprovada' | 'recusada' | 'retirada', autor: string, estado: FabricaEstado = lerEstado(), agora = new Date()): { ok: boolean; licao: Licao | null; nota: string } {
