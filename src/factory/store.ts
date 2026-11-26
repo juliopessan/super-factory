@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import type { EstadoDoDisjuntor } from './disjuntor.ts'
+import type { PedidoDeDecisao } from './decisoes.ts'
 import type { Licao } from './licoes.ts'
 import type { Card, Estado, Evento } from './schemas.ts'
 
@@ -14,6 +16,10 @@ export type FabricaEstado = {
   gastos?: Array<{ em: string; origem: string; tokens: number }>
   /** Lições para o construtor (melhoria entre cards): propostas por sinais observados, aprovadas por uma pessoa. */
   licoes?: Licao[]
+  /** Pedidos de decisão a uma pessoa (opções com custo, recomendação, padrão com prazo). */
+  decisoes?: PedidoDeDecisao[]
+  /** Disjuntor por repositório: falhas seguidas, último sucesso e circuito aberto. */
+  disjuntor?: EstadoDoDisjuntor
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -79,6 +85,8 @@ export function lerEstado(): FabricaEstado {
     ledger: bruto.ledger,
     gastos: bruto.gastos ?? [],
     licoes: bruto.licoes ?? [],
+    decisoes: bruto.decisoes ?? [],
+    disjuntor: bruto.disjuntor ?? { circuitos: {} },
   }
 }
 

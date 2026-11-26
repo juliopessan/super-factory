@@ -1,7 +1,8 @@
 // Visão por onda: cada card reservado para a onda, a execução dele, o PR, o CI e o resultado por critério, num lugar só.
 // Antes, a pessoa precisava juntar quadro, trilha e checks à mão. A onda é o número que planejarOnda/iniciarOnda gravam no card.
 
-import { contagemDosCriterios, resultadoPorCriterio, type ResultadoDoCriterio } from './criterios.ts'
+import { aplicarDecisoes, contagemDosCriterios, resultadoPorCriterio, type ResultadoDoCriterio } from './criterios.ts'
+import { decisoesDeCriterio } from './decisoes.ts'
 import type { GithubDeps } from './github.ts'
 import { lerChecksGithub, type ResultadoDaLeitura, type ChecksLidos } from './github-leitura.ts'
 import type { Card, Estado } from './schemas.ts'
@@ -57,7 +58,7 @@ export function visaoDaOnda(onda: number, estado: FabricaEstado = lerEstado()): 
   if (cards.length === 0) return null
   const itens = cards.map((card): CardDaOnda => {
     const run = runDoCard(estado, card)
-    const criterios = run?.criterios ?? resultadoPorCriterio({ criterios: card.criterios, mapa: null, arquivosMudados: [], checks: run?.checks ?? [], parado: run?.parado ?? false, motivo: run?.motivo ?? null })
+    const criterios = aplicarDecisoes(run?.criterios ?? resultadoPorCriterio({ criterios: card.criterios, mapa: null, arquivosMudados: [], checks: run?.checks ?? [], parado: run?.parado ?? false, motivo: run?.motivo ?? null }), decisoesDeCriterio(card.id, estado))
     return {
       id: card.id,
       titulo: card.titulo,

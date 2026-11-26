@@ -35,6 +35,11 @@ const JANELA_DE_BASE = 10
 // Palavras que tocam em guardas. Lição não é lugar para isso: recusa, e a pessoa escreve uma regra de projeto se quiser.
 const PROIBIDAS = /\b(merge|mescl\w*|aprov\w*|deploy|publica\w*|push|force|--no-verify|segredo\w*|secret\w*|token\w*|credencia\w*|senha\w*|password|\.env|chave de api)\b|(ignor|desativ|desabilit|pul(e|ar)|contorn|burl|remov(a|er) (o )?teste|apag(ue|ar) (o )?teste|skip|disable)/i
 
+/** O texto toca em guarda da Factory (merge, aprovação, deploy, push, segredo, teste desligado)? */
+export function tocaEmGuarda(texto: string): boolean {
+  return PROIBIDAS.test(texto)
+}
+
 export function validarLicao(texto: string): { ok: boolean; motivo: string | null } {
   const t = texto.trim()
   if (t.length < 20 || t.length > 300) return { ok: false, motivo: 'A lição deve ter de 20 a 300 caracteres.' }
@@ -108,14 +113,27 @@ export function proporLicoes(escopo = 'global', estado: FabricaEstado = lerEstad
   return { novas, sinais }
 }
 
-const PAPEIS_DA_FACTORY = /^(factory|super[- ]?factory|chief|chief of staff|agente?|agent|bot|claude|reviewer|architect|backend|frontend|qa|security|docs|integrations)$/i
+// Os papéis da Factory (ids e nomes dos agentes, com variações de separador e acento) e outros nomes genéricos de máquina.
+// "Chief of Staff", "chief-of-staff" e "chief_of_staff" são o mesmo papel; quem decide é uma pessoa, com nome próprio.
+const PAPEIS_NORMALIZADOS = new Set([
+  'factory', 'superfactory', 'chief', 'chiefofstaff', 'agente', 'agent', 'bot', 'claude', 'copilot', 'assistant', 'assistente', 'sistema', 'system', 'ia', 'ai', 'gpt',
+  'architect', 'arquiteto', 'frontend', 'backend', 'qa', 'security', 'seguranca', 'docs', 'integrations', 'integracoes', 'reviewer', 'prreview', 'revisor',
+  'construtor', 'reprodutor', 'melhorador', 'improver', 'worker', 'builder',
+])
+const normalizarNome = (nome: string) => nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+
+/** O nome é de um papel da Factory (ou de uma máquina), e não de uma pessoa? */
+export function ehPapelDaFactory(nome: string): boolean {
+  const n = normalizarNome(nome)
+  return n === '' || PAPEIS_NORMALIZADOS.has(n) || /(bot|agent)$/.test(n)
+}
 
 /** Aprova, recusa ou retira uma lição, em nome de uma pessoa. Aprovar guarda a pontuação média de antes, para comparar depois. */
 export function decidirLicao(id: string, decisao: 'aprovada' | 'recusada' | 'retirada', autor: string, estado: FabricaEstado = lerEstado(), agora = new Date()): { ok: boolean; licao: Licao | null; nota: string } {
   const licao = (estado.licoes ?? []).find((l) => l.id === id)
   if (!licao) return { ok: false, licao: null, nota: `Não achei a lição ${id}.` }
   const nome = autor.trim()
-  if (!nome || nome.length > 80 || PAPEIS_DA_FACTORY.test(nome)) return { ok: false, licao, nota: 'Quem decide é uma pessoa: informe o nome dela como autor, nunca um papel da Factory.' }
+  if (!nome || nome.length > 80 || ehPapelDaFactory(nome)) return { ok: false, licao, nota: 'Quem decide é uma pessoa: informe o nome dela como autor, nunca um papel da Factory.' }
   if (decisao === 'aprovada') {
     if (licao.estado === 'aprovada') return { ok: true, licao, nota: `A lição ${id} já está aprovada.` }
     const v = validarLicao(licao.texto)

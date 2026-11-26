@@ -2,6 +2,7 @@
 // confere duplicatas e o sandbox, e reserva os cards. Quem de fato roda a onda é o workflow "onda".
 
 import { mensagemDoTeto, type Tetos } from './custo.ts'
+import { bloqueioDoDisjuntor } from './disjuntor.ts'
 import { duplicatasDe, issueDoCard, lerCardCompleto, repositorioComparavel } from './cards.ts'
 import { preValidarSandbox, type DepsDoPreflight } from './preflight.ts'
 import { atualizarEstado, lerEstado, type FabricaEstado } from './store.ts'
@@ -78,12 +79,22 @@ export async function prepararOnda(
   }
   if (pedidos.length === 0) return falha(`Nenhum card pôde iniciar: ${pulados.map((p) => `${p.id} (${p.motivo})`).join('; ')}.`)
 
+  // Disjuntor: repositório com o circuito aberto não recebe execução nova até uma pessoa retomar. Vem antes do sandbox: não gasta nada.
+  let aptos = pedidos
+  if (!entrada.ensaio) {
+    aptos = []
+    for (const p of pedidos) {
+      const parado = bloqueioDoDisjuntor(p.repositorio, estado)
+      if (parado) bloqueados.push({ id: p.cardId ?? p.titulo, motivos: [parado] })
+      else aptos.push(p)
+    }
+  }
   // Sandbox: uma conferência por repositório, antes de gastar qualquer execução.
-  let seguros = pedidos
+  let seguros = aptos
   if (!entrada.ensaio && deps.preflight) {
     const porRepo = new Map<string, Awaited<ReturnType<typeof preValidarSandbox>>>()
     seguros = []
-    for (const p of pedidos) {
+    for (const p of aptos) {
       const base = p.branchBase ?? 'main'
       const chave = `${p.provedor}:${p.repositorio.toLowerCase()}@${base}`
       if (!porRepo.has(chave)) porRepo.set(chave, await preValidarSandbox({ repositorio: p.repositorio, branchBase: base, provedor: p.provedor }, deps.preflight))
@@ -112,6 +123,6 @@ export async function prepararOnda(
   }
   const partes = [`${seguros.length} card(s) prontos para a onda`]
   if (pulados.length) partes.push(`${pulados.length} pulado(s): ${pulados.map((p) => `${p.id} (${p.motivo})`).join('; ')}`)
-  if (bloqueados.length) partes.push(`${bloqueados.length} BLOCKED pelo sandbox: ${bloqueados.map((b) => `${b.id}: ${b.motivos[0]}`).join(' ')}`)
+  if (bloqueados.length) partes.push(`${bloqueados.length} BLOCKED (sandbox ou disjuntor): ${bloqueados.map((b) => `${b.id}: ${b.motivos[0]}`).join(' ')}`)
   return { ok: true, pedidos: seguros, pulados, bloqueados, avisos, onda: ondaN, nota: `${partes.join('. ')}.` }
 }

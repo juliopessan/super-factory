@@ -36,6 +36,7 @@ Decisões da pessoa que opera a Factory (21/11/2026): navegador no sandbox, **si
 | F | Resultado por critério de aceite e visão por onda | feito |
 | G | Teto de custo em tokens (card, onda, dia) | feito |
 | AI-native SDLC playbook | CI da própria Factory (npm run check e audit em cada PR) e skills do repositório (.claude/skills) nas convenções do construtor. Spec aprovado antes do build (K2) e o loop de produção (Maintain) ficam para depois do ensaio | feito |
+| Fábrica | Três ideias do método da Fábrica (DeskLabs): resultado por critério em **cinco estados** (N_A e DECIDIDO só por decisão de pessoa), **pedido de decisão** estruturado (opções com custo, recomendação, padrão reversível com prazo, "não medido") e **disjuntor** sem IA por repositório (falhas seguidas ou na hora; só pessoa retoma). A régua `conformidade.md` da Fábrica ainda não foi aplicada à Factory | feito |
 | K1 | Auditoria de slop no diff (teste enfraquecido vira rascunho; o resto, nota). Origem: palestra "12 Rules for a Software Factory That Doesn't Ship Slop" (Dex Horthy). K2 (plano antes, nos cards de dor alta) e K3 (fila de revisão por risco) ficam para depois do ensaio real | feito |
 | I | Melhoria recursiva fraca: Improver dentro do card e lições entre cards ([RSI.md](RSI.md)) | feito |
 | H | Projeto em subpasta, Python (`.[dev]`, ruff, versão) e imagem do sandbox com Python 3.13 | feito; ensaio real em [ENSAIO-REAL.md](ENSAIO-REAL.md) |

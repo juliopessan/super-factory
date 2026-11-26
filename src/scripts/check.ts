@@ -4327,7 +4327,7 @@ assert.equal(
     preparo = await po.prepararOnda({ cardIds: ['C-1', 'C-8'] }, { preflight: { ...depsPre({ pip: false }, null), arquivosDaRaiz: async (repo) => (repo === 'acme/pedidos' ? ['requirements.txt'] : ['package.json']) } })
     assert.deepEqual(preparo.pedidos.map((p) => p.cardId), ['C-8'])
     assert.deepEqual(preparo.bloqueados.map((b) => b.id), ['C-1'])
-    assert.match(preparo.nota, /1 BLOCKED pelo sandbox/)
+    assert.match(preparo.nota, /1 BLOCKED \(sandbox ou disjuntor\)/)
     // ensaio não confere o sandbox; sem ele, só avisa quando não deu para conferir
     assert.equal((await po.prepararOnda({ cardIds: ['C-3'], ensaio: true }, { preflight: depsPre({ pip: false }, ['requirements.txt']) })).ok, true)
     semear()
@@ -4506,7 +4506,8 @@ assert.equal(
     fs.rmSync(pasta, { recursive: true, force: true })
   }
   const ag = fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8')
-  assert.ok(ag.includes('lerOnda') && ag.includes('PASS/FAIL/NOT_RUN/BLOCKED'))
+  assert.ok(ag.includes('lerOnda') && ag.includes('N_A') && ag.includes('DECIDIDO') && ag.includes('NOT_RUN'))
+  assert.ok(ag.includes('pedirDecisao') && ag.includes('lerDisjuntor') && ag.includes('retomarDisjuntor') && ag.includes('responderDecisao'), 'o Chief conhece pedido de decisão e disjuntor')
 }
 
 // --- Lote G: teto de custo em tokens (card, onda e dia)
