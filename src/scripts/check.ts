@@ -3414,7 +3414,12 @@ assert.equal(
 
   // convenções do repositório
   assert.equal(await v.lerConvencoes(criarExecutorFalso(() => ({ saida: '' }))), null)
-  const conv = await v.lerConvencoes(criarExecutorFalso((c) => (c.startsWith('for f in AGENTS.md') ? { saida: `### AGENTS.md\nUse tabs. Token: ${TOKEN_TESTE}\n### CONTRIBUTING.md\nRode npm test.` } : {})))
+  const conv = await v.lerConvencoes(criarExecutorFalso((c) => {
+    if (c.startsWith('for f in AGENTS.md')) return { saida: 'instrucao\tAGENTS.md\ninstrucao\tCONTRIBUTING.md\nlixo\tsem-tipo.md\ninstrucao\t../fora.md' }
+    if (c === "head -c 10000 -- 'AGENTS.md'") return { saida: `Use tabs. Token: ${TOKEN_TESTE}` }
+    if (c === "head -c 10000 -- 'CONTRIBUTING.md'") return { saida: 'Rode npm test.' }
+    return {}
+  }))
   assert.match(conv ?? '', /### AGENTS\.md[\s\S]*### CONTRIBUTING\.md/)
   assert.ok(!(conv ?? '').includes(TOKEN_TESTE), 'segredo nas convenções sai redigido')
 
@@ -3429,7 +3434,8 @@ assert.equal(
       if (c === 'npm run build') return { codigo: o.build?.[n.build++] ?? 0, saida: 'saída do build' }
       if (c === 'git ls-files -m -o --exclude-standard') { n.ls++; return { saida: o.restaura === false && n.ls > 1 ? 'src/filtro.js' : (o.arquivos ?? 'src/filtro.js\ntests/filtro.test.js') } }
       if (c.startsWith('git stash push')) return { codigo: o.semCorrecao ?? 1, saida: 'FAIL sem a correção' }
-      if (c.startsWith('for f in AGENTS.md')) return { saida: o.convencoes ?? '' }
+      if (c.startsWith('for f in AGENTS.md')) return { saida: o.convencoes ? 'instrucao\tAGENTS.md' : '' }
+      if (c === "head -c 10000 -- 'AGENTS.md'") return { saida: o.convencoes ?? '' }
       return base(c)
     }
   }
@@ -3492,7 +3498,7 @@ assert.equal(
   assert.equal(t.g.chamadas.length, 0, 'e nenhum PR é aberto')
   // convenções chegam ao implementador; trilha e ancoragem entram no card e no PR
   let recebidas: string | null | undefined
-  t = await rodarA({ convencoes: '### AGENTS.md\nUse tabs.' }, { implementador: async ({ convencoes }) => { recebidas = convencoes; return { resumo: 'Corrigi src/outro.ts. Os testes passaram.', acoes: [{ tentativa: 0, ferramenta: 'escreverArquivo', alvo: 'src/filtro.js' }] } } })
+  t = await rodarA({ convencoes: 'Use tabs.' }, { implementador: async ({ convencoes }) => { recebidas = convencoes; return { resumo: 'Corrigi src/outro.ts. Os testes passaram.', acoes: [{ tentativa: 0, ferramenta: 'escreverArquivo', alvo: 'src/filtro.js' }] } } })
   assert.match(recebidas ?? '', /Use tabs/)
   assert.ok(t.r.estado.trilha.some((e) => /Convenções do repositório lidas \(1 arquivo/.test(e.resumo)))
   assert.deepEqual(t.r.estado.acoes, [{ tentativa: 1, ferramenta: 'escreverArquivo', alvo: 'src/filtro.js' }], 'a trilha do construtor fica no card, com a tentativa')
