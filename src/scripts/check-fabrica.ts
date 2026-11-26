@@ -15,7 +15,7 @@ for (const nome of ['SUPER_FACTORY_DISJUNTOR_SEGUIDAS', 'SUPER_FACTORY_DISJUNTOR
 const d = await import('../factory/decisoes.ts')
 const dj = await import('../factory/disjuntor.ts')
 const cr = await import('../factory/criterios.ts')
-const { lerCardCompleto } = await import('../factory/cards.ts')
+const { lerCardCompleto, editarCard } = await import('../factory/cards.ts')
 const { visaoDaOnda } = await import('../factory/ondas.ts')
 const { prepararOnda } = await import('../factory/preparar-onda.ts')
 const { lerEstado, atualizarEstado } = await import('../factory/store.ts')
@@ -165,6 +165,46 @@ function entrada(mudar: Partial<EntradaDoPedido> = {}): EntradaDoPedido {
   assert.equal(onda.cards[0]!.contagemDeCriterios, '1 N_A, 1 DECIDIDO')
   // e o que o sandbox gravou na execução não muda (a decisão é uma camada de leitura)
   assert.equal(JSON.stringify(lerEstado().runs).includes('N_A'), false)
+
+  // (revisão do PR) o histórico de pedidos é limitado, mas a decisão de critério não sai dele por idade
+  for (let i = 0; i < 210; i++) {
+    const x = d.abrirPedido(entrada({ pergunta: `Pergunta de enchimento número ${i} sobre a API?` }), depois(10_000 + i))
+    assert.ok(x.ok, x.nota)
+    d.cancelarPedido(x.pedido!.id, 'Júlio')
+  }
+  assert.ok((lerEstado().decisoes ?? []).filter((p) => p.estado === 'cancelado').length <= 201, 'o histórico comum continua limitado (a poda roda a cada pedido novo)')
+  assert.deepEqual(lerCardCompleto('C-1')!.criterios.map((c) => c.status), ['N_A', 'DECIDIDO'], 'a decisão de critério sobrevive à poda')
+
+  // (revisão do PR) o card muda o critério: a decisão sobre o texto antigo não vale para o novo, e o pedido pendente não se responde
+  const pend = d.abrirPedidoDeCriterio({ cardId: 'C-1', repositorio: card.repositorio, criterio: 2, textoDoCriterio: card.criterios[1]!, motivo: 'Cobrimos por teste de contrato fora deste repositório.' }, depois(20_000))
+  assert.ok(pend.ok && pend.pedido!.estado === 'aberto')
+  const editado = editarCard('C-1', { criterios: [card.criterios[0]!, 'O filtro aceita datas com fuso horário explícito.'] })
+  assert.ok(editado.ok, editado.nota)
+  assert.deepEqual(lerCardCompleto('C-1')!.criterios.map((c) => c.status), ['N_A', 'NOT_RUN'], 'o requisito novo não herda o DECIDIDO do antigo; o critério 1, que não mudou, segue N_A')
+  const tarde = d.responderPedido(pend.pedido!.id, 'A', 'Júlio', undefined, depois(20_001))
+  assert.equal(tarde.ok, false)
+  assert.match(tarde.nota, /mudou.*outro requisito/)
+  assert.equal(d.listarPedidos({ estado: 'aberto' }).some((p) => p.id === pend.pedido!.id), true, 'segue aberto até alguém cancelar')
+  d.cancelarPedido(pend.pedido!.id, 'Júlio')
+  // reescrever só os espaços do mesmo critério não invalida a decisão
+  editarCard('C-1', { criterios: [`  ${card.criterios[0]!.replace(/ /g, '  ')} `, 'O filtro aceita datas com fuso horário explícito.'] })
+  assert.equal(lerCardCompleto('C-1')!.criterios[0]!.status, 'N_A')
+
+  // (revisão do PR) responder "manter" depois de uma dispensa apaga a dispensa: vale a última resposta
+  const m1 = d.abrirPedidoDeCriterio({ cardId: 'C-1', repositorio: card.repositorio, criterio: 1, textoDoCriterio: card.criterios[0]!, motivo: 'Reconsiderei: o critério vale, falta o teste.' }, depois(30_000))
+  assert.ok(m1.ok && m1.pedido!.id !== b.pedido!.id)
+  assert.equal(d.responderPedido(m1.pedido!.id, 'C', 'Júlio', 'Vale, falta o teste.', depois(30_001)).efeito, 'manter')
+  assert.equal(lerCardCompleto('C-1')!.criterios[0]!.status, 'NOT_RUN', 'o "manter" posterior apaga a dispensa anterior')
+  assert.equal(JSON.stringify(lerCardCompleto('C-1')!.criterios).includes('N_A'), false)
+
+  // (revisão do PR) quem responde por papel da Factory, com variações de separador e nome de exibição, é recusado
+  const outro = d.abrirPedidoDeCriterio({ cardId: 'C-1', repositorio: card.repositorio, criterio: 1, textoDoCriterio: card.criterios[0]!, motivo: 'Mudei de ideia de novo, não se aplica.' }, depois(40_000))
+  for (const papel of ['chief-of-staff', 'Chief of Staff', 'chief_of_staff', 'Construtor', 'Reprodutor', 'Improver', 'PR Review', 'Super-Factory', 'architect', 'integrations', 'Arquiteto', 'Segurança', 'ci-bot', 'review-agent', '   ', 'Claude']) {
+    assert.equal(d.responderPedido(outro.pedido!.id, 'A', papel, undefined, depois(40_001)).ok, false, `${papel} não é uma pessoa`)
+    assert.equal(d.cancelarPedido(outro.pedido!.id, papel).ok, false, `${papel} não cancela`)
+  }
+  for (const pessoa of ['Júlio Pessan', 'Ana', 'José da Silva', 'Chiefe']) assert.equal(d.autorValido(pessoa), pessoa, `${pessoa} é uma pessoa`)
+  d.cancelarPedido(outro.pedido!.id, 'Júlio')
 }
 
 // ---------- disjuntor ----------
@@ -218,9 +258,42 @@ function entrada(mudar: Partial<EntradaDoPedido> = {}): EntradaDoPedido {
   const outro = await prepararOnda({ pedidos: [{ titulo: 'Filtro de datas', descricao: 'Aceitar intervalo com hora no filtro de pedidos da API.', criterios: 'O endpoint devolve 400 quando o fim é anterior ao início.', provedor: 'github', repositorio: 'acme/outro', branchBase: 'main', branchHead: '' }] }, {})
   assert.equal(outro.ok, true, 'outro repositório segue')
 
+  // (revisão do PR) o repositório tem uma chave só: maiúsculas e endereço do navegador contam como o mesmo
+  assert.equal(dj.chaveDoRepositorio('Acme/Pedidos'), 'acme/pedidos')
+  assert.equal(dj.chaveDoRepositorio('https://github.com/Acme/Pedidos.git'), 'acme/pedidos')
+  assert.ok(dj.bloqueioDoDisjuntor('ACME/PEDIDOS'), 'o bloqueio vale para o mesmo repositório escrito de outro jeito')
+  assert.ok(dj.bloqueioDoDisjuntor('https://github.com/acme/pedidos'))
+  const mix = (id: string, repo: string, min: number) => dj.registrarDesfecho({ repositorio: repo, cardId: id, ok: false, motivo: 'Falhou.' }, cfg, depois(50 * 24 * 60 + min))!
+  assert.equal(mix('C-60', 'Acme/Misto', 0).aberto, false)
+  assert.equal(mix('C-61', 'acme/misto', 1).aberto, false)
+  const tres = mix('C-62', 'https://github.com/ACME/misto', 2)
+  assert.equal(tres.aberto, true, 'três falhas escritas de três jeitos abrem o mesmo circuito')
+  assert.equal(tres.repositorio, 'acme/misto')
+  assert.deepEqual(Object.keys(lerEstado().disjuntor!.circuitos).filter((k) => /misto/i.test(k)), ['acme/misto'])
+  assert.equal(dj.ensaiarDisjuntor('ACME/NOVO', 3, cfg, lerEstado(), T0).abriria, true)
+  assert.equal(dj.retomarDisjuntor('ACME/Misto', 'Júlio', depois(51 * 24 * 60)).ok, true, 'retomar também aceita outra grafia')
+
+  // (revisão do PR) tráfego de outros repositórios não apaga as falhas de um: o contador é do próprio circuito
+  const A = 'acme/silencioso'
+  const ra = (id: string, min: number) => dj.registrarDesfecho({ repositorio: A, cardId: id, ok: false, motivo: 'Falhou.' }, cfg, depois(60 * 24 * 60 + min))!
+  assert.equal(ra('C-70', 0).aberto, false)
+  assert.equal(ra('C-71', 1).aberto, false)
+  for (let i = 0; i < 320; i++) dj.registrarDesfecho({ repositorio: `acme/ruido-${i % 7}`, cardId: `C-8${i}`, ok: i % 3 === 0, motivo: 'Falhou.' }, cfg, depois(60 * 24 * 60 + 2 + i / 100))
+  const abreA = ra('C-72', 10)
+  assert.equal(abreA.abriuAgora, true, 'a terceira falha seguida abre, mesmo depois de 320 desfechos de outros repositórios')
+  assert.equal(abreA.circuito.falhasSeguidas, 3)
+  // e a janela de uma hora é do repositório: 4 falhas dele + muito tráfego alheio + a quinta abre por hora
+  const H = 'acme/hora'
+  const rh = (id: string, ok: boolean, min: number) => dj.registrarDesfecho({ repositorio: H, cardId: id, ok, motivo: 'Falhou.' }, cfg, depois(70 * 24 * 60 + min))!
+  rh('C-90', false, 0); rh('C-91', true, 1); rh('C-92', false, 2); rh('C-93', true, 3); rh('C-94', false, 4); rh('C-95', true, 5); rh('C-96', false, 6)
+  for (let i = 0; i < 320; i++) dj.registrarDesfecho({ repositorio: `acme/outros-${i % 5}`, cardId: `C-1${i}`, ok: true }, cfg, depois(70 * 24 * 60 + 7 + i / 100))
+  const quinta = rh('C-97', false, 20)
+  assert.equal(quinta.abriuAgora, true)
+  assert.equal(quinta.circuito.aberto?.gatilho, 'hora', 'as 5 falhas da hora continuam contadas depois de 320 desfechos alheios')
+
   // resumo e "vigia precisa de vigia"
   const res = dj.resumoDoDisjuntor(cfg)
-  assert.match(res.resumo, /ABERTO em: acme\/pedidos/)
+  assert.match(res.resumo, /ABERTO em: .*acme\/pedidos/)
   const c = res.circuitos.find((x) => x.repositorio === R)!
   assert.equal(c.situacao, 'aberto')
   assert.equal(c.ultimoSucessoEm, depois(7).toISOString())

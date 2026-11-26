@@ -86,7 +86,7 @@ export function lerEstado(): FabricaEstado {
     gastos: bruto.gastos ?? [],
     licoes: bruto.licoes ?? [],
     decisoes: bruto.decisoes ?? [],
-    disjuntor: bruto.disjuntor ?? { circuitos: {}, historico: [] },
+    disjuntor: bruto.disjuntor ?? { circuitos: {} },
   }
 }
 

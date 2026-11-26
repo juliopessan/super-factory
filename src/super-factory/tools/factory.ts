@@ -35,7 +35,7 @@ import { editarCard as editarCardDoQuadro, lerCardCompleto, moverCard as moverCa
 import { acompanharLicoes, decidirLicao, proporLicoes as proporLicoesDoQuadro } from '../../factory/licoes.ts'
 import { gastoDoDia, lerTetos, resumoDeCusto } from '../../factory/custo.ts'
 import { abrirPedido, abrirPedidoDeCriterio, cancelarPedido, listarPedidos, resolverVencidos, responderPedido, resumoDosPedidos } from '../../factory/decisoes.ts'
-import { ensaiarDisjuntor, lerConfigDoDisjuntor, resumoDoDisjuntor, retomarDisjuntor as retomarDisjuntorDoRepositorio } from '../../factory/disjuntor.ts'
+import { chaveDoRepositorio, ensaiarDisjuntor, lerConfigDoDisjuntor, resumoDoDisjuntor, retomarDisjuntor as retomarDisjuntorDoRepositorio } from '../../factory/disjuntor.ts'
 import { anexarCI, listarOndas, visaoDaOnda } from '../../factory/ondas.ts'
 import { prepararOnda } from '../../factory/preparar-onda.ts'
 import { preValidarSandbox } from '../../factory/preflight.ts'
@@ -311,7 +311,7 @@ export const lerDisjuntor = createTool({
     const config = lerConfigDoDisjuntor()
     const r = resumoDoDisjuntor(config)
     const ensaio = repositorio && ensaioDeFalhas ? ensaiarDisjuntor(repositorio, ensaioDeFalhas, config) : null
-    return { config, circuitos: repositorio ? r.circuitos.filter((c) => c.repositorio === repositorio) : r.circuitos, ensaio, resumo: ensaio ? `${r.resumo} Ensaio: ${ensaio.resumo}` : r.resumo }
+    return { config, circuitos: repositorio ? r.circuitos.filter((c) => c.repositorio === chaveDoRepositorio(repositorio)) : r.circuitos, ensaio, resumo: ensaio ? `${r.resumo} Ensaio: ${ensaio.resumo}` : r.resumo }
   },
 })
 

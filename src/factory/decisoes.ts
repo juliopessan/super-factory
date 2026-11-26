@@ -8,7 +8,7 @@
 // - em pedido de critério o padrão é "manter" (o critério continua exigido): o prazo nunca dispensa critério;
 // - em pedido de disjuntor o padrão é "manter pausado": o prazo nunca retoma sozinho.
 
-import { PAPEIS_DA_FACTORY, tocaEmGuarda } from './licoes.ts'
+import { ehPapelDaFactory, tocaEmGuarda } from './licoes.ts'
 import { alocarId, atualizarEstado, lerEstado, type FabricaEstado } from './store.ts'
 
 export type TipoDePedido = 'geral' | 'criterio' | 'disjuntor'
@@ -28,6 +28,8 @@ export type PedidoDeDecisao = {
   repositorio: string | null
   /** Só no pedido de critério: qual critério (1, 2, …) do card. */
   criterio: number | null
+  /** Só no pedido de critério: o texto do critério quando o pedido foi aberto. Se o card mudar o critério, a decisão deixa de valer. */
+  criterioTexto: string | null
   opcoes: OpcaoDoPedido[]
   recomendacao: { opcao: string; porque: string }
   /** Null quando nenhuma opção é reversível: o prazo não corre e o pedido espera a resposta. */
@@ -51,7 +53,7 @@ const dentro = (t: string, min: number, max: number) => t.trim().length >= min &
 /** Quem decide é uma pessoa: nome próprio, nunca um papel da Factory. */
 export function autorValido(autor: string): string | null {
   const nome = autor.trim()
-  if (!nome || nome.length > 80 || PAPEIS_DA_FACTORY.test(nome) || !linhaSo(nome)) return null
+  if (!nome || nome.length > 80 || ehPapelDaFactory(nome) || !linhaSo(nome)) return null
   return nome
 }
 
@@ -94,11 +96,19 @@ function validar(e: EntradaDoPedido): { opcoes: OpcaoDoPedido[]; erro: string | 
   return { opcoes, erro: null }
 }
 
+const mesmoTexto = (a: string | null | undefined, b: string | null | undefined) => (a ?? '').replace(/\s+/g, ' ').trim() === (b ?? '').replace(/\s+/g, ' ').trim()
+
 function guardar(estado: FabricaEstado, pedido: PedidoDeDecisao): FabricaEstado {
   const todos = [...(estado.decisoes ?? []), pedido]
   const abertos = todos.filter((p) => p.estado === 'aberto')
-  const fechados = todos.filter((p) => p.estado !== 'aberto').slice(-MAXIMO_GUARDADOS)
-  return { ...estado, decisoes: [...fechados, ...abertos] }
+  const fechados = todos.filter((p) => p.estado !== 'aberto')
+  // As respostas sobre critérios são a ÚNICA fonte do N_A/DECIDIDO que se lê no card: não podem sair do histórico por idade.
+  // Vale a última resposta de cada (card, critério), então só ela fica; o resto do histórico é limitado.
+  const ehDecisaoDeCriterio = (p: PedidoDeDecisao) => p.tipo === 'criterio' && p.estado === 'respondido' && p.criterio !== null
+  const ultimas = new Map<string, PedidoDeDecisao>()
+  for (const p of fechados.filter(ehDecisaoDeCriterio).sort((a, b) => (a.decididoEm ?? '').localeCompare(b.decididoEm ?? ''))) ultimas.set(`${p.cardId}#${p.criterio}`, p)
+  const outros = fechados.filter((p) => !ehDecisaoDeCriterio(p)).slice(-MAXIMO_GUARDADOS)
+  return { ...estado, decisoes: [...outros, ...ultimas.values(), ...abertos] }
 }
 
 function montar(base: Omit<PedidoDeDecisao, 'id' | 'estado' | 'criadoEm' | 'escolha' | 'decididoEm' | 'decididoPor' | 'nota'>, agora: Date): PedidoDeDecisao {
@@ -123,7 +133,7 @@ export function abrirPedido(e: EntradaDoPedido, agora: Date = new Date()): Resul
   }
   if ((lerEstado().decisoes ?? []).filter((p) => p.estado === 'aberto').length >= MAXIMO_ABERTOS) return { ok: false, pedido: null, nota: `Já há ${MAXIMO_ABERTOS} pedidos abertos. Resolva ou cancele alguns antes de abrir outro: pedido demais vira ruído.` }
   const quem = (e.quemDecide ?? 'dono').trim().slice(0, 60) || 'dono'
-  const pedido = montar({ tipo: 'geral', pergunta: e.pergunta.trim(), quemDecide: quem, parado: e.parado?.trim().slice(0, 200) || null, cardId: e.cardId ?? null, repositorio: e.repositorio ?? null, criterio: null, opcoes: v.opcoes, recomendacao: { opcao: rotulo, porque: e.porque.trim() }, padrao, naoMedido: e.naoMedido.trim() }, agora)
+  const pedido = montar({ tipo: 'geral', pergunta: e.pergunta.trim(), quemDecide: quem, parado: e.parado?.trim().slice(0, 200) || null, cardId: e.cardId ?? null, repositorio: e.repositorio ?? null, criterio: null, criterioTexto: null, opcoes: v.opcoes, recomendacao: { opcao: rotulo, porque: e.porque.trim() }, padrao, naoMedido: e.naoMedido.trim() }, agora)
   atualizarEstado((s) => guardar(s, pedido))
   return { ok: true, pedido, nota: padrao ? `Pedido ${pedido.id} aberto. Se ninguém responder até ${padrao.vence.slice(0, 10)}, vale a opção ${padrao.opcao}; o trabalho que não depende dele segue.` : `Pedido ${pedido.id} aberto. Nenhuma opção é reversível, então o prazo não corre: ele espera a resposta.` }
 }
@@ -144,6 +154,7 @@ export function abrirPedidoDeCriterio(entrada: { cardId: string; repositorio: st
     cardId: entrada.cardId,
     repositorio: entrada.repositorio,
     criterio: entrada.criterio,
+    criterioTexto: entrada.textoDoCriterio.replace(/\s+/g, ' ').trim(),
     opcoes: [
       { rotulo: 'A', oQue: 'Não se aplica a este card', custo: 'O critério deixa de ser cobrado neste card; quem revisa precisa concordar com o motivo.', reversivel: true, efeito: 'nao-se-aplica' },
       { rotulo: 'B', oQue: 'Decidido diferente: outra forma de cumprir', custo: 'O critério fica registrado como decidido diferente, com o motivo; a evidência deixa de ser um teste.', reversivel: true, efeito: 'decidido-diferente' },
@@ -169,6 +180,7 @@ export function abrirPedidoDeDisjuntor(entrada: { repositorio: string; resumo: s
     cardId: null,
     repositorio: entrada.repositorio,
     criterio: null,
+    criterioTexto: null,
     opcoes: [
       { rotulo: 'A', oQue: 'Retomar as execuções neste repositório', custo: 'Gasta tokens de novo; se a causa não foi resolvida, o disjuntor abre outra vez.', reversivel: true, efeito: 'retomar' },
       { rotulo: 'B', oQue: 'Manter pausado até a causa ser resolvida', custo: 'Os cards do repositório ficam parados.', reversivel: true, efeito: 'manter' },
@@ -208,6 +220,10 @@ export function responderPedido(id: string, escolha: string, autor: string, nota
   const nome = autorValido(autor)
   if (!nome) return { ok: false, pedido, efeito: null, nota: 'Quem decide é uma pessoa: informe o nome dela, nunca um papel da Factory.' }
   if (pedido.estado !== 'aberto') return { ok: false, pedido, efeito: null, nota: `O pedido ${id} já está ${pedido.estado}.` }
+  if (pedido.tipo === 'criterio' && pedido.criterio !== null) {
+    const atual = lerEstado().cards.find((c) => c.id === pedido.cardId)?.criterios[pedido.criterio - 1]
+    if (!mesmoTexto(atual, pedido.criterioTexto)) return { ok: false, pedido, efeito: null, nota: `O critério ${pedido.criterio} do card ${pedido.cardId} mudou (ou o card sumiu) depois deste pedido: a decisão seria sobre outro requisito. Cancele o pedido ${id} e abra outro.` }
+  }
   const opcao = pedido.opcoes.find((o) => o.rotulo === escolha.trim().toUpperCase())
   if (!opcao) return { ok: false, pedido, efeito: null, nota: `A opção ${escolha} não existe neste pedido (${pedido.opcoes.map((o) => o.rotulo).join(', ')}).` }
   if (nota && (!linhaSo(nota) || nota.length > 240)) return { ok: false, pedido, efeito: null, nota: 'A nota tem até 240 caracteres, numa linha.' }
@@ -233,14 +249,22 @@ export function listarPedidos(filtro: { estado?: EstadoDoPedido; repositorio?: s
 
 export type DecisaoDeCriterio = { n: number; efeito: 'nao-se-aplica' | 'decidido-diferente'; motivo: string; decisaoId: string; por: string }
 
-/** Decisões de uma pessoa sobre critérios do card (só as respondidas, com efeito diferente de "manter"). */
+/**
+ * Decisões de uma pessoa sobre critérios do card. Vale a ÚLTIMA resposta de cada critério: "manter" (C) apaga uma dispensa anterior.
+ * Uma decisão só vale enquanto o critério tem o mesmo texto de quando foi decidida: se o card mudou o requisito, a decisão não o cobre.
+ */
 export function decisoesDeCriterio(cardId: string, estado: FabricaEstado = lerEstado()): DecisaoDeCriterio[] {
+  const card = estado.cards.find((c) => c.id === cardId)
+  if (!card) return []
   const saida = new Map<number, DecisaoDeCriterio>()
-  for (const p of estado.decisoes ?? []) {
-    if (p.tipo !== 'criterio' || p.cardId !== cardId || p.estado !== 'respondido' || p.criterio === null || !p.escolha) continue
+  const respondidos = (estado.decisoes ?? []).filter((p) => p.tipo === 'criterio' && p.cardId === cardId && p.estado === 'respondido' && p.criterio !== null && p.escolha)
+  for (const p of [...respondidos].sort((a, b) => (a.decididoEm ?? '').localeCompare(b.decididoEm ?? ''))) {
+    const n = p.criterio!
     const efeito = p.opcoes.find((o) => o.rotulo === p.escolha)?.efeito
+    if (efeito === 'manter') { saida.delete(n); continue }
     if (efeito !== 'nao-se-aplica' && efeito !== 'decidido-diferente') continue
-    saida.set(p.criterio, { n: p.criterio, efeito, motivo: p.nota ?? p.recomendacao.porque, decisaoId: p.id, por: p.decididoPor ?? 'uma pessoa' })
+    if (!mesmoTexto(card.criterios[n - 1], p.criterioTexto)) { saida.delete(n); continue }
+    saida.set(n, { n, efeito, motivo: p.nota ?? p.recomendacao.porque, decisaoId: p.id, por: p.decididoPor ?? 'uma pessoa' })
   }
   return [...saida.values()]
 }
