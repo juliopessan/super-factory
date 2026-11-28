@@ -49,14 +49,37 @@ export type OpcoesDocker = {
   memoriaBytes?: number
 }
 
+/** O Docker respondeu, mas a imagem não está no servidor e não dá para baixá-la (nome interno, sem registro). */
+export const IMAGEM_AUSENTE = /pull access denied|manifest unknown|repository does not exist|no such image|image .{0,200}not found|not found: manifest/i
+
+/** A imagem do sandbox não existe neste servidor. Erro do ambiente e determinístico: toda execução falharia igual. */
+export class ErroDeImagemAusente extends Error {
+  // Sem "parameter properties": o Node em modo strip-only (npm run check) não as aceita.
+  imagem: string
+  constructor(imagem: string, detalhe: string) {
+    super(`A imagem do sandbox (${imagem}) não existe neste servidor e o Docker não conseguiu baixá-la. Isso é do ambiente, não do card. Conserto: sudo bash /opt/super-factory/deploy/construir-sandbox.sh (ou ajuste SUPER_FACTORY_SANDBOX_IMAGE, no .env, para uma imagem que exista, e recrie o container). (${detalhe})`)
+    this.name = 'ErroDeImagemAusente'
+    this.imagem = imagem
+  }
+}
+
+/** O erro que sobe quando o container não inicia. A classificação vem ANTES do corte: referência longa de imagem não esconde o marcador. */
+export function erroAoIniciarSandbox(erro: unknown, imagem: string, segredos: string[]): Error {
+  const motivo = erro instanceof Error ? erro.message : String(erro)
+  const limpo = limparSaida(motivo, segredos)
+  if (IMAGEM_AUSENTE.test(motivo)) return new ErroDeImagemAusente(imagem, limpo.slice(0, 200))
+  return new Error(`O Docker não respondeu. Abra o Docker Desktop ou o Colima e tente de novo. (${limpo.slice(0, 200)})`)
+}
+
 /** Abre um container para o card. Lança erro claro se o Docker não responder. */
 export async function criarExecutorDocker(opcoes: OpcoesDocker): Promise<Executor> {
   const { DockerSandbox } = await import('@mastra/docker')
   const segredos = [...(opcoes.segredos ?? []), ...Object.values(opcoes.env ?? {})]
+  const opcoesImagem = opcoes.imagem ?? process.env.SUPER_FACTORY_SANDBOX_IMAGE?.trim() ?? 'node:22-bookworm'
   // O container nasce sem token. Ele entra por comando, em executar(…, { env }).
   const sandbox = new DockerSandbox({
     id: `super-factory-${opcoes.cardId.toLowerCase().replace(/[^a-z0-9-]/g, '-')}-${Date.now()}`,
-    image: opcoes.imagem ?? process.env.SUPER_FACTORY_SANDBOX_IMAGE?.trim() ?? 'node:22-bookworm',
+    image: opcoesImagem,
     env: opcoes.env ?? {},
     workingDir: '/workspace',
     ...(opcoes.rede ?? process.env.SUPER_FACTORY_SANDBOX_NETWORK?.trim() ? { network: opcoes.rede ?? process.env.SUPER_FACTORY_SANDBOX_NETWORK?.trim() } : {}),
@@ -72,8 +95,7 @@ export async function criarExecutorDocker(opcoes: OpcoesDocker): Promise<Executo
   try {
     await sandbox.start()
   } catch (erro) {
-    const motivo = erro instanceof Error ? erro.message : String(erro)
-    throw new Error(`O Docker não respondeu. Abra o Docker Desktop ou o Colima e tente de novo. (${limparSaida(motivo, segredos).slice(0, 200)})`)
+    throw erroAoIniciarSandbox(erro, opcoesImagem, segredos)
   }
   return {
     tipo: 'docker',

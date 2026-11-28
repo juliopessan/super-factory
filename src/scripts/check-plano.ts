@@ -117,5 +117,46 @@ function pedido(cards: unknown[], extra: Record<string, unknown> = {}) {
   assert.doesNotMatch(v3.resumo, /Falta uma pessoa/)
 }
 
+// ---------- o preflight bloqueia imagem ausente, antes de abrir qualquer card ----------
+{
+  const { preValidarSandbox } = await import('../factory/preflight.ts')
+  const { prepararOnda } = await import('../factory/preparar-onda.ts')
+  const base = { imagem: 'super-factory-sandbox:latest', versaoDoPython: async () => null, arquivosDaRaiz: async () => ['package.json'] }
+  const semImagem = { ...base, ferramentas: async () => { throw new Error('O Docker não respondeu: Failed to pull Docker image super-factory-sandbox:latest: pull access denied for super-factory-sandbox, repository does not exist or may require authorization') } }
+  const r = await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, semImagem as never)
+  assert.equal(r.resultado, 'BLOCKED', 'imagem ausente é erro do ambiente: bloqueia, não "não consegui conferir"')
+  assert.match(r.motivos[0]!, /super-factory-sandbox:latest.*não existe neste servidor.*construir-sandbox\.sh.*docker image ls/)
+
+  for (const mensagem of ['Error response from daemon: No such image: super-factory-sandbox:latest', 'manifest unknown: manifest unknown']) {
+    const x = await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, { ...base, ferramentas: async () => { throw new Error(mensagem) } } as never)
+    assert.equal(x.resultado, 'BLOCKED', mensagem)
+  }
+  // (revisão do PR) o erro de produção passa por um corte de 200 caracteres: referência longa de imagem não pode esconder o marcador
+  const { erroAoIniciarSandbox, ErroDeImagemAusente, IMAGEM_AUSENTE } = await import('../factory/sandbox.ts')
+  const longa = `registry.exemplo.com.br/time-de-plataforma/${'a'.repeat(150)}/super-factory-sandbox:latest`
+  const bruto = new Error(`Failed to pull Docker image ${longa}: pull access denied for ${longa}, repository does not exist or may require 'docker login'`)
+  assert.equal(IMAGEM_AUSENTE.test(bruto.message.slice(0, 200)), false, 'o corte antigo realmente escondia o marcador')
+  const transformado = erroAoIniciarSandbox(bruto, longa, [])
+  assert.ok(transformado instanceof ErroDeImagemAusente, 'classificado antes de cortar')
+  assert.equal((transformado as InstanceType<typeof ErroDeImagemAusente>).imagem, longa)
+  assert.match(transformado.message, /construir-sandbox\.sh/)
+  const viaProducao = await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, { ...base, imagem: longa, ferramentas: async () => { throw transformado } } as never)
+  assert.equal(viaProducao.resultado, 'BLOCKED', 'o preflight recebe o erro como a produção o entrega')
+  const generico = erroAoIniciarSandbox(new Error('connect ENOENT /var/run/docker.sock'), longa, [])
+  assert.ok(!(generico instanceof ErroDeImagemAusente))
+  assert.match(generico.message, /O Docker não respondeu/)
+  assert.equal((await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, { ...base, ferramentas: async () => { throw generico } } as never)).resultado, 'NOT_RUN')
+  // outros erros do Docker (daemon fora do ar, timeout) continuam "não consegui conferir": podem ser passageiros
+  const fora = await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, { ...base, ferramentas: async () => { throw new Error('connect ENOENT /var/run/docker.sock') } } as never)
+  assert.equal(fora.resultado, 'NOT_RUN')
+
+  // e a onda não começa: nenhum card é aberto nem reservado
+  const antes = lerEstado().cards.length
+  const preparo = await prepararOnda({ pedidos: [{ titulo: 'Exportação de pedidos em CSV com cabeçalho', descricao: 'A exportação de pedidos em CSV ganha cabeçalho com o nome de cada coluna da tabela.', criterios: 'O endpoint devolve 200 quando o serviço está de pé.', provedor: 'github', repositorio: 'acme/pedidos', branchBase: 'main', branchHead: '' }] }, { preflight: semImagem as never })
+  assert.equal(preparo.ok, false)
+  assert.match(preparo.nota, /BLOCKED.*não existe neste servidor/)
+  assert.equal(lerEstado().cards.length, antes, 'nada foi aberto')
+}
+
 fs.rmSync(diretorio, { recursive: true, force: true })
 console.log('check-plano: ok')

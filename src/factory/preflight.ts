@@ -2,6 +2,7 @@
 // "pip: command not found" depois de clonar, instalar e esperar. Aqui a conferência vem antes e a resposta é BLOCKED, com o conserto.
 
 import { compararVersoes } from './projeto-pasta.ts'
+import { ErroDeImagemAusente, IMAGEM_AUSENTE } from './sandbox.ts'
 import type { Executor } from './sandbox.ts'
 
 export const FERRAMENTAS = ['git', 'node', 'npm', 'python3', 'pip', 'go', 'dotnet'] as const
@@ -84,7 +85,13 @@ export async function preValidarSandbox(card: { repositorio: string; branchBase:
   try {
     ferramentas = await deps.ferramentas()
   } catch (erro) {
-    return { resultado: 'NOT_RUN', motivos: [`Não consegui abrir o sandbox para conferir: ${erro instanceof Error ? erro.message.slice(0, 200) : 'erro'}`], ferramentas: null, pilhas: [] }
+    const mensagem = erro instanceof Error ? erro.message : 'erro'
+    // Imagem que não existe neste servidor (e que o Docker não consegue baixar) é erro do ambiente e determinístico: toda execução
+    // falharia igual. Bloqueia ANTES de abrir qualquer card, com o conserto, em vez de deixar o card nascer e travar.
+    if (erro instanceof ErroDeImagemAusente || IMAGEM_AUSENTE.test(mensagem)) {
+      return { resultado: 'BLOCKED', motivos: [`A imagem do sandbox (${deps.imagem}) não existe neste servidor e o Docker não conseguiu baixá-la. Isso é do ambiente, não do card. Conserto: rode sudo bash /opt/super-factory/deploy/construir-sandbox.sh (constrói a imagem e a registra em SUPER_FACTORY_SANDBOX_IMAGE) ou aponte SUPER_FACTORY_SANDBOX_IMAGE, no .env, para uma imagem que exista, e recrie o container. Para conferir: docker image ls | grep sandbox.`], ferramentas: null, pilhas: [] }
+    }
+    return { resultado: 'NOT_RUN', motivos: [`Não consegui abrir o sandbox para conferir: ${mensagem.slice(0, 200)}`], ferramentas: null, pilhas: [] }
   }
   if (card.provedor !== 'github') return { resultado: 'NOT_RUN', motivos: ['Conferi o sandbox, mas só leio a raiz de repositórios GitHub: o que o repositório pede não foi comparado.'], ferramentas, pilhas: [] }
   const projeto: ProjetoLido | null = deps.projeto
