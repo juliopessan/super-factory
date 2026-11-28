@@ -10,7 +10,7 @@
     "build": "mastra build --dir src/super-factory --studio",
     "start": "MASTRA_AUTO_DETECT_URL=true mastra start",
     "typecheck": "tsc --noEmit",
-    "check": "tsc --noEmit && node --experimental-strip-types src/scripts/check.ts && node --experimental-strip-types src/scripts/check-slop.ts && node --experimental-strip-types src/scripts/check-extras.ts && node --experimental-strip-types src/scripts/check-fabrica.ts",
+    "check": "tsc --noEmit && node --experimental-strip-types src/scripts/check.ts && node --experimental-strip-types src/scripts/check-slop.ts && node --experimental-strip-types src/scripts/check-extras.ts && node --experimental-strip-types src/scripts/check-fabrica.ts && node --experimental-strip-types src/scripts/check-intake.ts",
     "evals": "node --experimental-strip-types src/scripts/evals.ts",
     "e2e": "node --experimental-strip-types src/scripts/e2e.ts",
     "limpar-segredos": "node --experimental-strip-types src/scripts/limpar-segredos.ts"

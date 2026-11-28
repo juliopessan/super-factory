@@ -26,6 +26,7 @@ Para quem prefere aprovar a entrega antes de abrir o pull request, o workflow `s
 
 | Etapa | O que a Factory faz | Detalhes |
 | --- | --- | --- |
+| **Receber** | Uma demanda em linguagem natural vira plano, card e **uma branch nova com um PR**, no ritmo do Claude Code. Do PR em diante é do aprovador. | [Intake: da demanda ao PR](#intake-da-demanda-ao-pr) |
 | **Escolher** | Importa as issues que você etiquetou e cria um card para cada uma. Sem critério observável, o card nasce bloqueado, com o motivo. | [Gatilho de issues](#gatilho-de-issues) |
 | **Organizar** | Cria milestone, atribui responsável, mexe em labels, cria o Project e seus campos (Prioridade, Estimativa, Prazo). Comenta e fecha issues quando você pede. | [Gestão do GitHub](#gestão-do-github) |
 | **Conferir** | Lê issues, pull requests, o CI (com o passo que falhou e o fim do log), a proteção de branch, os alertas de segurança e o alcance do token. | [Ler o GitHub](#ler-o-github-um-token-só-para-tudo) |
@@ -250,6 +251,25 @@ O workflow suspende três vezes. Em cada uma, retome com o JSON do gate. `aprova
 ## Da demanda ao pull request
 
 Do card ao PR: o que roda dentro do container, como uma issue vira card, como o PR volta para a issue, como tarefas que dependem uma da outra viram pull requests em pilha e quem revisa. Uma só decisão humana: o merge.
+
+### Intake: da demanda ao PR
+
+A mesma dinâmica de uma sessão do Claude Code: a pessoa descreve o que quer, a Factory cria uma **branch nova**, trabalha até o **pull request** e entrega ao **aprovador**. Dali em diante revisar e fazer o merge é de uma pessoa: a Factory não aprova, não mescla e não faz deploy.
+
+```text
+demanda ──► especificar ──► validar o plano ──► abrir o card ──► rodar no container ──► PR ──► aprovador
+ (chat)      (modelo lê       (a triagem de       (em ready)       (branch nova,         (revisor     (revisa
+             a demanda e       qualquer card,                       testes, lint,         comenta)     e mescla)
+             o repositório)    duplicata, chaves)                   build)
+```
+
+- **Como pedir.** No chat, `receberDemanda` com a demanda nas palavras da pessoa e o repositório (`owner/repo`). Ela devolve na hora o id (`DM-n`) e a execução (Workflows → `intake`, com cada fase acendendo no canvas). `lerDemanda` mostra o estágio (os do manifesto: `triage`, `specification`, `implementation`, `verification`, `human-review`, `delivery`), o plano, cada card e PR, a ordem do merge e **o que depende de uma pessoa agora**.
+- **Uma demanda, uma branch, um PR.** O especificador (só lê o repositório; modelo do revisor) devolve o plano em JSON: objetivo, fora de escopo, riscos e os cards com critérios observáveis. O padrão é **um card**; só divide quando não cabe numa revisão de uma sentada ou as partes são independentes (até 8; `dependeDe` vira PRs em pilha, e a ordem do merge vem junto).
+- **Pergunta em vez de chute.** Se falta algo sem o qual o plano seria adivinhação, ele devolve até 3 perguntas (`precisa-de-resposta`) e **nada é aberto** até a resposta.
+- **A triagem não é opcional.** Cada card do plano passa pela mesma triagem de qualquer card (critério observável, segredo, pedido de push protegido, merge automático) e pela checagem de duplicata do quadro. Plano recusado volta ao especificador **uma vez**, com o motivo; se continuar ruim, a demanda para (`bloqueada`) com o motivo e não gasta sandbox.
+- **Os freios de sempre valem.** Disjuntor aberto no repositório, teto de tokens (o gasto do especificador entra no teto do dia) e o preflight do sandbox são conferidos antes da onda. Texto com segredo é recusado na entrada e nem é guardado. No máximo 5 demandas em andamento, e a mesma demanda aberta não duplica.
+- **Opções.** `soPlano` para depois do plano validado (sem card, sem sandbox, sem PR); `ensaio` percorre o fluxo sem modelo e sem chave; `revisar` (padrão: sim) deixa o revisor comentar cada PR, só comentário.
+- **Fim do trabalho da Factory = PR aberto.** A demanda fica `pronta-para-o-merge` (ou `parcial`, se algum card parou) e só vira `entregue` depois que as pessoas mesclam os PRs **e** a Factory mede o resultado deles (`medirResultadoDosPrs`; hoje ainda não é automático por webhook).
 
 ### Modo autônomo, fase por fase
 
@@ -574,7 +594,7 @@ A landing traz o FAQ visível, dados estruturados (schema.org: `WebSite`, `Softw
 | `src/factory/` | Quadro, gates, trilha, guardas de segredo, GitHub (leitura, escrita e gatilho de issues), Azure DevOps e métricas |
 | `deploy/` | Instalador, atualizador, login e a imagem do sandbox com Python |
 | `src/scripts/check.ts` | Checagem do ciclo, sem shell e sem suíte de produto |
-| `src/scripts/check-slop.ts`, `check-extras.ts`, `check-fabrica.ts` | Auditoria de slop no diff; convenções do repositório e o CI, no shell de verdade; resultado por critério em cinco estados, pedido de decisão e disjuntor |
+| `src/scripts/check-slop.ts`, `check-extras.ts`, `check-fabrica.ts`, `check-intake.ts` | Auditoria de slop no diff; convenções do repositório e o CI, no shell de verdade; resultado por critério em cinco estados, pedido de decisão e disjuntor; o intake, da demanda ao PR |
 | `.github/workflows/ci.yml` | O CI da própria Factory: `npm ci`, `npm run check` e `npm audit --omit=dev` em cada PR e em cada push na `main`, só com permissão de leitura e sem segredo |
 | `docs/` | Roteiros e estado: [ROADMAP-VERIFICACAO](docs/ROADMAP-VERIFICACAO.md), [ENSAIO-REAL](docs/ENSAIO-REAL.md) (o roteiro do primeiro repositório de verdade) e [RSI](docs/RSI.md) |
 | `src/scripts/e2e.ts` | Teste de ponta a ponta, pela API e no navegador |
@@ -585,7 +605,7 @@ A landing traz o FAQ visível, dados estruturados (schema.org: `WebSite`, `Softw
 | Comando | O que faz |
 | --- | --- |
 | `npm run dev` | Sobe a Factory em `localhost:4721` |
-| `npm run check` | Typecheck e as quatro checagens (`check.ts`, `check-slop.ts`, `check-extras.ts`, `check-fabrica.ts`): o ciclo, o gate, a verificação, as guardas e os evals determinísticos. É o que o CI roda |
+| `npm run check` | Typecheck e as cinco checagens (`check.ts`, `check-slop.ts`, `check-extras.ts`, `check-fabrica.ts`, `check-intake.ts`): o ciclo, o gate, a verificação, as guardas e os evals determinísticos. É o que o CI roda |
 | `npm run evals` | Monta a matriz de modelos como revisores (cada um contra os diffs de ouro) com juiz de outro provedor. Sem `--executar` só mostra o plano e o número de chamadas; com ele, gasta modelo até o teto (`--teto`) |
 | `npm run e2e` | Sobe a Factory sem chave e sem token, conduz o `sdlc` pelo gate do merge, testa recusas, triagem e redação de segredo, e abre a landing e o Studio no navegador, inclusive em larguras de celular |
 | `npm run limpar-segredos` | Troca segredos já gravados no `factory.db` por marcadores e roda `VACUUM` |

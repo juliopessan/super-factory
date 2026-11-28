@@ -51,6 +51,8 @@ export const ETAPAS_POR_FERRAMENTA: Record<string, { peso: number; sugestao: str
   proporLicoes: { peso: 6, sugestao: 'Aprove a lição que fizer sentido, em meu nome' },
   lerLicoes: { peso: 4, sugestao: 'Alguma lição aprovada piorou o resultado? Quero retirar' },
   decidirLicaoDoConstrutor: { peso: 7, sugestao: 'Como está a pontuação depois dessa lição?' },
+  receberDemanda: { peso: 8, sugestao: 'Como está a demanda? Mostre o PR e o que falta para o merge' },
+  lerDemanda: { peso: 5, sugestao: 'Mostre os PRs da demanda e a ordem do merge' },
   pedirDecisao: { peso: 6, sugestao: 'Responda ao pedido de decisão em meu nome' },
   pedirDecisaoDeCriterio: { peso: 6, sugestao: 'Mostre o pedido para eu decidir sobre o critério' },
   lerDecisoes: { peso: 5, sugestao: 'Responda ao pedido de decisão mais antigo' },

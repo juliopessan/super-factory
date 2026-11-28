@@ -118,7 +118,7 @@ export function proporLicoes(escopo = 'global', estado: FabricaEstado = lerEstad
 const PAPEIS_NORMALIZADOS = new Set([
   'factory', 'superfactory', 'chief', 'chiefofstaff', 'agente', 'agent', 'bot', 'claude', 'copilot', 'assistant', 'assistente', 'sistema', 'system', 'ia', 'ai', 'gpt',
   'architect', 'arquiteto', 'frontend', 'backend', 'qa', 'security', 'seguranca', 'docs', 'integrations', 'integracoes', 'reviewer', 'prreview', 'revisor',
-  'construtor', 'reprodutor', 'melhorador', 'improver', 'worker', 'builder',
+  'construtor', 'reprodutor', 'melhorador', 'improver', 'worker', 'builder', 'especificador', 'analista',
 ])
 const normalizarNome = (nome: string) => nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '')
 

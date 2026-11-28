@@ -4508,6 +4508,7 @@ assert.equal(
   const ag = fs.readFileSync(new URL('../super-factory/agents/factory.ts', import.meta.url), 'utf8')
   assert.ok(ag.includes('lerOnda') && ag.includes('N_A') && ag.includes('DECIDIDO') && ag.includes('NOT_RUN'))
   assert.ok(ag.includes('pedirDecisao') && ag.includes('lerDisjuntor') && ag.includes('retomarDisjuntor') && ag.includes('responderDecisao'), 'o Chief conhece pedido de decisão e disjuntor')
+  assert.ok(ag.includes('receberDemanda') && ag.includes('lerDemanda') && /branch NOVA/.test(ag) && /APROVADOR/.test(ag), 'o Chief conhece o intake: da demanda ao PR, e do PR em diante é do aprovador')
 }
 
 // --- Lote G: teto de custo em tokens (card, onda e dia)
