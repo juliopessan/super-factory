@@ -55,6 +55,8 @@ export const VERBOS_POR_FERRAMENTA: Record<string, string> = {
   medirResultadoDosPrs: 'Vendo o que aconteceu com os PRs…',
   lerCard: 'Lendo o card…',
   lerOnda: 'Lendo a onda…',
+  receberDemanda: 'Recebendo a demanda…',
+  lerDemanda: 'Lendo a demanda…',
   pedirDecisao: 'Abrindo o pedido de decisão…',
   pedirDecisaoDeCriterio: 'Abrindo o pedido sobre o critério…',
   lerDecisoes: 'Lendo os pedidos de decisão…',
