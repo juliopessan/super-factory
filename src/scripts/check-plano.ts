@@ -131,6 +131,21 @@ function pedido(cards: unknown[], extra: Record<string, unknown> = {}) {
     const x = await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, { ...base, ferramentas: async () => { throw new Error(mensagem) } } as never)
     assert.equal(x.resultado, 'BLOCKED', mensagem)
   }
+  // (revisão do PR) o erro de produção passa por um corte de 200 caracteres: referência longa de imagem não pode esconder o marcador
+  const { erroAoIniciarSandbox, ErroDeImagemAusente, IMAGEM_AUSENTE } = await import('../factory/sandbox.ts')
+  const longa = `registry.exemplo.com.br/time-de-plataforma/${'a'.repeat(150)}/super-factory-sandbox:latest`
+  const bruto = new Error(`Failed to pull Docker image ${longa}: pull access denied for ${longa}, repository does not exist or may require 'docker login'`)
+  assert.equal(IMAGEM_AUSENTE.test(bruto.message.slice(0, 200)), false, 'o corte antigo realmente escondia o marcador')
+  const transformado = erroAoIniciarSandbox(bruto, longa, [])
+  assert.ok(transformado instanceof ErroDeImagemAusente, 'classificado antes de cortar')
+  assert.equal((transformado as InstanceType<typeof ErroDeImagemAusente>).imagem, longa)
+  assert.match(transformado.message, /construir-sandbox\.sh/)
+  const viaProducao = await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, { ...base, imagem: longa, ferramentas: async () => { throw transformado } } as never)
+  assert.equal(viaProducao.resultado, 'BLOCKED', 'o preflight recebe o erro como a produção o entrega')
+  const generico = erroAoIniciarSandbox(new Error('connect ENOENT /var/run/docker.sock'), longa, [])
+  assert.ok(!(generico instanceof ErroDeImagemAusente))
+  assert.match(generico.message, /O Docker não respondeu/)
+  assert.equal((await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, { ...base, ferramentas: async () => { throw generico } } as never)).resultado, 'NOT_RUN')
   // outros erros do Docker (daemon fora do ar, timeout) continuam "não consegui conferir": podem ser passageiros
   const fora = await preValidarSandbox({ repositorio: 'acme/pedidos', branchBase: 'main', provedor: 'github' }, { ...base, ferramentas: async () => { throw new Error('connect ENOENT /var/run/docker.sock') } } as never)
   assert.equal(fora.resultado, 'NOT_RUN')
