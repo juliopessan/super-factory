@@ -35,7 +35,7 @@ import { editarCard as editarCardDoQuadro, lerCardCompleto, moverCard as moverCa
 import { acompanharLicoes, decidirLicao, proporLicoes as proporLicoesDoQuadro } from '../../factory/licoes.ts'
 import { gastoDoDia, lerTetos, resumoDeCusto } from '../../factory/custo.ts'
 import { abrirPedido, abrirPedidoDeCriterio, cancelarPedido, listarPedidos, resolverVencidos, responderPedido, resumoDosPedidos } from '../../factory/decisoes.ts'
-import { listarDemandas, registrarDemanda, visaoDaDemanda } from '../../factory/intake.ts'
+import { CardDoPlanoSchema, validarPlano as validarPlanoDaDemanda } from '../../factory/plano.ts'
 import { chaveDoRepositorio, ensaiarDisjuntor, lerConfigDoDisjuntor, resumoDoDisjuntor, retomarDisjuntor as retomarDisjuntorDoRepositorio } from '../../factory/disjuntor.ts'
 import { anexarCI, listarOndas, visaoDaOnda } from '../../factory/ondas.ts'
 import { prepararOnda } from '../../factory/preparar-onda.ts'
@@ -327,50 +327,25 @@ export const retomarDisjuntor = createTool({
   },
 })
 
-export const receberDemanda = createTool({
-  id: 'receber-demanda',
-  description: 'INTAKE: recebe uma demanda em linguagem natural e leva o fluxo inteiro até o pull request, no ritmo do Claude Code: o especificador lê a demanda e o repositório e faz o plano (por padrão UM card: uma branch nova, um PR); a triagem valida cada card; os cards abrem em ready; o modo autônomo roda no container (testes, lint, build) e abre o PR; o revisor comenta. Devolve na hora o id da demanda (DM-n) e da execução; acompanhe com lerDemanda. Do PR em diante é do APROVADOR: a Factory não aprova, não mescla e não faz deploy. Se faltar informação, ela devolve perguntas (situação "precisa-de-resposta") em vez de chutar. Com soPlano, para depois do plano validado, sem gastar sandbox. Use esta ferramenta para pedido novo de mudança; para cards que já estão no quadro use planejarOnda e iniciarOnda.',
+export const validarPlano = createTool({
+  id: 'validar-plano',
+  description: 'Valida o PLANO de uma demanda ANTES de abrir qualquer card: a mesma triagem de qualquer card (critério observável, segredo, pedido de push protegido ou merge automático), chaves e dependências da onda (até 8 cards, um pai por card, sem ciclo), e duplicata do quadro e do próprio plano. Só lê e não abre nada. Se recusar, corrija o que ele apontou (uma vez) e valide de novo; se continuar recusado, mostre à pessoa o que falta. Com o plano aprovado, abra os cards e rode com iniciarOnda.',
   inputSchema: z.object({
-    demanda: z.string().min(20).max(6000).describe('O que a pessoa quer, com as palavras dela: o problema, para quem e o que fica de fora. Não reescreva nem acrescente requisitos.'),
-    repositorio: z.string().min(3).max(140).describe('owner/repo (obrigatório: a Factory não adivinha o destino).'),
-    branchBase: z.string().max(120).optional().describe('Branch de destino do PR. Vazio é main.'),
-    issue: z.number().int().min(1).max(9_999_999).optional().describe('Número da issue de origem, quando a demanda veio de uma.'),
-    soPlano: z.boolean().optional().describe('Para depois do plano validado, sem abrir cards, sem sandbox e sem PR.'),
-    ensaio: z.boolean().optional().describe('Percorre o fluxo sem modelo, sem chave e sem tocar repositório. Só para demonstrar.'),
-    revisar: z.boolean().optional().describe('O agente revisor comenta em cada PR (padrão: sim). Só comenta: nunca aprova.'),
+    repositorio: z.string().min(3).max(140).describe('owner/repo.'),
+    provedor: z.enum(['github', 'azure-devops']).optional().describe('Padrão: github.'),
+    branchBase: z.string().max(120).optional().describe('Branch de destino dos PRs. Vazio é main.'),
+    cards: z.array(CardDoPlanoSchema).min(1).max(MAXIMO_DE_CARDS_POR_ONDA).describe('Por padrão UM card: uma demanda, uma branch nova, um PR. Divida só quando não couber numa revisão ou as partes forem independentes.'),
   }),
-  outputSchema: z.object({ ok: z.boolean(), demandaId: z.string().nullable(), runId: z.string().nullable(), existente: z.boolean(), nota: z.string() }),
-  execute: async (bruto, contexto) => {
-    const r = registrarDemanda({ texto: bruto.demanda, repositorio: bruto.repositorio, branchBase: bruto.branchBase, issue: bruto.issue, soPlano: bruto.soPlano, ensaio: bruto.ensaio, revisar: bruto.revisar, origem: 'chat' })
-    if (!r.ok || !r.demanda) return { ok: false, demandaId: null, runId: null, existente: false, nota: r.nota }
-    if (r.existente) return { ok: true, demandaId: r.demanda.id, runId: null, existente: true, nota: `${r.nota} Acompanhe com lerDemanda.` }
-    const fluxo = contexto?.mastra?.getWorkflow('intake')
-    if (!fluxo) return { ok: false, demandaId: r.demanda.id, runId: null, existente: false, nota: 'O workflow intake não está registrado neste servidor.' }
-    const execucao = await fluxo.createRun()
-    const { runId } = await execucao.startAsync({ inputData: { demandaId: r.demanda.id } })
-    return { ok: true, demandaId: r.demanda.id, runId, existente: false, nota: `Demanda ${r.demanda.id} em andamento (execução ${runId} em Workflows → intake). Ela especifica, valida, abre o card, roda no container e abre o PR numa branch nova; do PR em diante é do aprovador. Acompanhe com lerDemanda.` }
-  },
-})
-
-export const lerDemanda = createTool({
-  id: 'ler-demanda',
-  description: 'Mostra uma demanda do intake: em que estágio está (triage, specification, implementation, verification, human-review, delivery), a situação, o plano (objetivo, riscos, cards), cada card (andamento, PR, resultado por critério), a ordem do merge e o que depende de uma PESSOA agora (perguntas, merge, pedidos de decisão, bloqueios). Sem o id, lista as demandas. Só lê.',
-  inputSchema: z.object({ id: z.string().regex(/^DM-\d+$/).optional().describe('Id da demanda (receberDemanda devolve). Sem isto, lista.') }),
-  outputSchema: z.object({ ok: z.boolean(), demanda: z.any().nullable(), demandas: z.array(z.any()), resumo: z.string() }),
-  execute: async ({ id }) => {
-    if (!id) {
-      const demandas = listarDemandas()
-      return { ok: true, demanda: null, demandas, resumo: demandas.length ? `${demandas.length} demanda(s). A mais recente: ${demandas[0]!.id} (${demandas[0]!.situacao}).` : 'Nenhuma demanda ainda.' }
-    }
-    const v = visaoDaDemanda(id)
-    if (!v) return { ok: false, demanda: null, demandas: [], resumo: `Não achei a demanda ${id}.` }
-    return { ok: true, demanda: { ...v.demanda, texto: v.demanda.texto.slice(0, 800), estagio: v.estagio, situacao: v.situacao, onda: v.onda, aguardaPessoa: v.aguardaPessoa, pedidosAbertos: v.pedidosAbertos }, demandas: [], resumo: v.resumo }
+  outputSchema: z.object({ ok: z.boolean(), problemas: z.array(z.string()), duplicatas: z.array(z.string()), resumo: z.string() }),
+  execute: async ({ cards, ...resto }) => {
+    const v = validarPlanoDaDemanda({ cards, ...resto })
+    return { ...v, resumo: v.ok ? `Plano válido: ${cards.length} card(s)${cards.length === 1 ? ' (uma branch, um PR)' : ''}. Abra e rode com iniciarOnda.` : `Plano recusado (${v.problemas.length}): ${v.problemas.slice(0, 3).join(' ')}` }
   },
 })
 
 export const lerOnda = createTool({
   id: 'ler-onda',
-  description: 'Mostra uma onda inteira num lugar só: cada card reservado, a execução dele (estágio, desfecho, motivo, minutos), o PR e o resultado do PR (aceito/ajustado/recusado), o resultado por critério de aceite (PASS, FAIL, NOT_RUN, BLOCKED, e N_A ou DECIDIDO quando uma pessoa decidiu, com a evidência) e os tokens. Com comCI, lê também o CI de cada PR no GitHub (só leitura). Sem o número da onda, lista as ondas que existem.',
+  description: 'Mostra uma onda inteira num lugar só: cada card reservado, a execução dele (estágio, desfecho, motivo, minutos), o PR e o resultado do PR (aceito/ajustado/recusado), o resultado por critério de aceite (PASS, FAIL, NOT_RUN, BLOCKED, e N_A ou DECIDIDO quando uma pessoa decidiu, com a evidência) os tokens e o que depende de uma PESSOA agora (aguardaPessoa: revisar e mesclar os PRs na ordem, card parado, pedido de decisão aberto, disjuntor). Com comCI, lê também o CI de cada PR no GitHub (só leitura). Sem o número da onda, lista as ondas que existem.',
   inputSchema: z.object({ onda: z.number().int().min(1).optional().describe('Número da onda (iniciarOnda e planejarOnda devolvem). Sem isto, lista as ondas.'), comCI: z.boolean().optional().describe('Lê o CI de cada PR da onda.') }),
   outputSchema: z.object({ ok: z.boolean(), onda: z.any().nullable(), ondas: z.array(z.any()), resumo: z.string() }),
   execute: async ({ onda, comCI }) => {

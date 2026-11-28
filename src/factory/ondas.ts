@@ -2,7 +2,8 @@
 // Antes, a pessoa precisava juntar quadro, trilha e checks à mão. A onda é o número que planejarOnda/iniciarOnda gravam no card.
 
 import { aplicarDecisoes, contagemDosCriterios, resultadoPorCriterio, type ResultadoDoCriterio } from './criterios.ts'
-import { decisoesDeCriterio } from './decisoes.ts'
+import { decisoesDeCriterio, listarPedidos } from './decisoes.ts'
+import { bloqueioDoDisjuntor, chaveDoRepositorio } from './disjuntor.ts'
 import type { GithubDeps } from './github.ts'
 import { lerChecksGithub, type ResultadoDaLeitura, type ChecksLidos } from './github-leitura.ts'
 import type { Card, Estado } from './schemas.ts'
@@ -30,6 +31,8 @@ export type VisaoDaOnda = {
   porAndamento: Record<Andamento, number>
   tokens: number
   cards: CardDaOnda[]
+  /** O que depende de uma PESSOA agora: revisar e mesclar os PRs (na ordem), card parado, pedido de decisão, disjuntor aberto. */
+  aguardaPessoa: string[]
   resumo: string
 }
 
@@ -51,6 +54,33 @@ function andamentoDe(card: Card, run: Estado | null): Andamento {
   if (run?.parado || card.coluna === 'blocked') return 'parado'
   if (card.coluna === 'build' || card.coluna === 'qa' || card.coluna === 'review') return 'em-execucao'
   return 'aguardando'
+}
+
+/** O que falta de uma pessoa nesta onda. O trabalho da Factory termina no PR aberto: revisar e mesclar é do aprovador. */
+export function pendenciasDaOnda(cards: CardDaOnda[], quadro: Card[], estado: FabricaEstado): string[] {
+  const saida: string[] = []
+  const daOnda = cards.map((c) => quadro.find((q) => q.id === c.id)).filter((c): c is Card => Boolean(c))
+  // PRs empilhados: o merge segue de baixo para cima (o filho nasce da branch do pai).
+  const profundidade = (c: Card, vistos = new Set<string>()): number => {
+    const pai = daOnda.find((o) => o.branchHead && o.branchHead === c.branchBase)
+    if (!pai || vistos.has(pai.id)) return 0
+    return 1 + profundidade(pai, new Set([...vistos, c.id]))
+  }
+  const abertos = cards.filter((c) => c.andamento === 'pr-aberto')
+  if (abertos.length > 0) {
+    const ordenados = [...abertos].sort((a, b) => profundidade(quadro.find((q) => q.id === a.id)!) - profundidade(quadro.find((q) => q.id === b.id)!) || Number(a.id.slice(2)) - Number(b.id.slice(2)))
+    const empilhado = ordenados.some((c) => profundidade(quadro.find((q) => q.id === c.id)!) > 0)
+    saida.push(`Revisar e fazer o merge de ${abertos.length} PR(s)${empilhado ? ` (de baixo para cima: ${ordenados.map((c) => c.id).join(' → ')})` : ''}: ${ordenados.map((c) => c.pullRequestUrl).join(' ')}`)
+  }
+  for (const c of cards.filter((x) => x.andamento === 'parado')) saida.push(`Decidir o que fazer com ${c.id} (parado): ${(c.execucao?.motivo ?? 'sem motivo registrado').slice(0, 200)}`)
+  for (const c of abertos) {
+    const sem = c.criterios.filter((k) => k.status === 'FAIL' || k.status === 'NOT_RUN' || k.status === 'BLOCKED')
+    if (sem.length) saida.push(`Olhar no PR de ${c.id}: ${sem.length} critério(s) sem resultado conclusivo (${sem.map((k) => `${k.n} ${k.status}`).join(', ')}).`)
+  }
+  const repos = new Set(daOnda.map((c) => chaveDoRepositorio(c.repositorio)))
+  for (const p of listarPedidos({ estado: 'aberto' }, estado)) if ((p.cardId && cards.some((c) => c.id === p.cardId)) || (p.repositorio && repos.has(chaveDoRepositorio(p.repositorio)))) saida.push(`Responder o pedido ${p.id}: ${p.pergunta}`)
+  for (const r of repos) if (bloqueioDoDisjuntor(r, estado)) saida.push(`Retomar o disjuntor de ${r} (retomarDisjuntor), depois de resolver a causa das paradas.`)
+  return saida
 }
 
 export function visaoDaOnda(onda: number, estado: FabricaEstado = lerEstado()): VisaoDaOnda | null {
@@ -76,7 +106,8 @@ export function visaoDaOnda(onda: number, estado: FabricaEstado = lerEstado()): 
   const porAndamento = Object.fromEntries(ANDAMENTOS.map((a) => [a, itens.filter((i) => i.andamento === a).length])) as Record<Andamento, number>
   const tokens = itens.reduce((n, i) => n + (i.tokens ?? 0), 0)
   const partes = ANDAMENTOS.filter((a) => porAndamento[a] > 0).map((a) => `${porAndamento[a]} ${a.replace('-', ' ')}`)
-  return { onda, total: itens.length, porAndamento, tokens, cards: itens, resumo: `Onda ${onda}: ${itens.length} card(s) (${partes.join(', ')}).${tokens ? ` ${tokens} tokens gastos.` : ''}` }
+  const aguardaPessoa = pendenciasDaOnda(itens, estado.cards, estado)
+  return { onda, total: itens.length, porAndamento, tokens, cards: itens, aguardaPessoa, resumo: `Onda ${onda}: ${itens.length} card(s) (${partes.join(', ')}).${tokens ? ` ${tokens} tokens gastos.` : ''}${aguardaPessoa.length ? ` Falta uma pessoa: ${aguardaPessoa[0]}` : ''}` }
 }
 
 export function listarOndas(estado: FabricaEstado = lerEstado()): Array<{ onda: number; cards: string[]; resumo: string }> {

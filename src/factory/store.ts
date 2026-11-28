@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 
 import type { EstadoDoDisjuntor } from './disjuntor.ts'
 import type { PedidoDeDecisao } from './decisoes.ts'
-import type { Demanda } from './intake.ts'
 import type { Licao } from './licoes.ts'
 import type { Card, Estado, Evento } from './schemas.ts'
 
@@ -21,8 +20,6 @@ export type FabricaEstado = {
   decisoes?: PedidoDeDecisao[]
   /** Disjuntor por repositório: falhas seguidas, último sucesso e circuito aberto. */
   disjuntor?: EstadoDoDisjuntor
-  /** Demandas recebidas pelo intake: da descrição ao PR entregue ao aprovador. */
-  demandas?: Demanda[]
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -90,7 +87,6 @@ export function lerEstado(): FabricaEstado {
     licoes: bruto.licoes ?? [],
     decisoes: bruto.decisoes ?? [],
     disjuntor: bruto.disjuntor ?? { circuitos: {} },
-    demandas: bruto.demandas ?? [],
   }
 }
 
