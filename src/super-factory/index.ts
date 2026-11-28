@@ -32,7 +32,6 @@ import {
   validarManifesto,
 } from './tools/factory.ts'
 import { autonomoWorkflow } from './workflows/autonomo.ts'
-import { intakeWorkflow } from './workflows/intake.ts'
 import { ondaWorkflow } from './workflows/onda.ts'
 import { sdlcWorkflow } from './workflows/sdlc.ts'
 
@@ -74,7 +73,7 @@ export const mastra = new Mastra({
     security,
     docs,
   },
-  workflows: { sdlc: sdlcWorkflow, autonomo: autonomoWorkflow, onda: ondaWorkflow, intake: intakeWorkflow },
+  workflows: { sdlc: sdlcWorkflow, autonomo: autonomoWorkflow, onda: ondaWorkflow },
   tools: {
     statusQuadro,
     validarManifesto,
